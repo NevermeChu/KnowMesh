@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        node-version: [24.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+    name: Build with ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js environment
+        uses: ./.github/actions/setup-project
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Restore or cache Next.js build
+        uses: actions/cache@v5
+        with:
+          path: |
+            .next/cache
+          # Generate a new cache whenever packages or source files change.
+          key: nextjs-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('src/**') }}
+
+      - name: Build Next.js
+        run: npm run build-local
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3008
+
+      - if: matrix.node-version == '24.x' && success()
+        name: Cache Next.js build output
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            .next
+            next-env.d.ts
+          key: nextjs-build-${{ matrix.node-version }}-${{ github.sha }}
+
+  static:
+    strategy:
+      matrix:
+        node-version: [24.x]
+
+    name: Run static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js environment
+        uses: ./.github/actions/setup-project
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Linter
+        run: npx next typegen && npm run lint
+
+  unit:
+    strategy:
+      matrix:
+        node-version: [24.x]
+
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js environment
+        uses: ./.github/actions/setup-project
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Run unit tests
+        uses: docker://mcr.microsoft.com/playwright:v1.60.0
+        with:
+          args: npm run test -- --coverage
+
+  e2e:
+    strategy:
+      matrix:
+        node-version: [24.x]
+
+    name: Run E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js environment
+        uses: ./.github/actions/setup-project
+        with:
+          node-version: ${{ matrix.node-version }}
+          restore-nextjs-cache: true
+
+      - name: Run E2E tests
+        uses: docker://mcr.microsoft.com/playwright:v1.60.0
+        with:
+          args: sh -c "HOME=/root npm run test:e2e" # Set HOME to /root to avoid Playwright error with Firebox
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7

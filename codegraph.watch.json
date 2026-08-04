@@ -1,0 +1,6 @@
+{
+  "watchFolders": ["src", "scripts"],
+  "command": "codegraph sync .",
+  "debounceMs": 500,
+  "ignored": [".codegraph", ".git", ".next", "node_modules"]
+}

@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "oxc.oxc-vscode",
+    "mikestead.dotenv",
+    "bradlc.vscode-tailwindcss",
+    "vitest.explorer",
+    "humao.rest-client",
+    "ms-playwright.playwright",
+    "github.vscode-github-actions"
+  ]
+}
