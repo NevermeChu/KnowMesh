@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function DashboardPage() {
   return (
-    <div>
+    <div className="py-12 sm:py-16">
       <div className="max-w-2xl">
         <p className="text-sm font-semibold text-[#2383e2]">团队工作台</p>
         <h1 className="mt-3 text-4xl font-bold tracking-[-0.04em] text-[#202124]">
