@@ -120,3 +120,18 @@ npm run test:e2e
 ```
 
 CI 会执行构建、静态检查、测试和覆盖率收集。
+
+## 生产构建产物
+
+GitHub Actions 的 `Release` 工作流会在推送到 `main` 或手动触发时构建 Next.js standalone 应用，并在对应的 Actions 运行页面上传名为 `knowmesh-<commit SHA>` 的 artifact。该文件保留 14 天，不会出现在 GitHub Releases 页面。
+
+工作流从名为 `production` 的 GitHub Environment 读取以下配置：
+
+| 类型 | 名称 | 用途 |
+| --- | --- | --- |
+| Environment variable | `PRODUCTION_APP_URL` | 构建时写入的生产站点 HTTPS 地址 |
+| Environment secret | `PRODUCTION_CLERK_PUBLISHABLE_KEY` | 构建时写入的 Clerk 生产环境公钥 |
+| Environment variable | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | CI 构建和 E2E 使用的 Clerk 开发环境公钥 |
+| Environment secret | `CLERK_SECRET_KEY` | CI E2E 使用的 Clerk 开发环境密钥 |
+
+下载并解压 artifact 后，入口文件为 `server.js`。生产服务器仍需在运行时提供 `CLERK_SECRET_KEY` 和 `DATABASE_URL`，并在切换应用版本前单独执行数据库迁移；这些运行时密钥不会打包进 artifact。

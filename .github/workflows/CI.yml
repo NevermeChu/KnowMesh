@@ -16,6 +16,7 @@ jobs:
     name: Build with ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: production
 
     steps:
       - uses: actions/checkout@v6
@@ -37,6 +38,7 @@ jobs:
         run: npm run build-local
         env:
           NEXT_PUBLIC_APP_URL: http://localhost:3008
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
       - if: matrix.node-version == '24.x' && success()
         name: Cache Next.js build output
@@ -98,6 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build]
+    environment: production
 
     steps:
       - uses: actions/checkout@v6
@@ -114,6 +117,7 @@ jobs:
           args: sh -c "HOME=/root npm run test:e2e" # Set HOME to /root to avoid Playwright error with Firebox
         env:
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
       - name: Upload test results
         uses: actions/upload-artifact@v7
