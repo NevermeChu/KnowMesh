@@ -3,6 +3,7 @@
 import { ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { DocumentEditorToolbar } from '@/features/documents/components/DocumentEditorToolbar';
 
 type BreadcrumbItem = {
   href?: string;
@@ -83,6 +84,8 @@ export function ContentToolbar(props: {
           ))}
         </ol>
       </nav>
+
+      <DocumentEditorToolbar />
 
       <button
         type="button"

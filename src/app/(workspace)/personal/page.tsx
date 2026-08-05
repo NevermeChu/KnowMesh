@@ -1,11 +1,7 @@
-import { AppSectionPlaceholder } from '@/components/layout/AppSectionPlaceholder';
+import { ProjectDocumentsPage } from '@/features/documents/components/ProjectDocumentsPage';
 
-export default function PersonalPage() {
-  return (
-    <AppSectionPlaceholder
-      eyebrow="个人工作区"
-      title="个人工作区"
-      description="整理仅属于你的草稿、笔记与个人知识。"
-    />
-  );
+export default function PersonalPage(props: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return <ProjectDocumentsPage kind="personal" searchParams={props.searchParams} />;
 }
