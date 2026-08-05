@@ -1,5 +1,8 @@
 # 项目结构说明
 
+> [!WARNING]
+> 这是项目早期结构快照，包含已经删除的 Counter 和旧路由，不再是当前架构事实来源。当前知识库从 [`docs/README.md`](README.md) 开始；当前架构参见 [`architecture/overview.md`](architecture/overview.md)。本文仅用于追溯项目演进。
+
 本文档以当前仓库中实际存在的文件为准，说明各目录的职责、当前路由关系，以及后续增加业务代码时的放置约定。
 
 ## 当前目录树
