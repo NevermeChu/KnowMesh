@@ -21,19 +21,15 @@ jobs:
       - name: Build standalone application
         run: npm run build-local
         env:
-          NEXT_PUBLIC_APP_URL:
-          ${{ vars.PRODUCTION_APP_URL }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
-          ${{ secrets.PRODUCTION_CLERK_PUBLIS
-          HABLE_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_CLERK_PUBLISHABLE_KEY }}
 
-      - name: Include static files
+      - name: Prepare production artifact
         run: |
-          cp -r public .next/standalone/
-          public
+          cp -r public .next/standalone/public
           mkdir -p .next/standalone/.next
-          cp -r .next/static .next/
-          standalone/.next/static
+          cp -r .next/static .next/standalone/.next/static
+          rm -f .next/standalone/.env*
 
       - name: Upload production artifact
         uses: actions/upload-artifact@v7
