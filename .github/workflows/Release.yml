@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build production artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up project
+        uses: ./.github/actions/setup-project
+        with:
+          node-version: 24.x
+
+      - name: Build standalone application
+        run: npm run build-local
+        env:
+          NEXT_PUBLIC_APP_URL:
+          ${{ vars.PRODUCTION_APP_URL }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
+          ${{ secrets.PRODUCTION_CLERK_PUBLIS
+          HABLE_KEY }}
+
+      - name: Include static files
+        run: |
+          cp -r public .next/standalone/
+          public
+          mkdir -p .next/standalone/.next
+          cp -r .next/static .next/
+          standalone/.next/static
+
+      - name: Upload production artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: knowmesh-${{ github.sha }}
+          path: .next/standalone
+          include-hidden-files: true
+          retention-days: 14
