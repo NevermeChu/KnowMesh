@@ -1,3 +1,6 @@
+> [!WARNING]
+> 这是旧路由资料，不是当前路由设计。当前架构参见 [`architecture/overview.md`](architecture/overview.md)。
+
 import { sql } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';

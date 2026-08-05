@@ -13,6 +13,14 @@
 - Options object for 3+ params, optional flags, or ambiguous args.
 - Hypothesis-driven debugging: 1-3 causes, validate most likely first.
 
+## Project knowledge
+- Start at `docs/README.md` when a task changes architecture, data flow, authentication, database structure, or a documented feature.
+- Read `docs/KNOWLEDGE_MAINTENANCE.md` before creating, restructuring, or materially updating knowledge-base documents.
+- Treat accepted ADRs in `docs/adr/` as active architectural constraints. Replace an accepted decision only with a new ADR that supersedes it.
+- Update the relevant current-state document in the same change when behavior, invariants, ownership, boundaries, or operational procedures change.
+- Do not document trivial implementation details, temporary debugging state, or facts that are clearer from a single nearby function.
+- Historical documents explicitly marked non-authoritative are context only; verify current behavior in code and current-state documents.
+
 ## Token efficiency
 - Skip recaps unless the result is ambiguous or you need more input.
 
