@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { AppSidebar } from '@/components/layout/AppSidebar/AppSidebar';
 import { ContentToolbar } from '@/components/layout/ContentToolbar';
+import { DocumentEditorToolbarProvider } from '@/features/documents/components/DocumentEditorToolbar';
+import type { DocumentNavigationItem } from '@/features/documents/Document';
+import type { Project } from '@/features/projects/Project';
 
 const DEFAULT_SIDEBAR_WIDTH = 190;
 const MIN_SIDEBAR_WIDTH = 190;
@@ -18,7 +21,11 @@ type AppShellStyle = React.CSSProperties & {
  * @param props - Shell content.
  * @returns The authenticated application layout.
  */
-export function AppShell(props: { children: React.ReactNode }) {
+export function AppShell(props: {
+  children: React.ReactNode;
+  documents: DocumentNavigationItem[];
+  projects: Project[];
+}) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isContentFullscreen, setIsContentFullscreen] = useState(false);
   const shellStyle: AppShellStyle = {
@@ -26,27 +33,31 @@ export function AppShell(props: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-dvh bg-[#fbfbfa] text-[#2f3437] antialiased" style={shellStyle}>
-      <AppSidebar
-        isHidden={isContentFullscreen}
-        width={sidebarWidth}
-        onResize={(width) => {
-          setSidebarWidth(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)));
-        }}
-      />
-      <main
-        className={`min-h-dvh pt-16 transition-[margin-left] duration-200 lg:pt-0 ${
-          isContentFullscreen ? 'lg:ml-0' : 'lg:ml-[var(--app-sidebar-width)]'
-        }`}
-      >
-        <ContentToolbar
-          isContentFullscreen={isContentFullscreen}
-          onToggleContentFullscreen={() => {
-            setIsContentFullscreen((isFullscreen) => !isFullscreen);
+    <DocumentEditorToolbarProvider>
+      <div className="min-h-dvh bg-[#fbfbfa] text-[#2f3437] antialiased" style={shellStyle}>
+        <AppSidebar
+          documents={props.documents}
+          isHidden={isContentFullscreen}
+          projects={props.projects}
+          width={sidebarWidth}
+          onResize={(width) => {
+            setSidebarWidth(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)));
           }}
         />
-        <div className="px-5 sm:px-8 lg:px-12">{props.children}</div>
-      </main>
-    </div>
+        <main
+          className={`min-h-dvh pt-16 transition-[margin-left] duration-200 lg:pt-0 ${
+            isContentFullscreen ? 'lg:ml-0' : 'lg:ml-[var(--app-sidebar-width)]'
+          }`}
+        >
+          <ContentToolbar
+            isContentFullscreen={isContentFullscreen}
+            onToggleContentFullscreen={() => {
+              setIsContentFullscreen((isFullscreen) => !isFullscreen);
+            }}
+          />
+          <div className="px-5 sm:px-8 lg:px-12">{props.children}</div>
+        </main>
+      </div>
+    </DocumentEditorToolbarProvider>
   );
 }

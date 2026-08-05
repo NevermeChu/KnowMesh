@@ -1,6 +1,7 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import '@/styles/global.css';
 import type { Metadata, Viewport } from 'next';
+import { GlobalContextMenuBoundary } from '@/components/layout/GlobalContextMenuBoundary';
 
 export const metadata: Metadata = {
   icons: [
@@ -46,7 +47,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
           signUpFallbackRedirectUrl="/"
           afterSignOutUrl="/"
         >
-          {props.children}
+          <GlobalContextMenuBoundary>{props.children}</GlobalContextMenuBoundary>
         </ClerkProvider>
       </body>
     </html>

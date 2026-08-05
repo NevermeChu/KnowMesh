@@ -1,11 +1,7 @@
-import { AppSectionPlaceholder } from '@/components/layout/AppSectionPlaceholder';
+import { ProjectDocumentsPage } from '@/features/documents/components/ProjectDocumentsPage';
 
-export default function CollaborationPage() {
-  return (
-    <AppSectionPlaceholder
-      eyebrow="协作区"
-      title="协作区"
-      description="与团队成员共同组织、维护和分享知识。"
-    />
-  );
+export default function CollaborationPage(props: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return <ProjectDocumentsPage kind="collaboration" searchParams={props.searchParams} />;
 }

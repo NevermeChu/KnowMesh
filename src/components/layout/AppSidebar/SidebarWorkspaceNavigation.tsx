@@ -1,49 +1,41 @@
 'use client';
 
-import type { LucideIcon } from 'lucide-react';
-import { ChevronRight, FileText, Users } from 'lucide-react';
+import { ChevronRight, FileText, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
-
-type WorkspaceProject = {
-  href: string;
-  label: string;
-};
-
-type WorkspaceSectionId = 'collaboration' | 'personal';
-
-type WorkspaceSection = {
-  href: string;
-  id: WorkspaceSectionId;
-  icon: LucideIcon;
-  label: string;
-  projects: WorkspaceProject[];
-};
-
-const workspaceSections: WorkspaceSection[] = [
-  {
-    href: '/personal',
-    id: 'personal',
-    icon: FileText,
-    label: '个人工作区',
-    projects: [],
-  },
-  {
-    href: '/collaboration',
-    id: 'collaboration',
-    icon: Users,
-    label: '协作区',
-    projects: [],
-  },
-];
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useTransition } from 'react';
+import { SidebarNavigationContextMenus } from '@/components/layout/AppSidebar/SidebarNavigationContextMenus';
+import type {
+  NavigationContextMenu,
+  NavigationContextTarget,
+  WorkspaceProject,
+  WorkspaceSection,
+} from '@/components/layout/AppSidebar/SidebarWorkspaceNavigationTypes';
+import { fitContextMenuPosition } from '@/components/ui/ContextMenu';
+import { canEditDocuments } from '@/features/documents/Document';
+import type { DocumentNavigationItem } from '@/features/documents/Document';
+import { createDocument } from '@/features/documents/server/CreateDocument';
+import type { Project, ProjectKind } from '@/features/projects/Project';
 
 const isActiveRoute = (pathname: string, href: string) => pathname.startsWith(href);
 
 function WorkspaceSectionNavigation(props: {
+  creatingDocumentProjectId: string | null;
+  documentCreationErrorProjectId: string | null;
   isExpanded: boolean;
+  expandedProjectIds: Record<string, boolean>;
+  onCreate: () => void;
+  onCreateDocument: (project: WorkspaceProject) => void;
   onNavigate: () => void;
+  onOpenContextMenu: (
+    event: React.MouseEvent<HTMLElement>,
+    target: NavigationContextTarget,
+  ) => void;
   onToggle: () => void;
+  onToggleProject: (projectId: string) => void;
   pathname: string;
+  selectedDocumentId?: string;
+  selectedProjectId?: string;
   section: WorkspaceSection;
 }) {
   const Icon = props.section.icon;
@@ -51,26 +43,50 @@ function WorkspaceSectionNavigation(props: {
 
   return (
     <nav aria-label={props.section.label}>
-      <button
-        type="button"
-        aria-controls={`workspace-projects-${props.section.id}`}
-        aria-expanded={props.isExpanded}
-        aria-current={isActive ? 'page' : undefined}
-        className={`flex min-h-9 w-full items-center gap-3 rounded-lg px-1.5 text-sm font-semibold transition-colors ${
+      <div
+        className={`flex min-h-9 items-center rounded-lg transition-colors ${
           isActive
             ? 'bg-black/7 text-[#202124]'
             : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
         }`}
-        onClick={props.onToggle}
+        onContextMenu={(event) => {
+          props.onOpenContextMenu(event, { kind: 'workspace', section: props.section });
+        }}
       >
-        <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
-        <span>{props.section.label}</span>
-        <ChevronRight
-          aria-hidden="true"
-          className={`ml-auto size-4 shrink-0 transition-transform ${props.isExpanded ? 'rotate-90' : ''}`}
-          strokeWidth={1.8}
-        />
-      </button>
+        <button
+          type="button"
+          aria-controls={`workspace-projects-${props.section.id}`}
+          aria-expanded={props.isExpanded}
+          aria-current={isActive ? 'page' : undefined}
+          className="flex min-w-0 flex-1 items-center gap-3 self-stretch px-1.5 text-left text-sm font-semibold"
+          onClick={props.onToggle}
+        >
+          <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
+          <span className="truncate">{props.section.label}</span>
+        </button>
+        <button
+          type="button"
+          aria-label={`在${props.section.label}中创建项目`}
+          className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+          onClick={props.onCreate}
+        >
+          <Plus aria-hidden="true" className="size-4" strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          aria-label={
+            props.isExpanded ? `收起${props.section.label}` : `展开${props.section.label}`
+          }
+          className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+          onClick={props.onToggle}
+        >
+          <ChevronRight
+            aria-hidden="true"
+            className={`size-4 transition-transform ${props.isExpanded ? 'rotate-90' : ''}`}
+            strokeWidth={1.8}
+          />
+        </button>
+      </div>
 
       {props.isExpanded && (
         <ul id={`workspace-projects-${props.section.id}`} className="mt-1 space-y-1 pl-5">
@@ -78,22 +94,115 @@ function WorkspaceSectionNavigation(props: {
             <li className="px-3 py-1.5 text-xs text-[#9a9da1]">暂无项目</li>
           ) : (
             props.section.projects.map((project) => {
-              const isProjectActive = isActiveRoute(props.pathname, project.href);
+              const isProjectActive =
+                isActiveRoute(props.pathname, props.section.href) &&
+                props.selectedProjectId === project.id;
+              const isProjectExpanded = props.expandedProjectIds[project.id] ?? false;
 
               return (
-                <li key={project.href}>
-                  <Link
-                    href={project.href}
-                    aria-current={isProjectActive ? 'page' : undefined}
-                    className={`block min-h-8 truncate rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                <li key={project.id}>
+                  <div
+                    className={`flex min-h-8 items-center rounded-lg transition-colors ${
                       isProjectActive
                         ? 'bg-black/7 text-[#202124]'
                         : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
                     }`}
-                    onClick={props.onNavigate}
+                    onContextMenu={(event) => {
+                      props.onOpenContextMenu(event, { kind: 'project', project });
+                    }}
                   >
-                    {project.label}
-                  </Link>
+                    <Link
+                      href={project.href}
+                      aria-current={isProjectActive ? 'page' : undefined}
+                      className="min-w-0 flex-1 truncate px-3 py-1.5 text-sm"
+                      onClick={() => {
+                        if (!isProjectExpanded) {
+                          props.onToggleProject(project.id);
+                        }
+                        props.onNavigate();
+                      }}
+                    >
+                      {project.label}
+                    </Link>
+                    {isProjectActive && canEditDocuments(project.role) && (
+                      <button
+                        type="button"
+                        aria-label={`在${project.label}中创建文档`}
+                        title="创建文档"
+                        className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={props.creatingDocumentProjectId === project.id}
+                        onClick={() => {
+                          props.onCreateDocument(project);
+                        }}
+                      >
+                        <Plus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      aria-controls={`project-documents-${project.id}`}
+                      aria-expanded={isProjectExpanded}
+                      aria-label={
+                        isProjectExpanded ? `收起${project.label}` : `展开${project.label}`
+                      }
+                      className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+                      onClick={() => {
+                        props.onToggleProject(project.id);
+                      }}
+                    >
+                      <ChevronRight
+                        aria-hidden="true"
+                        className={`size-3.5 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`}
+                        strokeWidth={1.8}
+                      />
+                    </button>
+                  </div>
+
+                  {isProjectExpanded && (
+                    <ul id={`project-documents-${project.id}`} className="mt-1 space-y-1 pl-3">
+                      {project.documents.length === 0 ? (
+                        <li className="px-3 py-1 text-xs text-[#9a9da1]">暂无文档</li>
+                      ) : (
+                        project.documents.map((document) => {
+                          const isDocumentActive = props.selectedDocumentId === document.id;
+
+                          return (
+                            <li key={document.id}>
+                              <Link
+                                href={document.href}
+                                aria-current={isDocumentActive ? 'page' : undefined}
+                                className={`flex min-h-8 items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                                  isDocumentActive
+                                    ? 'bg-black/7 font-medium text-[#202124]'
+                                    : 'text-[#777b80] hover:bg-black/5 hover:text-[#202124]'
+                                }`}
+                                onClick={props.onNavigate}
+                                onContextMenu={(event) => {
+                                  props.onOpenContextMenu(event, {
+                                    document,
+                                    kind: 'document',
+                                    project,
+                                  });
+                                }}
+                              >
+                                <FileText
+                                  aria-hidden="true"
+                                  className="size-3.5 shrink-0"
+                                  strokeWidth={1.8}
+                                />
+                                <span className="truncate">{document.label}</span>
+                              </Link>
+                            </li>
+                          );
+                        })
+                      )}
+                      {props.documentCreationErrorProjectId === project.id && (
+                        <li className="px-3 py-1 text-xs text-[#d14343]" role="alert">
+                          创建文档失败，请重试
+                        </li>
+                      )}
+                    </ul>
+                  )}
                 </li>
               );
             })
@@ -110,29 +219,155 @@ function WorkspaceSectionNavigation(props: {
  * @param props - Current route and navigation behavior.
  * @returns The collapsible workspace navigation.
  */
-export function SidebarWorkspaceNavigation(props: { pathname: string; onNavigate: () => void }) {
-  const [expandedSections, setExpandedSections] = useState<Record<WorkspaceSectionId, boolean>>({
-    collaboration: false,
-    personal: false,
+export function SidebarWorkspaceNavigation(props: {
+  documents: DocumentNavigationItem[];
+  pathname: string;
+  projects: Project[];
+  onCreateProject: (kind: ProjectKind) => void;
+  onNavigate: () => void;
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedDocumentId = searchParams.get('document') ?? undefined;
+  const selectedProjectId = searchParams.get('project') ?? undefined;
+  const selectedProjectKind = props.projects.find(
+    (project) => project.id === selectedProjectId,
+  )?.kind;
+  const [expandedSections, setExpandedSections] = useState<Record<ProjectKind, boolean>>({
+    collaboration: selectedProjectKind === 'collaboration',
+    personal: selectedProjectKind === 'personal',
   });
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Record<string, boolean>>(
+    selectedProjectId ? { [selectedProjectId]: true } : {},
+  );
+  const [contextMenu, setContextMenu] = useState<NavigationContextMenu | null>(null);
+  const [creatingDocumentProjectId, setCreatingDocumentProjectId] = useState<string | null>(null);
+  const [documentCreationErrorProjectId, setDocumentCreationErrorProjectId] = useState<
+    string | null
+  >(null);
+  const [isCreatingDocument, startCreatingDocument] = useTransition();
+  const workspaceSections: WorkspaceSection[] = [
+    {
+      href: '/personal',
+      id: 'personal',
+      icon: FileText,
+      label: '个人工作区',
+      projects: props.projects
+        .filter((project) => project.kind === 'personal')
+        .map((project) => ({
+          documents: props.documents
+            .filter((document) => document.projectId === project.id)
+            .map((document) => ({
+              href: `/personal?project=${project.id}&document=${document.id}`,
+              id: document.id,
+              label: document.title,
+            })),
+          href: `/personal?project=${project.id}`,
+          id: project.id,
+          label: project.name,
+          role: project.role,
+        })),
+    },
+    {
+      href: '/collaboration',
+      id: 'collaboration',
+      icon: Users,
+      label: '协作区',
+      projects: props.projects
+        .filter((project) => project.kind === 'collaboration')
+        .map((project) => ({
+          documents: props.documents
+            .filter((document) => document.projectId === project.id)
+            .map((document) => ({
+              href: `/collaboration?project=${project.id}&document=${document.id}`,
+              id: document.id,
+              label: document.title,
+            })),
+          href: `/collaboration?project=${project.id}`,
+          id: project.id,
+          label: project.name,
+          role: project.role,
+        })),
+    },
+  ];
+
+  const createDocumentForProject = (project: WorkspaceProject) => {
+    setCreatingDocumentProjectId(project.id);
+    setDocumentCreationErrorProjectId(null);
+    setExpandedProjectIds((currentProjects) => ({ ...currentProjects, [project.id]: true }));
+    startCreatingDocument(async () => {
+      try {
+        const document = await createDocument({ projectId: project.id });
+        router.push(`${project.href}&document=${document.id}`);
+        router.refresh();
+        props.onNavigate();
+      } catch {
+        setDocumentCreationErrorProjectId(project.id);
+      } finally {
+        setCreatingDocumentProjectId(null);
+      }
+    });
+  };
 
   return (
     <div className="mt-7 space-y-3">
       {workspaceSections.map((section) => (
         <WorkspaceSectionNavigation
           key={section.href}
+          creatingDocumentProjectId={isCreatingDocument ? creatingDocumentProjectId : null}
+          documentCreationErrorProjectId={documentCreationErrorProjectId}
+          expandedProjectIds={expandedProjectIds}
           isExpanded={expandedSections[section.id]}
           pathname={props.pathname}
+          selectedDocumentId={selectedDocumentId}
+          selectedProjectId={selectedProjectId}
           section={section}
+          onCreate={() => {
+            setExpandedSections((currentSections) => ({
+              ...currentSections,
+              [section.id]: true,
+            }));
+            props.onCreateProject(section.id);
+          }}
+          onCreateDocument={createDocumentForProject}
           onNavigate={props.onNavigate}
+          onOpenContextMenu={(event, target) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setContextMenu({
+              position: fitContextMenuPosition({
+                itemCount: 2,
+                x: event.clientX,
+                y: event.clientY,
+              }),
+              target,
+            });
+          }}
           onToggle={() => {
             setExpandedSections((currentSections) => ({
               ...currentSections,
               [section.id]: !currentSections[section.id],
             }));
           }}
+          onToggleProject={(projectId) => {
+            setExpandedProjectIds((currentProjects) => ({
+              ...currentProjects,
+              [projectId]: !currentProjects[projectId],
+            }));
+          }}
         />
       ))}
+      <SidebarNavigationContextMenus
+        contextMenu={contextMenu}
+        onClose={() => {
+          setContextMenu(null);
+        }}
+        onCreateDocument={createDocumentForProject}
+        onCreateProject={(kind) => {
+          setExpandedSections((currentSections) => ({ ...currentSections, [kind]: true }));
+          props.onCreateProject(kind);
+        }}
+      />
     </div>
   );
 }

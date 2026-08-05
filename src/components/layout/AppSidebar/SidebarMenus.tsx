@@ -10,32 +10,8 @@ import {
   UserRound,
 } from 'lucide-react';
 import Link from 'next/link';
+import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
 import { AppConfig } from '@/utils/AppConfig';
-
-function SidebarDialog(props: {
-  children: React.ReactNode;
-  id: string;
-  isOpen: boolean;
-  label: string;
-  placement: 'bottom' | 'top';
-}) {
-  if (!props.isOpen) {
-    return null;
-  }
-
-  return (
-    <dialog
-      open
-      id={props.id}
-      aria-label={props.label}
-      className={`absolute left-1.5 z-20 m-0 w-[13.333rem] max-w-[calc(100vw-0.75rem)] rounded-lg border border-black/10 bg-white p-1 text-[#2f3437] shadow-lg ${
-        props.placement === 'bottom' ? 'top-11' : 'bottom-10'
-      }`}
-    >
-      {props.children}
-    </dialog>
-  );
-}
 
 /**
  * Displays the workspace switcher and its compact dialog.
@@ -72,15 +48,13 @@ export function WorkspaceSwitcher(props: {
         />
       </button>
 
-      <SidebarDialog
+      <PopupMenu
         id="workspace-switcher-dialog"
         isOpen={props.isOpen}
         label="切换工作区"
-        placement="bottom"
+        placement={{ kind: 'anchor', side: 'bottom' }}
       >
-        <p className="px-1.5 pt-1 pb-0.5 text-xs font-semibold tracking-[0.08em] text-[#8a8d91] uppercase">
-          切换工作区
-        </p>
+        <PopupMenuLabel>切换工作区</PopupMenuLabel>
         <button
           type="button"
           className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-black/5"
@@ -100,7 +74,7 @@ export function WorkspaceSwitcher(props: {
           </span>
           <Check aria-hidden="true" className="size-3.5 text-[#2383e2]" strokeWidth={2} />
         </button>
-      </SidebarDialog>
+      </PopupMenu>
     </div>
   );
 }
@@ -140,13 +114,16 @@ export function SettingsMenu(props: {
         />
       </button>
 
-      <SidebarDialog id="settings-dialog" isOpen={props.isOpen} label="设置" placement="top">
-        <p className="px-1.5 pt-1 pb-0.5 text-xs font-semibold tracking-[0.08em] text-[#8a8d91] uppercase">
-          设置
-        </p>
+      <PopupMenu
+        id="settings-dialog"
+        isOpen={props.isOpen}
+        label="设置"
+        placement={{ kind: 'anchor', side: 'top' }}
+      >
+        <PopupMenuLabel>设置</PopupMenuLabel>
         <Link
           href="/settings/preferences"
-          className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm font-medium text-[#555a60] transition-colors hover:bg-black/5 hover:text-[#202124]"
+          className={popupMenuItemClassName}
           onClick={props.onNavigate}
         >
           <SlidersHorizontal aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
@@ -154,7 +131,7 @@ export function SettingsMenu(props: {
         </Link>
         <Link
           href="/settings/user-profile"
-          className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm font-medium text-[#555a60] transition-colors hover:bg-black/5 hover:text-[#202124]"
+          className={popupMenuItemClassName}
           onClick={props.onNavigate}
         >
           <UserRound aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
@@ -162,15 +139,12 @@ export function SettingsMenu(props: {
         </Link>
         <div className="my-0.5 border-t border-black/8" />
         <SignOutButton>
-          <button
-            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-sm font-medium text-[#555a60] transition-colors hover:bg-black/5 hover:text-[#202124]"
-            type="button"
-          >
+          <button className={popupMenuItemClassName} type="button">
             <LogOut aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
             <span>退出登录</span>
           </button>
         </SignOutButton>
-      </SidebarDialog>
+      </PopupMenu>
     </div>
   );
 }

@@ -6,6 +6,9 @@ import { useState } from 'react';
 import { SettingsMenu, WorkspaceSwitcher } from '@/components/layout/AppSidebar/SidebarMenus';
 import { SidebarPrimaryNavigation } from '@/components/layout/AppSidebar/SidebarPrimaryNavigation';
 import { SidebarWorkspaceNavigation } from '@/components/layout/AppSidebar/SidebarWorkspaceNavigation';
+import type { DocumentNavigationItem } from '@/features/documents/Document';
+import { CreateProjectDialog } from '@/features/projects/components/CreateProjectDialog';
+import type { Project, ProjectKind } from '@/features/projects/Project';
 import { AppConfig } from '@/utils/AppConfig';
 
 type SidebarMenu = 'settings' | 'workspace' | null;
@@ -16,9 +19,12 @@ const menuDialogIds: Record<Exclude<SidebarMenu, null>, string> = {
 };
 
 function SidebarContent(props: {
+  documents: DocumentNavigationItem[];
   openMenu: SidebarMenu;
   pathname: string;
+  projects: Project[];
   onCloseMenu: () => void;
+  onCreateProject: (kind: ProjectKind) => void;
   onNavigate: () => void;
   onToggleMenu: (menu: Exclude<SidebarMenu, null>) => void;
 }) {
@@ -34,7 +40,13 @@ function SidebarContent(props: {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-4">
         <SidebarPrimaryNavigation pathname={props.pathname} onNavigate={props.onNavigate} />
-        <SidebarWorkspaceNavigation pathname={props.pathname} onNavigate={props.onNavigate} />
+        <SidebarWorkspaceNavigation
+          documents={props.documents}
+          pathname={props.pathname}
+          projects={props.projects}
+          onCreateProject={props.onCreateProject}
+          onNavigate={props.onNavigate}
+        />
       </div>
 
       <SettingsMenu
@@ -56,16 +68,20 @@ function SidebarContent(props: {
  * @returns The responsive application sidebar.
  */
 export function AppSidebar(props: {
+  documents: DocumentNavigationItem[];
   isHidden: boolean;
+  projects: Project[];
   width: number;
   onResize: (width: number) => void;
 }) {
   const pathname = usePathname();
+  const [creatingProjectKind, setCreatingProjectKind] = useState<ProjectKind | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<SidebarMenu>(null);
 
   const closeNavigation = () => {
     setIsOpen(false);
+    setCreatingProjectKind(null);
     setOpenMenu(null);
   };
 
@@ -129,11 +145,14 @@ export function AppSidebar(props: {
 
         <div className="flex h-full w-full flex-col">
           <SidebarContent
+            documents={props.documents}
             openMenu={openMenu}
             pathname={pathname}
+            projects={props.projects}
             onCloseMenu={() => {
               setOpenMenu(null);
             }}
+            onCreateProject={setCreatingProjectKind}
             onNavigate={closeNavigation}
             onToggleMenu={(menu) => {
               setOpenMenu((currentMenu) => (currentMenu === menu ? null : menu));
@@ -166,6 +185,15 @@ export function AppSidebar(props: {
           }}
         />
       </aside>
+
+      {creatingProjectKind && (
+        <CreateProjectDialog
+          kind={creatingProjectKind}
+          onClose={() => {
+            setCreatingProjectKind(null);
+          }}
+        />
+      )}
     </>
   );
 }
