@@ -15,6 +15,13 @@
       "when": 1785837167235,
       "tag": "0001_add-project-members",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785859231156,
+      "tag": "0002_add-documents",
+      "breakpoints": true
     }
   ]
 }
