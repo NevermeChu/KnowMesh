@@ -16,6 +16,7 @@ jobs:
     name: Build with ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: production
 
     steps:
       - uses: actions/checkout@v6
@@ -99,6 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build]
+    environment: production
 
     steps:
       - uses: actions/checkout@v6
