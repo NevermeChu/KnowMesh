@@ -1,17 +1,21 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-const isProtectedRoute = createRouteMatcher([
-  '/collaboration(.*)',
-  '/dashboard(.*)',
-  '/personal(.*)',
-  '/search(.*)',
-  '/settings(.*)',
-  '/starred(.*)',
-]);
+const protectedRoutePrefixes = [
+  '/collaboration',
+  '/dashboard',
+  '/personal',
+  '/search',
+  '/settings',
+  '/starred',
+] as const;
+
+function isProtectedRoute(pathname: string) {
+  return protectedRoutePrefixes.some((prefix) => pathname.startsWith(prefix));
+}
 
 export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedRoute(request)) {
+  if (isProtectedRoute(request.nextUrl.pathname)) {
     const signInUrl = new URL('/sign-in', request.url);
 
     await auth.protect({

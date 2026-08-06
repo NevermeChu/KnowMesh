@@ -1,3 +1,4 @@
+import { zhCN } from '@clerk/localizations';
 import { ClerkProvider } from '@clerk/nextjs';
 import '@/styles/global.css';
 import type { Metadata, Viewport } from 'next';
@@ -35,9 +36,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout(props: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <body>
         <ClerkProvider
+          localization={zhCN}
           appearance={{
             cssLayerName: 'clerk', // Ensure Clerk is compatible with Tailwind CSS v4
           }}
