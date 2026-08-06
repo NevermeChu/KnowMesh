@@ -2,8 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 jobs:
   build:
@@ -27,9 +25,16 @@ jobs:
 
       - name: Prepare production artifact
         run: |
-          cp -r public .next/standalone/public
-          mkdir -p .next/standalone/.next
-          cp -r .next/static .next/standalone/.next/static
+          npx --no-install esbuild scripts/migrate-production.ts \
+            --bundle \
+            --platform=node \
+            --target=node24 \
+            --format=cjs \
+            --outfile=.next/standalone/migrate-production.cjs
+          mkdir -p .next/standalone/public .next/standalone/.next/static .next/standalone/migrations
+          cp -r public/. .next/standalone/public/
+          cp -r .next/static/. .next/standalone/.next/static/
+          cp -r migrations/. .next/standalone/migrations/
           rm -f .next/standalone/.env*
 
       - name: Upload production artifact

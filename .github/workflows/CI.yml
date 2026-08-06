@@ -126,3 +126,269 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 7
+
+  deploy:
+    name: Deploy production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, static, unit, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: 20.46.165.183
+      DEPLOY_PORT: '22'
+      DEPLOY_USER: thisme
+      EXPECTED_HOST_FINGERPRINT: SHA256:s8fwWfOG9piXBn7D7gxG98WflWbmvvOeZyDoRUy2o+A
+      NODE_BINARY: /home/thisme/.nvm/versions/node/v24.19.0/bin/node
+      RELEASE_ROOT: /srv/knowmesh-app/releases
+      CURRENT_LINK: /srv/knowmesh-app/current
+      ENVIRONMENT_FILE: /etc/knowmesh.env
+      SERVICE_NAME: knowmesh.service
+      PUBLIC_HEALTH_URL: https://thisme.icu/
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up project
+        uses: ./.github/actions/setup-project
+        with:
+          node-version: 24.x
+
+      - name: Build standalone application
+        run: npm run build-local
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_CLERK_PUBLISHABLE_KEY }}
+
+      - name: Prepare production release
+        run: |
+          set -euo pipefail
+          npx --no-install esbuild scripts/migrate-production.ts \
+            --bundle \
+            --platform=node \
+            --target=node24 \
+            --format=cjs \
+            --outfile=.next/standalone/migrate-production.cjs
+          mkdir -p .next/standalone/public .next/standalone/.next/static .next/standalone/migrations
+          cp -r public/. .next/standalone/public/
+          cp -r .next/static/. .next/standalone/.next/static/
+          cp -r migrations/. .next/standalone/migrations/
+          rm -f .next/standalone/.env*
+          test -f .next/standalone/server.js
+          test -f .next/standalone/migrate-production.cjs
+          test -d .next/standalone/.next/static
+          test -d .next/standalone/public
+          test -f .next/standalone/migrations/meta/_journal.json
+          tar -C .next/standalone -czf "${RUNNER_TEMP}/knowmesh-release-${GITHUB_SHA}.tgz" .
+
+      - name: Retain production artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: knowmesh-${{ github.sha }}
+          path: ${{ runner.temp }}/knowmesh-release-${{ github.sha }}.tgz
+          retention-days: 14
+
+      - name: Configure verified SSH access
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "${HOME}/.ssh"
+          printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/knowmesh-deploy"
+          for attempt in 1 2 3 4 5; do
+            if ssh-keyscan -p "${DEPLOY_PORT}" -t ed25519 "${DEPLOY_HOST}" > "${HOME}/.ssh/known_hosts" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          test -s "${HOME}/.ssh/known_hosts"
+          mapfile -t fingerprints < <(ssh-keygen -lf "${HOME}/.ssh/known_hosts" -E sha256 | awk '{print $2}' | sort -u)
+          if [[ "${#fingerprints[@]}" -ne 1 || "${fingerprints[0]}" != "${EXPECTED_HOST_FINGERPRINT}" ]]; then
+            echo 'Production SSH host fingerprint verification failed' >&2
+            exit 1
+          fi
+
+      - name: Upload production release
+        run: |
+          set -euo pipefail
+          scp \
+            -i "${HOME}/.ssh/knowmesh-deploy" \
+            -P "${DEPLOY_PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            "${RUNNER_TEMP}/knowmesh-release-${GITHUB_SHA}.tgz" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/knowmesh-release-${GITHUB_SHA}.tgz"
+
+      - name: Migrate and activate production release
+        run: |
+          set -euo pipefail
+          ssh \
+            -i "${HOME}/.ssh/knowmesh-deploy" \
+            -p "${DEPLOY_PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            sudo -n bash -s -- \
+            "${GITHUB_SHA}" \
+            "${RELEASE_ROOT}" \
+            "${CURRENT_LINK}" \
+            "${ENVIRONMENT_FILE}" \
+            "${NODE_BINARY}" \
+            "${SERVICE_NAME}" <<'REMOTE'
+          set -euo pipefail
+
+          release_id=$1
+          release_root=$2
+          current_link=$3
+          environment_file=$4
+          node_binary=$5
+          service_name=$6
+
+          if [[ ! "${release_id}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Invalid release ID' >&2
+            exit 1
+          fi
+
+          archive="/tmp/knowmesh-release-${release_id}.tgz"
+          release_dir="${release_root}/${release_id}"
+          staging_dir="${release_root}/.${release_id}.staging"
+          rollback_marker="${release_root}/.previous-${release_id}"
+          temporary_link="${current_link}.next-${release_id}"
+
+          cleanup() {
+            rm -f -- "${archive}" "${temporary_link}"
+            if [[ -d "${staging_dir}" ]]; then
+              rm -rf -- "${staging_dir}"
+            fi
+          }
+          trap cleanup EXIT
+
+          install -d -o thisme -g thisme "${release_root}"
+          test -f "${archive}"
+
+          if [[ ! -d "${release_dir}" ]]; then
+            rm -rf -- "${staging_dir}"
+            install -d -o thisme -g thisme "${staging_dir}"
+            tar -xzf "${archive}" -C "${staging_dir}"
+            test -f "${staging_dir}/server.js"
+            test -f "${staging_dir}/migrate-production.cjs"
+            test -d "${staging_dir}/.next/static"
+            test -d "${staging_dir}/public"
+            test -f "${staging_dir}/migrations/meta/_journal.json"
+            chown -R thisme:thisme "${staging_dir}"
+            mv -- "${staging_dir}" "${release_dir}"
+          fi
+
+          test -f "${release_dir}/server.js"
+          test -f "${release_dir}/migrate-production.cjs"
+          test -d "${release_dir}/.next/static"
+          test -d "${release_dir}/public"
+          test -f "${release_dir}/migrations/meta/_journal.json"
+          test -r "${environment_file}"
+          test -x "${node_binary}"
+
+          "${node_binary}" "${release_dir}/migrate-production.cjs" "${environment_file}"
+
+          old_release=$(readlink -f "${current_link}")
+          if [[ -z "${old_release}" || ! -d "${old_release}" ]]; then
+            echo 'Current production release is unavailable for rollback' >&2
+            exit 1
+          fi
+          printf '%s\n' "${old_release}" > "${rollback_marker}"
+
+          rm -f -- "${temporary_link}"
+          ln -s "${release_dir}" "${temporary_link}"
+          mv -Tf -- "${temporary_link}" "${current_link}"
+
+          healthy=false
+          if systemctl restart "${service_name}"; then
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null; then
+                healthy=true
+                break
+              fi
+              sleep 2
+            done
+          fi
+
+          if [[ "${healthy}" != true ]]; then
+            rollback_link="${current_link}.rollback-${release_id}"
+            rm -f -- "${rollback_link}"
+            ln -s "${old_release}" "${rollback_link}"
+            mv -Tf -- "${rollback_link}" "${current_link}"
+            systemctl restart "${service_name}"
+            rm -f -- "${rollback_marker}"
+            echo 'Local production health check failed; application release was rolled back' >&2
+            exit 1
+          fi
+          REMOTE
+
+      - name: Verify public production and finalize
+        run: |
+          set -euo pipefail
+          if curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 10 \
+            --retry-all-errors \
+            --retry-delay 3 \
+            "${PUBLIC_HEALTH_URL}" >/dev/null; then
+            ssh \
+              -i "${HOME}/.ssh/knowmesh-deploy" \
+              -p "${DEPLOY_PORT}" \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+              "${DEPLOY_USER}@${DEPLOY_HOST}" \
+              sudo -n rm -f -- "${RELEASE_ROOT}/.previous-${GITHUB_SHA}"
+            exit 0
+          fi
+
+          ssh \
+            -i "${HOME}/.ssh/knowmesh-deploy" \
+            -p "${DEPLOY_PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            sudo -n bash -s -- \
+            "${GITHUB_SHA}" \
+            "${RELEASE_ROOT}" \
+            "${CURRENT_LINK}" \
+            "${SERVICE_NAME}" <<'ROLLBACK'
+          set -euo pipefail
+
+          release_id=$1
+          release_root=$2
+          current_link=$3
+          service_name=$4
+
+          if [[ ! "${release_id}" =~ ^[0-9a-f]{40}$ ]]; then
+            exit 1
+          fi
+
+          rollback_marker="${release_root}/.previous-${release_id}"
+          old_release=$(cat "${rollback_marker}")
+          if [[ "${old_release}" != "${release_root}/"* || ! -d "${old_release}" ]]; then
+            echo 'Rollback target is invalid' >&2
+            exit 1
+          fi
+
+          rollback_link="${current_link}.rollback-${release_id}"
+          rm -f -- "${rollback_link}"
+          ln -s "${old_release}" "${rollback_link}"
+          mv -Tf -- "${rollback_link}" "${current_link}"
+          systemctl restart "${service_name}"
+          rm -f -- "${rollback_marker}"
+          ROLLBACK
+          echo 'Public production health check failed; application release was rolled back' >&2
+          exit 1

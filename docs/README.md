@@ -13,6 +13,7 @@
 | 修改项目、个人/协作区或项目成员 | [`features/projects.md`](features/projects.md) |
 | 修改文档模型、编辑器或文档权限 | [`features/documents.md`](features/documents.md) 和 [`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
+| 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |
 | 理解“为什么这样选” | [`adr/README.md`](adr/README.md) 和相关 Accepted ADR |
 | 查看非权威 UI 参考 | [`design-references/README.md`](design-references/README.md) |
 | 新增或维护知识文档 | [`KNOWLEDGE_MAINTENANCE.md`](KNOWLEDGE_MAINTENANCE.md) |

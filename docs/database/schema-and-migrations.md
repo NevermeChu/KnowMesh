@@ -107,6 +107,8 @@ npm run db:studio
 
 `npm run db:migrate` 和 `npm run db:studio` 都不会自行启动 PGlite。操作本地持久化数据库时，应先在一个终端保持 `npm run dev` 运行，再在另一个终端执行相应命令；也可以连接已经可用的 PostgreSQL。`npm run build-local` 使用临时 PGlite 实例，不写入 `local.db/`，不用于查看或维护本地持久化数据。
 
+生产迁移由 CI 构建的自包含迁移程序从新 release 执行，不依赖服务器源码工作树。迁移必须先于应用软链接切换，并遵守 [`../operations/deployment.md`](../operations/deployment.md) 中的向后兼容与应用回滚边界。
+
 文档和日志不得记录 `DATABASE_URL`、密钥或真实用户数据。
 
 ## 相关代码
