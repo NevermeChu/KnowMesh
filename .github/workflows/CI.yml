@@ -19,7 +19,7 @@ jobs:
     environment: production
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -79,7 +79,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -101,7 +101,7 @@ jobs:
     timeout-minutes: 10
     needs: [build]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -151,7 +151,7 @@ jobs:
       PUBLIC_HEALTH_URL: https://thisme.icu/
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up project
         uses: ./.github/actions/setup-project
