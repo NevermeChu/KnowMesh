@@ -47,7 +47,7 @@ jobs:
           path: |
             .next
             next-env.d.ts
-          key: nextjs-build-${{ matrix.node-version }}-${{ github.sha }}
+          key: nextjs-build-${{ matrix.node-version }}-${{ github.sha }}-${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
   static:
     strategy:
@@ -100,8 +100,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build]
-    environment: production
-
     steps:
       - uses: actions/checkout@v6
 
@@ -109,6 +107,7 @@ jobs:
         uses: ./.github/actions/setup-project
         with:
           node-version: ${{ matrix.node-version }}
+          nextjs-build-cache-suffix: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           restore-nextjs-cache: true
 
       - name: Run E2E tests

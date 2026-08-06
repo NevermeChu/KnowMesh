@@ -5,6 +5,10 @@ inputs:
   node-version:
     description: Node.js version
     required: true
+  nextjs-build-cache-suffix:
+    description: Public build configuration used to isolate Next.js build output
+    required: false
+    default: default
   restore-nextjs-cache:
     description: Whether to restore Next.js build cache
     required: false
@@ -38,5 +42,5 @@ runs:
         path: |
           .next
           next-env.d.ts
-        key: nextjs-build-${{ inputs.node-version }}-${{ github.sha }}
+        key: nextjs-build-${{ inputs.node-version }}-${{ github.sha }}-${{ inputs.nextjs-build-cache-suffix }}
         fail-on-cache-miss: true

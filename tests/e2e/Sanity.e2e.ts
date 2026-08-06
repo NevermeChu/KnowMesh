@@ -37,16 +37,16 @@ test.describe('Sanity', () => {
   });
 
   test.describe('Authentication pages', () => {
-    test('displays the English sign-in page', async ({ page }) => {
+    test('displays the localized sign-in page', async ({ page }) => {
       await page.goto('/sign-in');
 
-      await expect(page.getByText('Email address')).toBeVisible();
+      await expect(page.getByRole('heading', { name: '登录 KnowMesh' })).toBeVisible();
     });
 
-    test('displays the English sign-up page', async ({ page }) => {
+    test('displays the localized sign-up page', async ({ page }) => {
       await page.goto('/sign-up');
 
-      await expect(page.getByText('Create your account')).toBeVisible();
+      await expect(page.getByRole('heading', { name: '创建您的账户' })).toBeVisible();
     });
   });
 
