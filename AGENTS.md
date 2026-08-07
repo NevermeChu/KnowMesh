@@ -18,6 +18,7 @@
 - Read `docs/KNOWLEDGE_MAINTENANCE.md` before creating, restructuring, or materially updating knowledge-base documents.
 - Treat accepted ADRs in `docs/adr/` as active architectural constraints. Replace an accepted decision only with a new ADR that supersedes it.
 - Update the relevant current-state document in the same change when behavior, invariants, ownership, boundaries, or operational procedures change.
+- Use judgment to identify significant development problems; record each in Chinese under a numbered heading in `docs/PROBLEMS.md` with only the problem, root cause, and solution.
 - Do not document trivial implementation details, temporary debugging state, or facts that are clearer from a single nearby function.
 - Historical documents explicitly marked non-authoritative are context only; verify current behavior in code and current-state documents.
 
