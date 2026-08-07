@@ -10,6 +10,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import Link from 'next/link';
+import { AppLogo } from '@/components/ui/AppLogo';
 import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
 import { AppConfig } from '@/utils/AppConfig';
 
@@ -34,12 +35,7 @@ export function WorkspaceSwitcher(props: {
         className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-0.5 text-left transition-colors hover:bg-black/5"
         onClick={props.onToggle}
       >
-        <span
-          aria-hidden="true"
-          className="grid size-7 shrink-0 place-items-center rounded-md bg-[#2f3437] text-xs font-bold text-white"
-        >
-          K
-        </span>
+        <AppLogo className="size-7 shrink-0" />
         <span className="truncate text-sm font-semibold tracking-tight">{AppConfig.name}</span>
         <ChevronsUpDown
           aria-hidden="true"
@@ -60,12 +56,7 @@ export function WorkspaceSwitcher(props: {
           className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-black/5"
           onClick={props.onClose}
         >
-          <span
-            aria-hidden="true"
-            className="grid size-7 shrink-0 place-items-center rounded-md bg-[#2f3437] text-xs font-bold text-white"
-          >
-            K
-          </span>
+          <AppLogo className="size-7 shrink-0" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold text-[#202124]">
               {AppConfig.name}

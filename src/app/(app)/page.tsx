@@ -1,6 +1,7 @@
 import { Show, SignOutButton } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { AppLogo } from '@/components/ui/AppLogo';
 import { AppConfig } from '@/utils/AppConfig';
 
 export const metadata: Metadata = {
@@ -17,12 +18,7 @@ export default function HomePage() {
           className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8"
         >
           <Link href="/" className="flex items-center gap-3 font-semibold tracking-tight">
-            <span
-              aria-hidden="true"
-              className="grid size-8 place-items-center rounded-lg bg-[#2f3437] text-sm font-bold text-white shadow-sm"
-            >
-              K
-            </span>
+            <AppLogo className="size-8" />
             <span>{AppConfig.name}</span>
           </Link>
 
@@ -227,12 +223,7 @@ export default function HomePage() {
       <footer className="border-t border-black/8">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-8 text-sm text-[#8a8d91] sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="grid size-6 place-items-center rounded-md bg-[#2f3437] text-[0.65rem] font-bold text-white"
-            >
-              K
-            </span>
+            <AppLogo className="size-6" />
             <span>{AppConfig.name}</span>
           </div>
           <p>© {new Date().getFullYear()} KnowMesh. 让知识持续创造价值。</p>
