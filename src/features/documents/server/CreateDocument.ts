@@ -1,6 +1,7 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
+import { revalidatePath } from 'next/cache';
 import { db } from '@/libs/DB';
 import { documentsSchema } from '@/models/Schema';
 import { canEditDocuments } from '../Document';
@@ -22,7 +23,7 @@ export async function createDocument(input: CreateDocumentInput) {
     .values({
       createdById: userId,
       projectId: documentInput.projectId,
-      title: '无标题',
+      title: documentInput.title,
     })
     .returning({
       id: documentsSchema.id,
@@ -34,5 +35,6 @@ export async function createDocument(input: CreateDocumentInput) {
     throw new Error('文档创建失败');
   }
 
+  revalidatePath('/(workspace)', 'layout');
   return document;
 }

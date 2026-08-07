@@ -3,7 +3,7 @@
 import { ChevronRight, FileText, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { SidebarNavigationContextMenus } from '@/components/layout/AppSidebar/SidebarNavigationContextMenus';
 import type {
   NavigationContextMenu,
@@ -12,16 +12,14 @@ import type {
   WorkspaceSection,
 } from '@/components/layout/AppSidebar/SidebarWorkspaceNavigationTypes';
 import { fitContextMenuPosition } from '@/components/ui/ContextMenu';
+import { CreateDocumentDialog } from '@/features/documents/components/CreateDocumentDialog';
 import { canEditDocuments } from '@/features/documents/Document';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
-import { createDocument } from '@/features/documents/server/CreateDocument';
 import type { Project, ProjectKind } from '@/features/projects/Project';
 
 const isActiveRoute = (pathname: string, href: string) => pathname.startsWith(href);
 
 function WorkspaceSectionNavigation(props: {
-  creatingDocumentProjectId: string | null;
-  documentCreationErrorProjectId: string | null;
   isExpanded: boolean;
   expandedProjectIds: Record<string, boolean>;
   onCreate: () => void;
@@ -129,8 +127,7 @@ function WorkspaceSectionNavigation(props: {
                         type="button"
                         aria-label={`在${project.label}中创建文档`}
                         title="创建文档"
-                        className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124] disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={props.creatingDocumentProjectId === project.id}
+                        className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
                         onClick={() => {
                           props.onCreateDocument(project);
                         }}
@@ -196,11 +193,6 @@ function WorkspaceSectionNavigation(props: {
                           );
                         })
                       )}
-                      {props.documentCreationErrorProjectId === project.id && (
-                        <li className="px-3 py-1 text-xs text-[#d14343]" role="alert">
-                          创建文档失败，请重试
-                        </li>
-                      )}
                     </ul>
                   )}
                 </li>
@@ -241,11 +233,9 @@ export function SidebarWorkspaceNavigation(props: {
     selectedProjectId ? { [selectedProjectId]: true } : {},
   );
   const [contextMenu, setContextMenu] = useState<NavigationContextMenu | null>(null);
-  const [creatingDocumentProjectId, setCreatingDocumentProjectId] = useState<string | null>(null);
-  const [documentCreationErrorProjectId, setDocumentCreationErrorProjectId] = useState<
-    string | null
-  >(null);
-  const [isCreatingDocument, startCreatingDocument] = useTransition();
+  const [creatingDocumentProject, setCreatingDocumentProject] = useState<WorkspaceProject | null>(
+    null,
+  );
   const workspaceSections: WorkspaceSection[] = [
     {
       href: '/personal',
@@ -292,82 +282,83 @@ export function SidebarWorkspaceNavigation(props: {
   ];
 
   const createDocumentForProject = (project: WorkspaceProject) => {
-    setCreatingDocumentProjectId(project.id);
-    setDocumentCreationErrorProjectId(null);
     setExpandedProjectIds((currentProjects) => ({ ...currentProjects, [project.id]: true }));
-    startCreatingDocument(async () => {
-      try {
-        const document = await createDocument({ projectId: project.id });
-        router.push(`${project.href}&document=${document.id}`);
-        router.refresh();
-        props.onNavigate();
-      } catch {
-        setDocumentCreationErrorProjectId(project.id);
-      } finally {
-        setCreatingDocumentProjectId(null);
-      }
-    });
+    setCreatingDocumentProject(project);
   };
 
   return (
-    <div className="mt-7 space-y-3">
-      {workspaceSections.map((section) => (
-        <WorkspaceSectionNavigation
-          key={section.href}
-          creatingDocumentProjectId={isCreatingDocument ? creatingDocumentProjectId : null}
-          documentCreationErrorProjectId={documentCreationErrorProjectId}
-          expandedProjectIds={expandedProjectIds}
-          isExpanded={expandedSections[section.id]}
-          pathname={props.pathname}
-          selectedDocumentId={selectedDocumentId}
-          selectedProjectId={selectedProjectId}
-          section={section}
-          onCreate={() => {
-            setExpandedSections((currentSections) => ({
-              ...currentSections,
-              [section.id]: true,
-            }));
-            props.onCreateProject(section.id);
+    <>
+      <div className="mt-7 space-y-3">
+        {workspaceSections.map((section) => (
+          <WorkspaceSectionNavigation
+            key={section.href}
+            expandedProjectIds={expandedProjectIds}
+            isExpanded={expandedSections[section.id]}
+            pathname={props.pathname}
+            selectedDocumentId={selectedDocumentId}
+            selectedProjectId={selectedProjectId}
+            section={section}
+            onCreate={() => {
+              setExpandedSections((currentSections) => ({
+                ...currentSections,
+                [section.id]: true,
+              }));
+              props.onCreateProject(section.id);
+            }}
+            onCreateDocument={createDocumentForProject}
+            onNavigate={props.onNavigate}
+            onOpenContextMenu={(event, target) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setContextMenu({
+                position: fitContextMenuPosition({
+                  itemCount: 2,
+                  x: event.clientX,
+                  y: event.clientY,
+                }),
+                target,
+              });
+            }}
+            onToggle={() => {
+              setExpandedSections((currentSections) => ({
+                ...currentSections,
+                [section.id]: !currentSections[section.id],
+              }));
+            }}
+            onToggleProject={(projectId) => {
+              setExpandedProjectIds((currentProjects) => ({
+                ...currentProjects,
+                [projectId]: !currentProjects[projectId],
+              }));
+            }}
+          />
+        ))}
+        <SidebarNavigationContextMenus
+          contextMenu={contextMenu}
+          onClose={() => {
+            setContextMenu(null);
           }}
           onCreateDocument={createDocumentForProject}
-          onNavigate={props.onNavigate}
-          onOpenContextMenu={(event, target) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setContextMenu({
-              position: fitContextMenuPosition({
-                itemCount: 2,
-                x: event.clientX,
-                y: event.clientY,
-              }),
-              target,
-            });
-          }}
-          onToggle={() => {
-            setExpandedSections((currentSections) => ({
-              ...currentSections,
-              [section.id]: !currentSections[section.id],
-            }));
-          }}
-          onToggleProject={(projectId) => {
-            setExpandedProjectIds((currentProjects) => ({
-              ...currentProjects,
-              [projectId]: !currentProjects[projectId],
-            }));
+          onCreateProject={(kind) => {
+            setExpandedSections((currentSections) => ({ ...currentSections, [kind]: true }));
+            props.onCreateProject(kind);
           }}
         />
-      ))}
-      <SidebarNavigationContextMenus
-        contextMenu={contextMenu}
-        onClose={() => {
-          setContextMenu(null);
-        }}
-        onCreateDocument={createDocumentForProject}
-        onCreateProject={(kind) => {
-          setExpandedSections((currentSections) => ({ ...currentSections, [kind]: true }));
-          props.onCreateProject(kind);
-        }}
-      />
-    </div>
+      </div>
+      {creatingDocumentProject && (
+        <CreateDocumentDialog
+          projectId={creatingDocumentProject.id}
+          projectName={creatingDocumentProject.label}
+          onClose={() => {
+            setCreatingDocumentProject(null);
+          }}
+          onCreated={(documentId) => {
+            router.push(`${creatingDocumentProject.href}&document=${documentId}`);
+            setCreatingDocumentProject(null);
+            props.onNavigate();
+          }}
+        />
+      )}
+    </>
   );
 }

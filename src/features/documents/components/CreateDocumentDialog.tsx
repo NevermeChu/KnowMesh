@@ -3,15 +3,18 @@
 import { X } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { createProjectSchema } from '../CreateProjectSchema';
-import type { ProjectKind } from '../Project';
-import { createProject } from '../server/CreateProject';
+import { createDocumentSchema } from '../DocumentSchema';
+import { createDocument } from '../server/CreateDocument';
 
-export function CreateProjectDialog(props: { kind: ProjectKind; onClose: () => void }) {
+export function CreateDocumentDialog(props: {
+  projectId: string;
+  projectName: string;
+  onClose: () => void;
+  onCreated: (documentId: string) => void;
+}) {
   const [error, setError] = useState<string>();
-  const [name, setName] = useState('');
+  const [title, setTitle] = useState('');
   const [isPending, startTransition] = useTransition();
-  const sectionLabel = props.kind === 'personal' ? '个人工作区' : '协作区';
 
   if (typeof document === 'undefined') {
     return null;
@@ -21,14 +24,14 @@ export function CreateProjectDialog(props: { kind: ProjectKind; onClose: () => v
     <div className="fixed inset-0 z-100 flex overflow-y-auto p-4">
       <button
         type="button"
-        aria-label="关闭创建项目弹窗"
+        aria-label="关闭新建文件弹窗"
         className="absolute inset-0 size-full bg-black/20"
         disabled={isPending}
         onClick={props.onClose}
       />
       <dialog
         open
-        aria-labelledby="create-project-title"
+        aria-labelledby="create-document-title"
         aria-modal="true"
         className="relative z-10 m-auto w-full max-w-88 rounded-xl border border-black/10 bg-white p-4 text-[#2f3437] shadow-xl"
         onKeyDown={(event) => {
@@ -39,10 +42,10 @@ export function CreateProjectDialog(props: { kind: ProjectKind; onClose: () => v
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id="create-project-title" className="text-sm font-semibold text-[#202124]">
-              创建项目
+            <h2 id="create-document-title" className="text-sm font-semibold text-[#202124]">
+              新建文件
             </h2>
-            <p className="mt-0.5 text-xs text-[#8a8d91]">项目将创建在{sectionLabel}中</p>
+            <p className="mt-0.5 text-xs text-[#8a8d91]">文件将创建在{props.projectName}中</p>
           </div>
           <button
             type="button"
@@ -60,39 +63,39 @@ export function CreateProjectDialog(props: { kind: ProjectKind; onClose: () => v
           onSubmit={(event) => {
             event.preventDefault();
             setError(undefined);
-            const result = createProjectSchema.safeParse({ kind: props.kind, name });
+            const result = createDocumentSchema.safeParse({ projectId: props.projectId, title });
 
             if (!result.success) {
-              setError(result.error.issues[0]?.message ?? '项目名称无效');
+              setError(result.error.issues[0]?.message ?? '文件名无效');
               return;
             }
 
             startTransition(async () => {
               try {
-                await createProject(result.data);
-                props.onClose();
+                const document = await createDocument(result.data);
+                props.onCreated(document.id);
               } catch {
-                setError('创建项目失败，请稍后重试');
+                setError('新建文件失败，请稍后重试');
               }
             });
           }}
         >
-          <label htmlFor="project-name" className="block text-xs font-medium text-[#555a60]">
-            项目名称
+          <label htmlFor="document-title" className="block text-xs font-medium text-[#555a60]">
+            文件名
           </label>
           <input
             autoFocus
-            id="project-name"
+            id="document-title"
             type="text"
-            aria-label="项目名称"
+            aria-label="文件名"
             autoComplete="off"
             className="mt-1.5 h-9 w-full rounded-lg border border-black/12 bg-white px-3 text-sm transition-colors outline-none placeholder:text-[#b0b3b7] focus:border-[#2383e2] focus:ring-2 focus:ring-[#2383e2]/15"
             disabled={isPending}
-            maxLength={80}
-            placeholder="输入项目名称"
-            value={name}
+            maxLength={200}
+            placeholder="输入文件名"
+            value={title}
             onChange={(event) => {
-              setName(event.target.value);
+              setTitle(event.target.value);
               if (error) {
                 setError(undefined);
               }

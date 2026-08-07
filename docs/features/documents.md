@@ -30,7 +30,7 @@
 
 应用根布局通过客户端事件边界禁用浏览器默认右键菜单。工作区、项目、文件和可编辑正文等明确注册了自定义菜单的区域显示对应菜单；其他区域右键不显示任何菜单。只读正文不会显示格式菜单。
 
-项目节点本身可以折叠，展开后才显示其文档。右键文件节点可以查看文件权限或在同一项目中新建文件；文件权限完全继承项目成员关系，当前没有文档级 ACL。
+项目节点本身可以折叠，展开后才显示其文档。项目节点的加号和右键菜单中的“新建文件”共用同一创建弹窗；用户输入文件名并提交后，应用创建文档、展开所属项目并导航到新文件。右键文件节点还可以查看文件权限；文件权限完全继承项目成员关系，当前没有文档级 ACL。
 
 编辑器使用 Tiptap，初始内容来自 ProseMirror JSON。标题失焦时保存；正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，避免较早的请求覆盖较新的本地内容。
 
@@ -53,6 +53,7 @@
 - `src/features/documents/DocumentSchema.ts`
 - `src/features/documents/DocumentExtensions.ts`
 - `src/features/documents/components/ProjectDocumentsPage.tsx`
+- `src/features/documents/components/CreateDocumentDialog.tsx`
 - `src/features/documents/components/DocumentWorkspace.tsx`
 - `src/features/documents/components/DocumentEditor.tsx`
 - `src/features/documents/components/DocumentEditorToolbar.tsx`

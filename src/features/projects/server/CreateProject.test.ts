@@ -22,6 +22,7 @@ const state = vi.hoisted(() => {
   const projectValues = vi.fn<(values: unknown) => { returning: typeof returning }>(() => ({
     returning,
   }));
+  const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
   const memberValues = vi.fn<(values: unknown) => Promise<void>>(async () => {
     await Promise.resolve();
   });
@@ -43,6 +44,7 @@ const state = vi.hoisted(() => {
     project,
     projectValues,
     protect,
+    revalidatePath,
     resetInsertCount: () => {
       insertCallCount = 0;
     },
@@ -59,6 +61,11 @@ vi.mock('@clerk/nextjs/server', () => ({
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates the database boundary.
 vi.mock('@/libs/DB', () => ({
   db: { transaction: state.transaction },
+}));
+
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates cache invalidation.
+vi.mock('next/cache', () => ({
+  revalidatePath: state.revalidatePath,
 }));
 
 describe('project creation action', () => {
@@ -85,6 +92,7 @@ describe('project creation action', () => {
       role: 'owner',
       userId: 'user_1',
     });
+    expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
   });
 
   it('rejects invalid input before transaction', async () => {
@@ -93,6 +101,7 @@ describe('project creation action', () => {
     );
 
     expect(state.transaction).not.toHaveBeenCalled();
+    expect(state.revalidatePath).not.toHaveBeenCalled();
   });
 
   it('stops member creation when project insert fails', async () => {
@@ -102,5 +111,6 @@ describe('project creation action', () => {
       '项目创建失败',
     );
     expect(state.memberValues).not.toHaveBeenCalled();
+    expect(state.revalidatePath).not.toHaveBeenCalled();
   });
 });

@@ -64,6 +64,23 @@ describe('document schemas', () => {
   });
 
   it('requires project UUID', () => {
-    expect(() => createDocumentSchema.parse({ projectId: 'project_1' })).toThrow('Invalid UUID');
+    expect(() => createDocumentSchema.parse({ projectId: 'project_1', title: '新文件' })).toThrow(
+      'Invalid UUID',
+    );
+  });
+
+  it('normalizes document title', () => {
+    expect(
+      createDocumentSchema.parse({ projectId: documentId, title: '  新文件  ' }),
+    ).toStrictEqual({
+      projectId: documentId,
+      title: '新文件',
+    });
+  });
+
+  it('requires document title', () => {
+    expect(() => createDocumentSchema.parse({ projectId: documentId, title: '  ' })).toThrow(
+      '文件名不能为空',
+    );
   });
 });

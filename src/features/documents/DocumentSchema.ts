@@ -71,6 +71,7 @@ export const isDocumentContent = (value: unknown): value is DocumentContent => {
 
 export const createDocumentSchema = z.object({
   projectId: z.uuid(),
+  title: z.string().trim().min(1, '文件名不能为空').max(200, '文件名不能超过 200 个字符'),
 });
 
 export const updateDocumentSchema = z

@@ -11,7 +11,7 @@
 用户交互：Client Component 管理界面状态
 内部写入：Client Component → Server Action → 数据库
 交互式权限读取：Client Component → Server Action → 资源授权 → 数据库与 Clerk 用户目录
-写入后同步：router.refresh() → 重新执行服务端读取
+写入后同步：Server Action 使工作区布局数据失效 → 重新执行服务端读取
 文档编辑：Client Component → 防抖/失焦保存 → Server Action → JSONB
 ```
 
@@ -50,6 +50,8 @@
 ```
 
 `createProject` 文件顶部的 `'use server'` 声明了服务器执行边界；客户端只调用该 Action，数据库访问仍位于服务器模块。
+
+项目或文档创建成功后，对应 Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 使共享工作区布局失效。因此侧边栏会重新执行 `getProjects` 和 `getDocumentNavigation`，而不依赖客户端刷新与导航的时序。新文档创建返回 ID 后，客户端只负责导航到该文档。
 
 ## 文档读取与保存
 

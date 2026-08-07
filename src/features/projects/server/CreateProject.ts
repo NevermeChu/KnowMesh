@@ -1,6 +1,7 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
+import { revalidatePath } from 'next/cache';
 import { db } from '@/libs/DB';
 import { projectMembersSchema, projectsSchema } from '@/models/Schema';
 import { createProjectSchema } from '../CreateProjectSchema';
@@ -10,8 +11,8 @@ export async function createProject(input: CreateProjectInput) {
   const { userId } = await auth.protect();
   const projectInput = createProjectSchema.parse(input);
 
-  return await db.transaction(async (transaction) => {
-    const [project] = await transaction
+  const project = await db.transaction(async (transaction) => {
+    const [createdProject] = await transaction
       .insert(projectsSchema)
       .values({
         kind: projectInput.kind,
@@ -26,16 +27,19 @@ export async function createProject(input: CreateProjectInput) {
         updatedAt: projectsSchema.updatedAt,
       });
 
-    if (!project) {
+    if (!createdProject) {
       throw new Error('项目创建失败');
     }
 
     await transaction.insert(projectMembersSchema).values({
-      projectId: project.id,
+      projectId: createdProject.id,
       role: 'owner',
       userId,
     });
 
-    return project;
+    return createdProject;
   });
+
+  revalidatePath('/(workspace)', 'layout');
+  return project;
 }
