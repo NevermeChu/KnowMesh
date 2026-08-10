@@ -15,6 +15,7 @@ ADR 记录具有真实替代方案和长期影响的架构决定。它回答“�
 | --- | --- | --- |
 | [0001](0001-use-server-components-for-workspace-data.md) | Accepted | 工作区初始数据使用 Server Component 查询 |
 | [0002](0002-use-versioned-prosemirror-json.md) | Accepted | 文档内容使用版本化 ProseMirror JSON 持久化 |
+| [0003](0003-introduce-workspace-resource-boundary.md) | Accepted | 引入真实 Workspace 资源边界并分阶段实现权限继承 |
 
 ## 新 ADR 模板
 

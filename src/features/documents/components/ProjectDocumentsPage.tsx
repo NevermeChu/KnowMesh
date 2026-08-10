@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { AppSectionPlaceholder } from '@/components/layout/AppSectionPlaceholder';
 import type { ProjectKind } from '@/features/projects/Project';
+import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
 import { canEditDocuments } from '../Document';
 import { createDocumentSchema } from '../DocumentSchema';
 import { getProjectDocuments } from '../server/GetProjectDocuments';
@@ -19,6 +20,17 @@ export async function ProjectDocumentsPage(props: {
   const projectId = getStringParam(searchParams.project);
   const documentId = getStringParam(searchParams.document);
   const sectionLabel = props.kind === 'personal' ? '个人工作区' : '协作区';
+  const { activeWorkspace } = await getWorkspaceContext();
+
+  if (!activeWorkspace) {
+    return (
+      <AppSectionPlaceholder
+        eyebrow="工作区"
+        title="创建或选择工作区"
+        description="使用左上角工作区切换器创建工作区后开始整理项目。"
+      />
+    );
+  }
 
   if (!projectId) {
     return (
@@ -34,7 +46,12 @@ export async function ProjectDocumentsPage(props: {
     notFound();
   }
 
-  const result = await getProjectDocuments({ documentId, kind: props.kind, projectId });
+  const result = await getProjectDocuments({
+    documentId,
+    kind: props.kind,
+    projectId,
+    workspaceId: activeWorkspace.id,
+  });
 
   if (!result) {
     notFound();

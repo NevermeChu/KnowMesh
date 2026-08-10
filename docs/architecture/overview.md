@@ -52,7 +52,7 @@ PostgreSQL / 本地 PGlite
 
 ## 当前工作区外壳
 
-`src/app/(workspace)/layout.tsx` 是 Server Component，读取当前用户项目后把安全、可序列化的数据传给 `AppShell`。
+`src/app/(workspace)/layout.tsx` 是 Server Component，先解析当前用户可访问的活动 Workspace，再读取该 Workspace 的项目和文档导航数据，并把安全、可序列化的数据传给 `AppShell`。
 
 `AppShell` 是 Client Component，负责：
 
@@ -62,7 +62,7 @@ PostgreSQL / 本地 PGlite
 - 当前文档编辑器与共享内容工具栏之间的命令上下文。
 - 渲染当前路由内容。
 
-侧边栏中的个人工作区和协作区是同一项目业务的两种分类，不是两套独立实现。
+左上角切换器选择真实 Workspace；侧边栏中的个人工作区和协作区仍是当前 Workspace 内同一项目业务的 Private/Shared 分类，不是嵌套 Workspace，也不是两套独立实现。
 
 个人工作区和协作区页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。正文以 ProseMirror JSON 通过 Server Action 保存到 PostgreSQL `JSONB`。
 
@@ -82,6 +82,7 @@ PostgreSQL / 本地 PGlite
 - Clerk 登录与工作区路由保护。
 - 登录后共享应用外壳。
 - 个人与协作项目创建。
+- Workspace 创建、切换和项目归属。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
 - 工作区、项目和文件的分层右键菜单与只读权限总览。
@@ -93,6 +94,7 @@ PostgreSQL / 本地 PGlite
 
 - 文档层级树、删除、移动、版本历史和 Markdown 导入导出。
 - 邀请成员、角色修改、所有权转移、评论和实时协作。
+- Workspace 角色继承和基于 Workspace 成员的 Shared 项目自动访问。
 - 面向外部客户端的稳定 API。
 
 未实现内容只表示当前边界，不构成已经批准的实现方案。
@@ -105,3 +107,4 @@ PostgreSQL / 本地 PGlite
 - [ADR 0001](../adr/0001-use-server-components-for-workspace-data.md)
 - [文档业务](../features/documents.md)
 - [ADR 0002](../adr/0002-use-versioned-prosemirror-json.md)
+- [ADR 0003](../adr/0003-introduce-workspace-resource-boundary.md)

@@ -15,7 +15,7 @@ import { documentsSchema, projectMembersSchema, projectsSchema } from '@/models/
 import { getProjects } from './GetProjects';
 
 const permissionOverviewInputSchema = z.discriminatedUnion('scope', [
-  z.object({ kind: z.enum(projectKinds), scope: z.literal('workspace') }),
+  z.object({ kind: z.enum(projectKinds), scope: z.literal('workspace'), workspaceId: z.uuid() }),
   z.object({ projectId: z.uuid(), scope: z.literal('project') }),
   z.object({ documentId: z.uuid(), scope: z.literal('document') }),
 ]);
@@ -123,7 +123,10 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
   const permissionInput = permissionOverviewInputSchema.parse(input);
 
   if (permissionInput.scope === 'workspace') {
-    const projects = await getProjects({ kind: permissionInput.kind });
+    const projects = await getProjects({
+      kind: permissionInput.kind,
+      workspaceId: permissionInput.workspaceId,
+    });
 
     return {
       description: '当前工作区是项目分区，没有独立成员权限。下方按项目展示实际生效的完整权限。',

@@ -10,11 +10,12 @@ export async function getProjectDocuments(options: {
   documentId?: string;
   kind: ProjectKind;
   projectId: string;
+  workspaceId: string;
 }) {
   const { userId } = await auth.protect();
   const access = await getProjectAccess({ projectId: options.projectId, userId });
 
-  if (!access || access.kind !== options.kind) {
+  if (!access || access.kind !== options.kind || access.workspaceId !== options.workspaceId) {
     return null;
   }
 

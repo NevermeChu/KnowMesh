@@ -21,6 +21,7 @@ export type WorkspaceSection = {
   icon: LucideIcon;
   label: string;
   projects: WorkspaceProject[];
+  workspaceId: string;
 };
 
 export type NavigationContextTarget =

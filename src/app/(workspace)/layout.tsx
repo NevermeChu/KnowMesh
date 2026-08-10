@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { AppShell } from '@/components/layout/AppShell';
 import { getDocumentNavigation } from '@/features/documents/server/GetDocumentNavigation';
 import { getProjects } from '@/features/projects/server/GetProjects';
+import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
 import { AppConfig } from '@/utils/AppConfig';
 
 export const metadata: Metadata = {
@@ -10,10 +11,21 @@ export const metadata: Metadata = {
 };
 
 export default async function WorkspaceLayout(props: { children: React.ReactNode }) {
-  const [documents, projects] = await Promise.all([getDocumentNavigation(), getProjects()]);
+  const workspaceContext = await getWorkspaceContext();
+  const [documents, projects] = workspaceContext.activeWorkspace
+    ? await Promise.all([
+        getDocumentNavigation({ workspaceId: workspaceContext.activeWorkspace.id }),
+        getProjects({ workspaceId: workspaceContext.activeWorkspace.id }),
+      ])
+    : [[], []];
 
   return (
-    <AppShell documents={documents} projects={projects}>
+    <AppShell
+      activeWorkspace={workspaceContext.activeWorkspace}
+      documents={documents}
+      projects={projects}
+      workspaces={workspaceContext.workspaces}
+    >
       {props.children}
     </AppShell>
   );

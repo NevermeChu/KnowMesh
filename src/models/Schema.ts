@@ -28,10 +28,44 @@ import { projectKinds, projectMemberRoles } from '@/features/projects/Project';
 export const projectKindEnum = pgEnum('project_kind', projectKinds);
 export const projectMemberRoleEnum = pgEnum('project_member_role', projectMemberRoles);
 
+export const workspacesSchema = pgTable(
+  'workspaces',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    name: varchar('name', { length: 80 }).notNull(),
+    ownerId: varchar('owner_id', { length: 255 }).notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [index('workspaces_owner_idx').on(table.ownerId)],
+);
+
+export const workspaceMembersSchema = pgTable(
+  'workspace_members',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
+    userId: varchar('user_id', { length: 255 }).notNull(),
+    role: projectMemberRoleEnum('role').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.userId] }),
+    index('workspace_members_user_workspace_idx').on(table.userId, table.workspaceId),
+  ],
+);
+
 export const projectsSchema = pgTable(
   'projects',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 80 }).notNull(),
     kind: projectKindEnum('kind').notNull(),
     ownerId: varchar('owner_id', { length: 255 }).notNull(),
@@ -41,7 +75,7 @@ export const projectsSchema = pgTable(
       .notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
-  (table) => [index('projects_owner_kind_idx').on(table.ownerId, table.kind)],
+  (table) => [index('projects_workspace_kind_idx').on(table.workspaceId, table.kind)],
 );
 
 export const projectMembersSchema = pgTable(

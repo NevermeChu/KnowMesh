@@ -11,4 +11,5 @@ export type Project = {
   name: string;
   role: ProjectMemberRole;
   updatedAt: Date;
+  workspaceId: string;
 };

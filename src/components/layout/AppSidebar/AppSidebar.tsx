@@ -1,14 +1,17 @@
 'use client';
 
 import { Menu, X } from 'lucide-react';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 import { SettingsMenu, WorkspaceSwitcher } from '@/components/layout/AppSidebar/SidebarMenus';
 import { SidebarPrimaryNavigation } from '@/components/layout/AppSidebar/SidebarPrimaryNavigation';
 import { SidebarWorkspaceNavigation } from '@/components/layout/AppSidebar/SidebarWorkspaceNavigation';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import { CreateProjectDialog } from '@/features/projects/components/CreateProjectDialog';
 import type { Project, ProjectKind } from '@/features/projects/Project';
+import { CreateWorkspaceDialog } from '@/features/workspaces/components/CreateWorkspaceDialog';
+import { selectWorkspace } from '@/features/workspaces/server/SelectWorkspace';
+import type { Workspace } from '@/features/workspaces/Workspace';
 import { AppConfig } from '@/utils/AppConfig';
 
 type SidebarMenu = 'settings' | 'workspace' | null;
@@ -19,20 +22,32 @@ const menuDialogIds: Record<Exclude<SidebarMenu, null>, string> = {
 };
 
 function SidebarContent(props: {
+  activeWorkspace: Workspace | null;
   documents: DocumentNavigationItem[];
   openMenu: SidebarMenu;
   pathname: string;
   projects: Project[];
+  workspaceError: string | null;
+  workspaces: Workspace[];
+  isSwitchingWorkspace: boolean;
   onCloseMenu: () => void;
+  onCreateWorkspace: () => void;
   onCreateProject: (kind: ProjectKind) => void;
   onNavigate: () => void;
   onToggleMenu: (menu: Exclude<SidebarMenu, null>) => void;
+  onSelectWorkspace: (workspaceId: string) => void;
 }) {
   return (
     <>
       <WorkspaceSwitcher
+        activeWorkspace={props.activeWorkspace}
+        error={props.workspaceError}
         isOpen={props.openMenu === 'workspace'}
+        isPending={props.isSwitchingWorkspace}
+        workspaces={props.workspaces}
         onClose={props.onCloseMenu}
+        onCreate={props.onCreateWorkspace}
+        onSelect={props.onSelectWorkspace}
         onToggle={() => {
           props.onToggleMenu('workspace');
         }}
@@ -41,6 +56,7 @@ function SidebarContent(props: {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-4">
         <SidebarPrimaryNavigation pathname={props.pathname} onNavigate={props.onNavigate} />
         <SidebarWorkspaceNavigation
+          activeWorkspace={props.activeWorkspace}
           documents={props.documents}
           pathname={props.pathname}
           projects={props.projects}
@@ -68,16 +84,22 @@ function SidebarContent(props: {
  * @returns The responsive application sidebar.
  */
 export function AppSidebar(props: {
+  activeWorkspace: Workspace | null;
   documents: DocumentNavigationItem[];
   isHidden: boolean;
   projects: Project[];
+  workspaces: Workspace[];
   width: number;
   onResize: (width: number) => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [creatingProjectKind, setCreatingProjectKind] = useState<ProjectKind | null>(null);
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<SidebarMenu>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [isSwitchingWorkspace, startSwitchingWorkspace] = useTransition();
 
   const closeNavigation = () => {
     setIsOpen(false);
@@ -145,17 +167,39 @@ export function AppSidebar(props: {
 
         <div className="flex h-full w-full flex-col">
           <SidebarContent
+            activeWorkspace={props.activeWorkspace}
             documents={props.documents}
             openMenu={openMenu}
             pathname={pathname}
             projects={props.projects}
+            workspaceError={workspaceError}
+            workspaces={props.workspaces}
+            isSwitchingWorkspace={isSwitchingWorkspace}
             onCloseMenu={() => {
               setOpenMenu(null);
             }}
             onCreateProject={setCreatingProjectKind}
+            onCreateWorkspace={() => {
+              setOpenMenu(null);
+              setIsCreatingWorkspace(true);
+            }}
             onNavigate={closeNavigation}
             onToggleMenu={(menu) => {
+              setWorkspaceError(null);
               setOpenMenu((currentMenu) => (currentMenu === menu ? null : menu));
+            }}
+            onSelectWorkspace={(workspaceId) => {
+              setWorkspaceError(null);
+              startSwitchingWorkspace(async () => {
+                try {
+                  await selectWorkspace({ workspaceId });
+                  setOpenMenu(null);
+                  router.replace(pathname);
+                  router.refresh();
+                } catch {
+                  setWorkspaceError('切换工作区失败，请稍后重试');
+                }
+              });
             }}
           />
         </div>
@@ -186,11 +230,24 @@ export function AppSidebar(props: {
         />
       </aside>
 
-      {creatingProjectKind && (
+      {creatingProjectKind && props.activeWorkspace && (
         <CreateProjectDialog
           kind={creatingProjectKind}
+          workspaceId={props.activeWorkspace.id}
           onClose={() => {
             setCreatingProjectKind(null);
+          }}
+        />
+      )}
+      {isCreatingWorkspace && (
+        <CreateWorkspaceDialog
+          onClose={() => {
+            setIsCreatingWorkspace(false);
+          }}
+          onCreated={() => {
+            setIsCreatingWorkspace(false);
+            router.replace(pathname);
+            router.refresh();
           }}
         />
       )}

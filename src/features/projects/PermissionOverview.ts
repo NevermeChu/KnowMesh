@@ -1,7 +1,7 @@
 import type { ProjectKind, ProjectMemberRole } from './Project';
 
 export type PermissionOverviewInput =
-  | { kind: ProjectKind; scope: 'workspace' }
+  | { kind: ProjectKind; scope: 'workspace'; workspaceId: string }
   | { projectId: string; scope: 'project' }
   | { documentId: string; scope: 'document' };
 
@@ -14,7 +14,7 @@ export function isSamePermissionOverviewInput(
   }
 
   if (left.scope === 'workspace' && right.scope === 'workspace') {
-    return left.kind === right.kind;
+    return left.kind === right.kind && left.workspaceId === right.workspaceId;
   }
 
   if (left.scope === 'project' && right.scope === 'project') {

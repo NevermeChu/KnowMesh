@@ -4,6 +4,7 @@ import { getProjectDocuments } from './GetProjectDocuments';
 const state = vi.hoisted(() => {
   const projectId = '01987654-3210-7000-8000-000000000001';
   const documentId = '01987654-3210-7000-8000-000000000002';
+  const workspaceId = '01987654-3210-7000-8000-000000000010';
   const documents = [
     {
       createdAt: new Date('2026-08-04T00:00:00.000Z'),
@@ -26,6 +27,7 @@ const state = vi.hoisted(() => {
       kind: 'collaboration' | 'personal';
       name: string;
       role: 'editor' | 'owner' | 'viewer';
+      workspaceId: string;
     } | null>
   >();
   const listOrderBy = vi.fn<(order: unknown) => Promise<typeof documents>>(async () => {
@@ -60,6 +62,7 @@ const state = vi.hoisted(() => {
     },
     select,
     selectedContent,
+    workspaceId,
   };
 });
 
@@ -91,6 +94,7 @@ describe('project document queries', () => {
       kind: 'personal',
       name: '产品知识库',
       role: 'owner',
+      workspaceId: state.workspaceId,
     });
   });
 
@@ -100,6 +104,7 @@ describe('project document queries', () => {
         documentId: state.documentId,
         kind: 'personal',
         projectId: state.projectId,
+        workspaceId: state.workspaceId,
       }),
     ).resolves.toStrictEqual({
       access: {
@@ -107,6 +112,7 @@ describe('project document queries', () => {
         kind: 'personal',
         name: '产品知识库',
         role: 'owner',
+        workspaceId: state.workspaceId,
       },
       documents: state.documents,
       selectedDocument: {
@@ -120,7 +126,11 @@ describe('project document queries', () => {
     state.getProjectAccess.mockResolvedValueOnce(null);
 
     await expect(
-      getProjectDocuments({ kind: 'personal', projectId: state.projectId }),
+      getProjectDocuments({
+        kind: 'personal',
+        projectId: state.projectId,
+        workspaceId: state.workspaceId,
+      }),
     ).resolves.toBeNull();
     expect(state.select).not.toHaveBeenCalled();
   });
@@ -131,10 +141,34 @@ describe('project document queries', () => {
       kind: 'collaboration',
       name: '产品知识库',
       role: 'owner',
+      workspaceId: state.workspaceId,
     });
 
     await expect(
-      getProjectDocuments({ kind: 'personal', projectId: state.projectId }),
+      getProjectDocuments({
+        kind: 'personal',
+        projectId: state.projectId,
+        workspaceId: state.workspaceId,
+      }),
+    ).resolves.toBeNull();
+    expect(state.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects project from another workspace', async () => {
+    state.getProjectAccess.mockResolvedValueOnce({
+      id: state.projectId,
+      kind: 'personal',
+      name: '产品知识库',
+      role: 'owner',
+      workspaceId: '01987654-3210-7000-8000-000000000011',
+    });
+
+    await expect(
+      getProjectDocuments({
+        kind: 'personal',
+        projectId: state.projectId,
+        workspaceId: state.workspaceId,
+      }),
     ).resolves.toBeNull();
     expect(state.select).not.toHaveBeenCalled();
   });

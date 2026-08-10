@@ -24,15 +24,17 @@
 公开页面与认证页面
         │
         └─ 登录后的 (workspace) 路由布局
-             ├─ 服务端查询当前用户项目
+             ├─ 服务端解析活动 Workspace 并查询其中的项目
              └─ AppShell 客户端应用外壳
                   ├─ AppSidebar
-                  │    ├─ 个人项目及文档
-                  │    └─ 协作项目及文档
+                  │    ├─ Workspace 切换器
+                  │    ├─ Private 项目及文档
+                  │    └─ Shared 项目及文档
                   └─ ContentToolbar（含文档格式命令）+ 路由内容
 
 项目业务
-├─ projects
+├─ workspaces + workspace_members
+├─ projects（归属 Workspace）
 ├─ project_members
 ├─ Server Action 写入
 └─ server-only 查询

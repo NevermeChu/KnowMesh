@@ -5,12 +5,16 @@ import { db } from '@/libs/DB';
 import { projectMembersSchema, projectsSchema } from '@/models/Schema';
 import type { ProjectKind } from '../Project';
 
-export async function getProjects(options: { kind?: ProjectKind } = {}) {
+export async function getProjects(options: { kind?: ProjectKind; workspaceId: string }) {
   const { userId } = await auth.protect();
   const memberCondition = eq(projectMembersSchema.userId, userId);
+  const workspaceCondition = and(
+    memberCondition,
+    eq(projectsSchema.workspaceId, options.workspaceId),
+  );
   const projectCondition = options.kind
-    ? and(memberCondition, eq(projectsSchema.kind, options.kind))
-    : memberCondition;
+    ? and(workspaceCondition, eq(projectsSchema.kind, options.kind))
+    : workspaceCondition;
 
   return await db
     .select({
@@ -20,6 +24,7 @@ export async function getProjects(options: { kind?: ProjectKind } = {}) {
       name: projectsSchema.name,
       role: projectMembersSchema.role,
       updatedAt: projectsSchema.updatedAt,
+      workspaceId: projectsSchema.workspaceId,
     })
     .from(projectsSchema)
     .innerJoin(projectMembersSchema, eq(projectMembersSchema.projectId, projectsSchema.id))

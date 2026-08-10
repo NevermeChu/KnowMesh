@@ -16,6 +16,7 @@ import { CreateDocumentDialog } from '@/features/documents/components/CreateDocu
 import { canEditDocuments } from '@/features/documents/Document';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import type { Project, ProjectKind } from '@/features/projects/Project';
+import type { Workspace } from '@/features/workspaces/Workspace';
 
 const isActiveRoute = (pathname: string, href: string) => pathname.startsWith(href);
 
@@ -212,6 +213,7 @@ function WorkspaceSectionNavigation(props: {
  * @returns The collapsible workspace navigation.
  */
 export function SidebarWorkspaceNavigation(props: {
+  activeWorkspace: Workspace | null;
   documents: DocumentNavigationItem[];
   pathname: string;
   projects: Project[];
@@ -236,50 +238,54 @@ export function SidebarWorkspaceNavigation(props: {
   const [creatingDocumentProject, setCreatingDocumentProject] = useState<WorkspaceProject | null>(
     null,
   );
-  const workspaceSections: WorkspaceSection[] = [
-    {
-      href: '/personal',
-      id: 'personal',
-      icon: FileText,
-      label: '个人工作区',
-      projects: props.projects
-        .filter((project) => project.kind === 'personal')
-        .map((project) => ({
-          documents: props.documents
-            .filter((document) => document.projectId === project.id)
-            .map((document) => ({
-              href: `/personal?project=${project.id}&document=${document.id}`,
-              id: document.id,
-              label: document.title,
+  const workspaceSections: WorkspaceSection[] = props.activeWorkspace
+    ? [
+        {
+          href: '/personal',
+          id: 'personal',
+          icon: FileText,
+          label: '个人工作区',
+          projects: props.projects
+            .filter((project) => project.kind === 'personal')
+            .map((project) => ({
+              documents: props.documents
+                .filter((document) => document.projectId === project.id)
+                .map((document) => ({
+                  href: `/personal?project=${project.id}&document=${document.id}`,
+                  id: document.id,
+                  label: document.title,
+                })),
+              href: `/personal?project=${project.id}`,
+              id: project.id,
+              label: project.name,
+              role: project.role,
             })),
-          href: `/personal?project=${project.id}`,
-          id: project.id,
-          label: project.name,
-          role: project.role,
-        })),
-    },
-    {
-      href: '/collaboration',
-      id: 'collaboration',
-      icon: Users,
-      label: '协作区',
-      projects: props.projects
-        .filter((project) => project.kind === 'collaboration')
-        .map((project) => ({
-          documents: props.documents
-            .filter((document) => document.projectId === project.id)
-            .map((document) => ({
-              href: `/collaboration?project=${project.id}&document=${document.id}`,
-              id: document.id,
-              label: document.title,
+          workspaceId: props.activeWorkspace.id,
+        },
+        {
+          href: '/collaboration',
+          id: 'collaboration',
+          icon: Users,
+          label: '协作区',
+          projects: props.projects
+            .filter((project) => project.kind === 'collaboration')
+            .map((project) => ({
+              documents: props.documents
+                .filter((document) => document.projectId === project.id)
+                .map((document) => ({
+                  href: `/collaboration?project=${project.id}&document=${document.id}`,
+                  id: document.id,
+                  label: document.title,
+                })),
+              href: `/collaboration?project=${project.id}`,
+              id: project.id,
+              label: project.name,
+              role: project.role,
             })),
-          href: `/collaboration?project=${project.id}`,
-          id: project.id,
-          label: project.name,
-          role: project.role,
-        })),
-    },
-  ];
+          workspaceId: props.activeWorkspace.id,
+        },
+      ]
+    : [];
 
   const createDocumentForProject = (project: WorkspaceProject) => {
     setExpandedProjectIds((currentProjects) => ({ ...currentProjects, [project.id]: true }));
@@ -289,6 +295,11 @@ export function SidebarWorkspaceNavigation(props: {
   return (
     <>
       <div className="mt-7 space-y-3">
+        {!props.activeWorkspace && (
+          <p className="px-2 text-xs leading-5 text-[#8a8d91]">
+            创建或选择工作区后，这里会显示个人与协作项目。
+          </p>
+        )}
         {workspaceSections.map((section) => (
           <WorkspaceSectionNavigation
             key={section.href}

@@ -6,6 +6,7 @@ import { ContentToolbar } from '@/components/layout/ContentToolbar';
 import { DocumentEditorToolbarProvider } from '@/features/documents/components/DocumentEditorToolbar';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import type { Project } from '@/features/projects/Project';
+import type { Workspace } from '@/features/workspaces/Workspace';
 
 const DEFAULT_SIDEBAR_WIDTH = 190;
 const MIN_SIDEBAR_WIDTH = 190;
@@ -22,9 +23,11 @@ type AppShellStyle = React.CSSProperties & {
  * @returns The authenticated application layout.
  */
 export function AppShell(props: {
+  activeWorkspace: Workspace | null;
   children: React.ReactNode;
   documents: DocumentNavigationItem[];
   projects: Project[];
+  workspaces: Workspace[];
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isContentFullscreen, setIsContentFullscreen] = useState(false);
@@ -36,9 +39,11 @@ export function AppShell(props: {
     <DocumentEditorToolbarProvider>
       <div className="min-h-dvh bg-[#fbfbfa] text-[#2f3437] antialiased" style={shellStyle}>
         <AppSidebar
+          activeWorkspace={props.activeWorkspace}
           documents={props.documents}
           isHidden={isContentFullscreen}
           projects={props.projects}
+          workspaces={props.workspaces}
           width={sidebarWidth}
           onResize={(width) => {
             setSidebarWidth(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)));

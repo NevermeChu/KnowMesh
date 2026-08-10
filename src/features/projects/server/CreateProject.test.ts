@@ -7,6 +7,7 @@ type ProjectRecord = {
   kind: 'personal';
   name: string;
   updatedAt: Date;
+  workspaceId: string;
 };
 
 const state = vi.hoisted(() => {
@@ -16,6 +17,7 @@ const state = vi.hoisted(() => {
     kind: 'personal',
     name: '产品知识库',
     updatedAt: new Date('2026-08-04T00:00:00.000Z'),
+    workspaceId: '01987654-3210-7000-8000-000000000010',
   };
   const protect = vi.fn<() => Promise<{ userId: string }>>();
   const returning = vi.fn<() => Promise<ProjectRecord[]>>();
@@ -23,6 +25,16 @@ const state = vi.hoisted(() => {
     returning,
   }));
   const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
+  const workspaceLimit = vi.fn<(limit: number) => Promise<{ workspaceId: string }[]>>();
+  const workspaceWhere = vi.fn<(condition: unknown) => { limit: typeof workspaceLimit }>(() => ({
+    limit: workspaceLimit,
+  }));
+  const workspaceFrom = vi.fn<(table: unknown) => { where: typeof workspaceWhere }>(() => ({
+    where: workspaceWhere,
+  }));
+  const select = vi.fn<(selection: unknown) => { from: typeof workspaceFrom }>(() => ({
+    from: workspaceFrom,
+  }));
   const memberValues = vi.fn<(values: unknown) => Promise<void>>(async () => {
     await Promise.resolve();
   });
@@ -49,7 +61,9 @@ const state = vi.hoisted(() => {
       insertCallCount = 0;
     },
     returning,
+    select,
     transaction,
+    workspaceLimit,
   };
 });
 
@@ -60,7 +74,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates the database boundary.
 vi.mock('@/libs/DB', () => ({
-  db: { transaction: state.transaction },
+  db: { select: state.select, transaction: state.transaction },
 }));
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates cache invalidation.
@@ -74,11 +88,16 @@ describe('project creation action', () => {
     state.resetInsertCount();
     state.protect.mockResolvedValue({ userId: 'user_1' });
     state.returning.mockResolvedValue([state.project]);
+    state.workspaceLimit.mockResolvedValue([{ workspaceId: state.project.workspaceId }]);
   });
 
   it('creates project with owner membership', async () => {
     await expect(
-      createProject({ kind: 'personal', name: '  产品知识库  ' }),
+      createProject({
+        kind: 'personal',
+        name: '  产品知识库  ',
+        workspaceId: state.project.workspaceId,
+      }),
     ).resolves.toStrictEqual(state.project);
 
     expect(state.transaction).toHaveBeenCalledOnce();
@@ -86,6 +105,7 @@ describe('project creation action', () => {
       kind: 'personal',
       name: '产品知识库',
       ownerId: 'user_1',
+      workspaceId: state.project.workspaceId,
     });
     expect(state.memberValues).toHaveBeenCalledWith({
       projectId: state.project.id,
@@ -96,9 +116,24 @@ describe('project creation action', () => {
   });
 
   it('rejects invalid input before transaction', async () => {
-    await expect(createProject({ kind: 'personal', name: '   ' })).rejects.toThrow(
-      '请输入项目名称',
-    );
+    await expect(
+      createProject({ kind: 'personal', name: '   ', workspaceId: state.project.workspaceId }),
+    ).rejects.toThrow('请输入项目名称');
+
+    expect(state.transaction).not.toHaveBeenCalled();
+    expect(state.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('rejects project creation outside accessible workspace', async () => {
+    state.workspaceLimit.mockResolvedValueOnce([]);
+
+    await expect(
+      createProject({
+        kind: 'personal',
+        name: '产品知识库',
+        workspaceId: state.project.workspaceId,
+      }),
+    ).rejects.toThrow('没有权限在该工作区创建项目');
 
     expect(state.transaction).not.toHaveBeenCalled();
     expect(state.revalidatePath).not.toHaveBeenCalled();
@@ -107,9 +142,13 @@ describe('project creation action', () => {
   it('stops member creation when project insert fails', async () => {
     state.returning.mockResolvedValueOnce([]);
 
-    await expect(createProject({ kind: 'personal', name: '产品知识库' })).rejects.toThrow(
-      '项目创建失败',
-    );
+    await expect(
+      createProject({
+        kind: 'personal',
+        name: '产品知识库',
+        workspaceId: state.project.workspaceId,
+      }),
+    ).rejects.toThrow('项目创建失败');
     expect(state.memberValues).not.toHaveBeenCalled();
     expect(state.revalidatePath).not.toHaveBeenCalled();
   });

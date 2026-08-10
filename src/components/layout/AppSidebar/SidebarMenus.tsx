@@ -5,6 +5,7 @@ import {
   Check,
   ChevronsUpDown,
   LogOut,
+  Plus,
   Settings,
   SlidersHorizontal,
   UserRound,
@@ -12,6 +13,7 @@ import {
 import Link from 'next/link';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
+import type { Workspace } from '@/features/workspaces/Workspace';
 import { AppConfig } from '@/utils/AppConfig';
 
 /**
@@ -21,8 +23,14 @@ import { AppConfig } from '@/utils/AppConfig';
  * @returns The workspace switcher.
  */
 export function WorkspaceSwitcher(props: {
+  activeWorkspace: Workspace | null;
+  error: string | null;
   isOpen: boolean;
+  isPending: boolean;
+  workspaces: Workspace[];
   onClose: () => void;
+  onCreate: () => void;
+  onSelect: (workspaceId: string) => void;
   onToggle: () => void;
 }) {
   return (
@@ -36,7 +44,9 @@ export function WorkspaceSwitcher(props: {
         onClick={props.onToggle}
       >
         <AppLogo className="size-7 shrink-0" />
-        <span className="truncate text-sm font-semibold tracking-tight">{AppConfig.name}</span>
+        <span className="truncate text-sm font-semibold tracking-tight">
+          {props.activeWorkspace?.name ?? AppConfig.name}
+        </span>
         <ChevronsUpDown
           aria-hidden="true"
           className="ml-auto size-4 shrink-0 text-[#8a8d91]"
@@ -51,19 +61,43 @@ export function WorkspaceSwitcher(props: {
         placement={{ kind: 'anchor', side: 'bottom' }}
       >
         <PopupMenuLabel>切换工作区</PopupMenuLabel>
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-black/5"
-          onClick={props.onClose}
-        >
-          <AppLogo className="size-7 shrink-0" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-[#202124]">
-              {AppConfig.name}
+        {props.workspaces.map((workspace) => (
+          <button
+            type="button"
+            key={workspace.id}
+            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={props.isPending}
+            onClick={() => {
+              if (workspace.id === props.activeWorkspace?.id) {
+                props.onClose();
+                return;
+              }
+              props.onSelect(workspace.id);
+            }}
+          >
+            <AppLogo className="size-7 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-[#202124]">
+                {workspace.name}
+              </span>
+              <span className="block text-xs text-[#8a8d91]">
+                {workspace.role === 'owner' ? 'Owner' : workspace.role}
+              </span>
             </span>
-            <span className="block text-xs text-[#8a8d91]">当前工作区</span>
-          </span>
-          <Check aria-hidden="true" className="size-3.5 text-[#2383e2]" strokeWidth={2} />
+            {workspace.id === props.activeWorkspace?.id && (
+              <Check aria-hidden="true" className="size-3.5 text-[#2383e2]" strokeWidth={2} />
+            )}
+          </button>
+        ))}
+        {props.error && (
+          <p className="px-2 py-1 text-xs text-[#b52e2e]" role="alert">
+            {props.error}
+          </p>
+        )}
+        <div className="my-0.5 border-t border-black/8" />
+        <button type="button" className={popupMenuItemClassName} onClick={props.onCreate}>
+          <Plus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+          <span>新建工作区</span>
         </button>
       </PopupMenu>
     </div>

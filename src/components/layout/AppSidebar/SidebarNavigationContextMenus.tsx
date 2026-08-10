@@ -72,7 +72,11 @@ export function SidebarNavigationContextMenus(props: {
           icon: <Settings aria-hidden="true" className="size-3.5" strokeWidth={1.8} />,
           label: '管理工作区',
           onSelect: () => {
-            openPermissionOverview({ kind: target.section.id, scope: 'workspace' });
+            openPermissionOverview({
+              kind: target.section.id,
+              scope: 'workspace',
+              workspaceId: target.section.workspaceId,
+            });
           },
         },
         {

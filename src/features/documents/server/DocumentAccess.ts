@@ -10,6 +10,7 @@ export async function getProjectAccess(options: { projectId: string; userId: str
       kind: projectsSchema.kind,
       name: projectsSchema.name,
       role: projectMembersSchema.role,
+      workspaceId: projectsSchema.workspaceId,
     })
     .from(projectsSchema)
     .innerJoin(projectMembersSchema, eq(projectMembersSchema.projectId, projectsSchema.id))

@@ -166,9 +166,16 @@ describe('permission overview', () => {
   });
 
   it('groups workspace permissions by accessible project', async () => {
-    const overview = await getPermissionOverview({ kind: 'personal', scope: 'workspace' });
+    const overview = await getPermissionOverview({
+      kind: 'personal',
+      scope: 'workspace',
+      workspaceId: state.projectId,
+    });
 
-    expect(state.getProjects).toHaveBeenCalledWith({ kind: 'personal' });
+    expect(state.getProjects).toHaveBeenCalledWith({
+      kind: 'personal',
+      workspaceId: state.projectId,
+    });
     expect(overview.groups).toHaveLength(1);
     expect(overview.groups[0]?.members.map((member) => member.role)).toStrictEqual([
       'owner',

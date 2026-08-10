@@ -24,13 +24,15 @@
 ```text
 浏览器请求任一受保护工作区页面
 → Next.js 执行 WorkspaceLayout
-→ WorkspaceLayout 并行调用 getProjects() 和 getDocumentNavigation()
-→ 两个 server-only 查询分别按当前 Clerk 成员关系读取项目和文档元数据
+→ WorkspaceLayout 调用 getWorkspaceContext()
+→ 服务端按当前 Clerk 用户的 workspace_members 校验 HttpOnly cookie 并确定当前 Workspace
+→ WorkspaceLayout 按当前 workspaceId 并行调用 getProjects() 和 getDocumentNavigation()
+→ 两个 server-only 查询按当前 Workspace 和 project_members 读取可访问项目及文档元数据
 → 项目及文档导航数据作为 props 传给 AppShell
 → 页面结构和序列化数据发送给浏览器
 ```
 
-`getProjects` 和 `getDocumentNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。
+`getWorkspaceContext`、`getProjects` 和 `getDocumentNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到第一个可访问 Workspace。
 
 项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。当前导航查询返回所有可访问文档的元数据，没有分页；正文仍只由具体文档页面按需读取。
 
@@ -44,6 +46,7 @@
 → 客户端调用标记了 `'use server'` 的 `createProject`
 → Clerk 服务端鉴权
 → 服务端 Zod 校验
+→ 验证当前用户属于目标 Workspace
 → 数据库事务写 projects 和 project_members
 → 客户端 router.refresh()
 → WorkspaceLayout 重新查询并更新侧边栏
@@ -59,8 +62,10 @@
 
 ```text
 页面取得 project 和 document 参数
+→ getWorkspaceContext 确定当前 Workspace
 → getProjectDocuments 从 Clerk 会话取得 userId
 → getProjectAccess 验证 project_members
+→ 验证项目属于当前 Workspace
 → 查询项目文档元数据和所选文档内容
 → DocumentWorkspace 与 DocumentEditor 接收所选文档数据
 ```
@@ -75,7 +80,7 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 侧边栏右键菜单按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证可访问项目或文件；验证通过后查询完整项目成员，并通过 Clerk 用户目录补充用于显示的姓名和主邮箱。当前用户标记由服务端计算。项目和文件响应同时返回授权后确认的资源 ID 与名称，客户端使用这些字段渲染可切换的权限路径；路径指向当前作用域时由客户端直接忽略，不重复调用 Server Action。
 
-个人工作区和协作区只是项目分类，因此工作区总览先调用成员过滤后的项目查询，再按项目分组读取权限，并在界面说明聚合关系。文件没有独立 ACL，因此文件总览先验证文件访问权，再返回所属项目权限；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
+Private 和 Shared 是选中 Workspace 内的项目分类。分区权限总览先限定当前 Workspace，再调用成员过滤后的项目查询并按项目分组读取权限；它不代表 Workspace 权限继承。文件没有独立 ACL，因此文件总览先验证文件访问权，再返回所属项目权限；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
 
 ## 安全不变量
 
@@ -96,6 +101,9 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 ## 相关代码
 
 - `src/app/(workspace)/layout.tsx`：服务端初始查询入口。
+- `src/features/workspaces/server/GetWorkspaceContext.ts`：解析并授权当前 Workspace。
+- `src/features/workspaces/server/CreateWorkspace.ts`：创建 Workspace 与 owner 成员。
+- `src/features/workspaces/server/SelectWorkspace.ts`：校验选择并写入当前 Workspace cookie。
 - `src/proxy.ts`：当前页面路由保护范围和 `/api` matcher 排除规则。
 - `src/features/projects/server/GetProjects.ts`：server-only 项目查询。
 - `src/features/documents/server/GetDocumentNavigation.ts`：server-only 文档导航元数据查询。
@@ -112,3 +120,4 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 - [ADR 0001：工作区初始数据使用 Server Component](../adr/0001-use-server-components-for-workspace-data.md)
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
+- [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)

@@ -17,13 +17,29 @@
 
 ## 当前业务表
 
+### `workspaces`
+
+- UUID 主键，名称最长 80 字符。
+- `owner_id` 保存创建者的 Clerk 用户 ID；当前用于记录所有者，不代表完整的 Workspace 权限矩阵已经实现。
+- `(owner_id)` 索引支持按所有者定位 Workspace。
+- 包含创建和更新时间。
+
+### `workspace_members`
+
+- `(workspace_id, user_id)` 联合主键。
+- `workspace_id` 外键指向 `workspaces.id`，删除 Workspace 时级联删除。
+- 角色复用 `owner`、`editor`、`viewer` 枚举；第一阶段只用于记录成员身份和展示。
+- `(user_id, workspace_id)` 索引支持查询用户可切换的 Workspace。
+- 第一阶段中，该表只控制 Workspace 可见性和切换资格，不向项目或文档继承权限。
+
 ### `projects`
 
 - UUID 主键。
 - 名称最长 80 字符。
 - 类型为 `personal` 或 `collaboration`。
+- `workspace_id` 非空外键指向 `workspaces.id`；删除 Workspace 时级联删除其项目。
 - `owner_id` 保存 Clerk 用户 ID。
-- 定义 `(owner_id, kind)` 索引；当前 `getProjects` 通过成员表查询，不使用该索引。
+- 定义 `(workspace_id, kind)` 索引，支持读取选中 Workspace 内的 Private/Shared 分区。
 - 包含创建和更新时间；`updated_at` 的 `$onUpdate` 是 Drizzle 写入行为，迁移中没有数据库自动更新时间的触发器。
 
 ### `project_members`
@@ -53,6 +69,8 @@
 数据库当前不能独立保证：
 
 - `projects.owner_id` 对应的成员一定存在且角色为 `owner`。
+- `workspaces.owner_id` 对应的 Workspace 成员一定存在且角色为 `owner`。
+- Workspace 成员自动获得其下项目的访问权；第一阶段明确不做权限继承。
 - `personal` 项目没有 `editor` 或 `viewer`。
 - 修改项目所有权时，成员关系同步更新。
 - `documents.content` 中的 JSON 符合 ProseMirror Schema。
@@ -81,6 +99,8 @@
 
 自动生成迁移不会推断业务数据回填。例如新增成员表时，需要明确把已有项目 owner 回填为 owner 成员。
 
+`0003_add-workspaces.sql` 为已有项目所有者创建 Workspace，将项目按原 `owner_id` 归入对应 Workspace，并把既有 `project_members` 汇总回填为 `workspace_members`。同一用户在同一 Workspace 参与多个项目时保留最高角色（`owner` 高于 `editor`，`editor` 高于 `viewer`）；完成回填后才把 `projects.workspace_id` 设为非空。
+
 ## 迁移不变量
 
 - 已共享或已用于生产的迁移不得改写历史，应新增后续迁移。
@@ -92,7 +112,7 @@
 
 ## 创建项目的一致性
 
-创建项目同时写入 `projects` 和 `project_members`，因此必须使用事务。不能先创建项目后异步补 owner 成员，否则失败时会出现无法通过成员查询访问的孤立项目。
+创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。创建项目前必须验证当前用户属于目标 Workspace；项目与 owner 的 `project_members` 也必须在同一事务写入，避免产生无成员项目。
 
 ## 本地操作
 

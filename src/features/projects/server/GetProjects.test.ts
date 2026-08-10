@@ -9,6 +9,7 @@ type ProjectRecord = {
   name: string;
   role: 'owner';
   updatedAt: Date;
+  workspaceId: string;
 };
 
 const state = vi.hoisted(() => {
@@ -20,6 +21,7 @@ const state = vi.hoisted(() => {
       name: '产品知识库',
       role: 'owner',
       updatedAt: new Date('2026-08-04T00:00:00.000Z'),
+      workspaceId: '01987654-3210-7000-8000-000000000010',
     },
   ];
   const protect = vi.fn<() => Promise<{ userId: string }>>();
@@ -84,18 +86,26 @@ describe('project queries', () => {
   });
 
   it('filters projects by authenticated membership', async () => {
-    await expect(getProjects()).resolves.toStrictEqual(state.projects);
+    await expect(
+      getProjects({ workspaceId: state.projects[0]?.workspaceId ?? '' }),
+    ).resolves.toStrictEqual(state.projects);
 
     expect(state.eq).toHaveBeenCalledWith(projectMembersSchema.userId, 'user_1');
-    expect(state.and).not.toHaveBeenCalled();
+    expect(state.eq).toHaveBeenCalledWith(
+      projectsSchema.workspaceId,
+      state.projects[0]?.workspaceId,
+    );
     expect(state.innerJoin).toHaveBeenCalledWith(projectMembersSchema, expect.anything());
     expect(state.desc).toHaveBeenCalledWith(projectsSchema.createdAt);
   });
 
   it('adds project kind filter', async () => {
-    await getProjects({ kind: 'collaboration' });
+    await getProjects({
+      kind: 'collaboration',
+      workspaceId: state.projects[0]?.workspaceId ?? '',
+    });
 
     expect(state.eq).toHaveBeenCalledWith(projectsSchema.kind, 'collaboration');
-    expect(state.and).toHaveBeenCalledOnce();
+    expect(state.and).toHaveBeenCalledTimes(2);
   });
 });
