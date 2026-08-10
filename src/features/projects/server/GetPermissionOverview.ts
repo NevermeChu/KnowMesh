@@ -128,6 +128,7 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
     return {
       description: '当前工作区是项目分区，没有独立成员权限。下方按项目展示实际生效的完整权限。',
       groups: await getPermissionGroups({ currentUserId: userId, projects }),
+      scope: 'workspace' as const,
       title: `${permissionInput.kind === 'personal' ? '个人工作区' : '协作区'}权限`,
     };
   }
@@ -140,9 +141,9 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
     }
 
     return {
-      description: '项目成员权限决定该项目及其全部文件的访问能力。',
       groups: await getPermissionGroups({ currentUserId: userId, projects: [access] }),
-      title: `${access.name} · 项目权限`,
+      project: { id: access.id, name: access.name },
+      scope: 'project' as const,
     };
   }
 
@@ -168,11 +169,12 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
   }
 
   return {
-    description: `该文件没有独立权限，完整继承项目“${resource.projectName}”的成员权限。`,
+    document: { id: permissionInput.documentId, title: resource.documentTitle },
     groups: await getPermissionGroups({
       currentUserId: userId,
       projects: [{ id: resource.projectId, name: resource.projectName }],
     }),
-    title: `${resource.documentTitle} · 文件权限`,
+    project: { id: resource.projectId, name: resource.projectName },
+    scope: 'document' as const,
   };
 }

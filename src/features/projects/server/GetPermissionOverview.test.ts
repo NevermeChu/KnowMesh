@@ -188,7 +188,10 @@ describe('permission overview', () => {
       projectId: state.projectId,
       userId: 'user_1',
     });
-    expect(overview.title).toBe('产品知识库 · 项目权限');
+    expect(overview).toMatchObject({
+      project: { id: state.projectId, name: '产品知识库' },
+      scope: 'project',
+    });
     expect(overview.groups[0]?.members).toHaveLength(3);
   });
 
@@ -202,8 +205,11 @@ describe('permission overview', () => {
       documentId: state.documentId,
       userId: 'user_1',
     });
-    expect(overview.title).toBe('产品方案 · 文件权限');
-    expect(overview.description).toContain('完整继承项目“产品知识库”');
+    expect(overview).toMatchObject({
+      document: { id: state.documentId, title: '产品方案' },
+      project: { id: state.projectId, name: '产品知识库' },
+      scope: 'document',
+    });
   });
 
   it('rejects inaccessible projects', async () => {

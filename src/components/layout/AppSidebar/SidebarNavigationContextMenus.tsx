@@ -1,7 +1,7 @@
 'use client';
 
 import { FilePlus, FolderPlus, Settings } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 import { canEditDocuments } from '@/features/documents/Document';
@@ -10,6 +10,7 @@ import type {
   PermissionOverview,
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
+import { isSamePermissionOverviewInput } from '@/features/projects/PermissionOverview';
 import { getPermissionOverview } from '@/features/projects/server/GetPermissionOverview';
 import type { NavigationContextMenu, WorkspaceProject } from './SidebarWorkspaceNavigationTypes';
 
@@ -27,18 +28,33 @@ export function SidebarNavigationContextMenus(props: {
 }) {
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [permissionOverview, setPermissionOverview] = useState<PermissionOverview | null>(null);
+  const [permissionInput, setPermissionInput] = useState<PermissionOverviewInput | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isLoadingPermissions, startLoadingPermissions] = useTransition();
+  const permissionRequestId = useRef(0);
 
   const openPermissionOverview = (input: PermissionOverviewInput) => {
+    if (isPermissionDialogOpen && isSamePermissionOverviewInput(permissionInput, input)) {
+      return;
+    }
+
+    const requestId = permissionRequestId.current + 1;
+    permissionRequestId.current = requestId;
     setIsPermissionDialogOpen(true);
+    setPermissionInput(input);
     setPermissionOverview(null);
     setPermissionError(null);
     startLoadingPermissions(async () => {
       try {
-        setPermissionOverview(await getPermissionOverview(input));
+        const overview = await getPermissionOverview(input);
+
+        if (permissionRequestId.current === requestId) {
+          setPermissionOverview(overview);
+        }
       } catch {
-        setPermissionError('权限列表加载失败，请稍后重试');
+        if (permissionRequestId.current === requestId) {
+          setPermissionError('权限列表加载失败，请稍后重试');
+        }
       }
     });
   };
@@ -123,8 +139,10 @@ export function SidebarNavigationContextMenus(props: {
           isLoading={isLoadingPermissions}
           overview={permissionOverview}
           onClose={() => {
+            permissionRequestId.current += 1;
             setIsPermissionDialogOpen(false);
           }}
+          onNavigate={openPermissionOverview}
         />
       )}
     </>
