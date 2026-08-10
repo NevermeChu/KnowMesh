@@ -9,6 +9,15 @@ type ModalDialogDismissal = {
   onDismiss: () => void;
 };
 
+type ModalDialogButtonVariant = 'accent' | 'danger' | 'neutral' | 'primary';
+
+const modalDialogButtonVariantClassNames: Record<ModalDialogButtonVariant, string> = {
+  accent: 'bg-[#2383e2] text-white hover:bg-[#1b6fbd]',
+  danger: 'bg-[#d14343] text-white hover:bg-[#b52e2e]',
+  neutral: 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]',
+  primary: 'bg-[#2f3437] text-white hover:bg-[#202124]',
+};
+
 /**
  * Renders a shared modal surface with an explicit dismissal policy.
  *
@@ -77,7 +86,7 @@ export function ModalDialogHeader(props: {
   titleId: string;
 }) {
   return (
-    <header className="flex items-start gap-3 border-b border-black/8 px-5 py-4">
+    <header className="flex items-center gap-3 border-b border-black/8 px-5 py-4">
       {props.icon && (
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#2383e2]/10 text-[#2383e2]">
           {props.icon}
@@ -103,5 +112,59 @@ export function ModalDialogHeader(props: {
         </button>
       )}
     </header>
+  );
+}
+
+/**
+ * Renders the consistently spaced content area of a modal dialog.
+ *
+ * @param props - Body content and optional layout classes.
+ * @returns The modal body.
+ */
+export function ModalDialogBody(props: { children: React.ReactNode; surfaceClassName?: string }) {
+  return <div className={`px-5 py-4 ${props.surfaceClassName ?? ''}`}>{props.children}</div>;
+}
+
+/**
+ * Renders the shared action area at the bottom of a modal dialog.
+ *
+ * @param props - Footer actions and their alignment.
+ * @returns The modal footer.
+ */
+export function ModalDialogFooter(props: {
+  alignment?: 'between' | 'end';
+  children: React.ReactNode;
+}) {
+  return (
+    <footer
+      className={`flex shrink-0 items-center gap-2 border-t border-black/8 px-5 py-3 ${props.alignment === 'between' ? 'justify-between' : 'justify-end'}`}
+    >
+      {props.children}
+    </footer>
+  );
+}
+
+/**
+ * Renders a modal action with a consistent semantic color.
+ *
+ * @param props - Button content, behavior, state, and semantic variant.
+ * @returns The modal action button.
+ */
+export function ModalDialogButton(props: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+  type: 'button' | 'submit';
+  variant?: ModalDialogButtonVariant;
+}) {
+  return (
+    <button
+      type={props.type}
+      className={`h-8 rounded-lg px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${modalDialogButtonVariantClassNames[props.variant ?? 'neutral']}`}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
+      {props.children}
+    </button>
   );
 }

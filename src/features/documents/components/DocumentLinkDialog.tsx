@@ -2,7 +2,13 @@
 
 import { Link2 } from 'lucide-react';
 import { useState } from 'react';
-import { ModalDialog, ModalDialogHeader } from '@/components/ui/ModalDialog';
+import {
+  ModalDialog,
+  ModalDialogBody,
+  ModalDialogButton,
+  ModalDialogFooter,
+  ModalDialogHeader,
+} from '@/components/ui/ModalDialog';
 
 /**
  * Collects the URL used by the StarterKit link mark.
@@ -31,7 +37,6 @@ export function DocumentLinkDialog(props: {
         titleId="document-link-dialog-title"
       />
       <form
-        className="space-y-4 px-5 py-4"
         onSubmit={(event) => {
           event.preventDefault();
           const normalizedHref = href.trim();
@@ -43,8 +48,8 @@ export function DocumentLinkDialog(props: {
           }
         }}
       >
-        <div>
-          <label htmlFor="document-link-href" className="block text-sm font-medium text-[#45494e]">
+        <ModalDialogBody>
+          <label htmlFor="document-link-href" className="block text-xs font-medium text-[#555a60]">
             链接地址
           </label>
           <input
@@ -52,42 +57,31 @@ export function DocumentLinkDialog(props: {
             required
             id="document-link-href"
             aria-label="链接地址"
-            className="mt-2 w-full rounded-lg border border-black/12 px-3 py-2 text-sm transition-colors outline-none placeholder:text-[#a0a3a7] focus:border-[#2383e2]"
+            className="mt-1.5 h-9 w-full rounded-lg border border-black/12 bg-white px-3 text-sm transition-colors outline-none placeholder:text-[#b0b3b7] focus:border-[#2383e2] focus:ring-2 focus:ring-[#2383e2]/15"
             placeholder="https://example.com"
             value={href}
             onChange={(event) => {
               setHref(event.target.value);
             }}
           />
-        </div>
-        <div className="flex items-center justify-between gap-3">
+        </ModalDialogBody>
+        <ModalDialogFooter alignment="between">
           <div>
             {props.href !== 'https://' && (
-              <button
-                type="button"
-                className="rounded-lg px-3 py-2 text-sm font-medium text-[#b52e2e] transition-colors hover:bg-[#d14343]/8"
-                onClick={props.onRemove}
-              >
+              <ModalDialogButton type="button" variant="danger" onClick={props.onRemove}>
                 移除链接
-              </button>
+              </ModalDialogButton>
             )}
           </div>
           <div className="flex gap-2">
-            <button
-              type="button"
-              className="rounded-lg px-3.5 py-2 text-sm font-medium text-[#666a70] transition-colors hover:bg-black/5 hover:text-[#202124]"
-              onClick={props.onClose}
-            >
+            <ModalDialogButton type="button" onClick={props.onClose}>
               取消
-            </button>
-            <button
-              type="submit"
-              className="rounded-lg bg-[#2383e2] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1b6fbd]"
-            >
+            </ModalDialogButton>
+            <ModalDialogButton type="submit" variant="primary">
               保存
-            </button>
+            </ModalDialogButton>
           </div>
-        </div>
+        </ModalDialogFooter>
       </form>
     </ModalDialog>
   );
