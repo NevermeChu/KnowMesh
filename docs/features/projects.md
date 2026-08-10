@@ -38,7 +38,7 @@
 
 ## 创建流程
 
-两个侧边栏分区复用 `CreateProjectDialog`。入口自动提供 `kind`，用户只输入名称。
+两个侧边栏分区复用 `CreateProjectDialog`。入口自动提供 `kind`，用户只输入名称。创建项目和权限总览均使用共享 `ModalDialog`；只有调用方显式配置关闭策略时，遮罩与 Escape 才能关闭弹窗，创建请求进行中会临时禁用关闭，避免中断状态反馈。
 
 服务端 `createProject` 必须：
 
@@ -112,6 +112,7 @@ WHERE project_members.user_id = 当前 Clerk 用户
 - `src/components/layout/AppSidebar/SidebarWorkspaceNavigation.tsx`
 - `src/components/layout/AppSidebar/SidebarWorkspaceNavigationTypes.ts`
 - `src/components/ui/ContextMenu.tsx`
+- `src/components/ui/ModalDialog.tsx`
 - `src/components/ui/PopupMenu.tsx`
 
 ## 相关文档

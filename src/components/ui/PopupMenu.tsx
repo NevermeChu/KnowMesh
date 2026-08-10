@@ -19,6 +19,7 @@ export function PopupMenu(props: {
   isOpen: boolean;
   label: string;
   placement: PopupMenuPlacement;
+  surfaceClassName?: string;
 }) {
   if (!props.isOpen) {
     return null;
@@ -39,7 +40,7 @@ export function PopupMenu(props: {
       open
       id={props.id}
       aria-label={props.label}
-      className={`${viewportPosition ? 'fixed z-70' : 'absolute left-1.5 z-20'} m-0 w-56 max-w-[calc(100vw-0.75rem)] rounded-lg border border-black/10 bg-white p-1 text-[#2f3437] shadow-lg ${anchorPositionClassName}`}
+      className={`${viewportPosition ? 'fixed z-70' : 'absolute left-1.5 z-20'} m-0 max-w-[calc(100vw-0.75rem)] rounded-lg border border-black/10 bg-white text-[#2f3437] shadow-lg ${props.surfaceClassName ?? 'w-56 p-1'} ${anchorPositionClassName}`}
       style={viewportPosition}
     >
       {props.children}
