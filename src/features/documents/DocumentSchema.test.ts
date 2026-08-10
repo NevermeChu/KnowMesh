@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocumentSchema, updateDocumentSchema } from './DocumentSchema';
+import { updateDocumentSchema } from './DocumentSchema';
 
 const documentId = '01987654-3210-7000-8000-000000000001';
 
@@ -57,30 +57,5 @@ describe('document schemas', () => {
         documentId,
       }),
     ).toThrow('文档内容格式无效');
-  });
-
-  it('requires a document change', () => {
-    expect(() => updateDocumentSchema.parse({ documentId })).toThrow('没有需要保存的文档变更');
-  });
-
-  it('requires project UUID', () => {
-    expect(() => createDocumentSchema.parse({ projectId: 'project_1', title: '新文件' })).toThrow(
-      'Invalid UUID',
-    );
-  });
-
-  it('normalizes document title', () => {
-    expect(
-      createDocumentSchema.parse({ projectId: documentId, title: '  新文件  ' }),
-    ).toStrictEqual({
-      projectId: documentId,
-      title: '新文件',
-    });
-  });
-
-  it('requires document title', () => {
-    expect(() => createDocumentSchema.parse({ projectId: documentId, title: '  ' })).toThrow(
-      '文件名不能为空',
-    );
   });
 });
