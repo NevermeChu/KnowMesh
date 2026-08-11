@@ -11,9 +11,9 @@ type BreadcrumbItem = {
 };
 
 const routeLabels: Record<string, string> = {
-  collaboration: '协作区',
+  collaboration: '协作区域',
   dashboard: '首页',
-  personal: '个人工作区',
+  personal: '个人区域',
   preferences: '系统偏好设置',
   search: '搜索',
   settings: '设置',

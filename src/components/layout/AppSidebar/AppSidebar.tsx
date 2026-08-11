@@ -2,13 +2,20 @@
 
 import { Menu, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { SettingsMenu, WorkspaceSwitcher } from '@/components/layout/AppSidebar/SidebarMenus';
 import { SidebarPrimaryNavigation } from '@/components/layout/AppSidebar/SidebarPrimaryNavigation';
 import { SidebarWorkspaceNavigation } from '@/components/layout/AppSidebar/SidebarWorkspaceNavigation';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import { CreateProjectDialog } from '@/features/projects/components/CreateProjectDialog';
+import { PermissionOverviewDialog } from '@/features/projects/components/PermissionOverviewDialog';
+import type {
+  PermissionOverview,
+  PermissionOverviewInput,
+} from '@/features/projects/PermissionOverview';
+import { isSamePermissionOverviewInput } from '@/features/projects/PermissionOverview';
 import type { Project, ProjectKind } from '@/features/projects/Project';
+import { getPermissionOverview } from '@/features/projects/server/GetPermissionOverview';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/CreateWorkspaceDialog';
 import { selectWorkspace } from '@/features/workspaces/server/SelectWorkspace';
 import type { Workspace } from '@/features/workspaces/Workspace';
@@ -33,7 +40,9 @@ function SidebarContent(props: {
   onCloseMenu: () => void;
   onCreateWorkspace: () => void;
   onCreateProject: (kind: ProjectKind) => void;
+  onManageWorkspace: () => void;
   onNavigate: () => void;
+  onOpenPermissionOverview: (input: PermissionOverviewInput) => void;
   onToggleMenu: (menu: Exclude<SidebarMenu, null>) => void;
   onSelectWorkspace: (workspaceId: string) => void;
 }) {
@@ -62,12 +71,15 @@ function SidebarContent(props: {
           projects={props.projects}
           onCreateProject={props.onCreateProject}
           onNavigate={props.onNavigate}
+          onOpenPermissionOverview={props.onOpenPermissionOverview}
         />
       </div>
 
       <SettingsMenu
         isOpen={props.openMenu === 'settings'}
         isSettingsRoute={props.pathname.startsWith('/settings')}
+        isWorkspaceAvailable={props.activeWorkspace !== null}
+        onManageWorkspace={props.onManageWorkspace}
         onNavigate={props.onNavigate}
         onToggle={() => {
           props.onToggleMenu('settings');
@@ -98,8 +110,40 @@ export function AppSidebar(props: {
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<SidebarMenu>(null);
+  const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
+  const [permissionOverview, setPermissionOverview] = useState<PermissionOverview | null>(null);
+  const [permissionInput, setPermissionInput] = useState<PermissionOverviewInput | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [isLoadingPermissions, startLoadingPermissions] = useTransition();
   const [isSwitchingWorkspace, startSwitchingWorkspace] = useTransition();
+  const permissionRequestId = useRef(0);
+
+  const openPermissionOverview = (input: PermissionOverviewInput) => {
+    if (isPermissionDialogOpen && isSamePermissionOverviewInput(permissionInput, input)) {
+      return;
+    }
+
+    const requestId = permissionRequestId.current + 1;
+    permissionRequestId.current = requestId;
+    setIsPermissionDialogOpen(true);
+    setPermissionInput(input);
+    setPermissionOverview(null);
+    setPermissionError(null);
+    startLoadingPermissions(async () => {
+      try {
+        const overview = await getPermissionOverview(input);
+
+        if (permissionRequestId.current === requestId) {
+          setPermissionOverview(overview);
+        }
+      } catch {
+        if (permissionRequestId.current === requestId) {
+          setPermissionError('权限列表加载失败，请稍后重试');
+        }
+      }
+    });
+  };
 
   const closeNavigation = () => {
     setIsOpen(false);
@@ -183,7 +227,20 @@ export function AppSidebar(props: {
               setOpenMenu(null);
               setIsCreatingWorkspace(true);
             }}
+            onManageWorkspace={() => {
+              if (!props.activeWorkspace) {
+                return;
+              }
+
+              setIsOpen(false);
+              setOpenMenu(null);
+              openPermissionOverview({
+                scope: 'workspace',
+                workspaceId: props.activeWorkspace.id,
+              });
+            }}
             onNavigate={closeNavigation}
+            onOpenPermissionOverview={openPermissionOverview}
             onToggleMenu={(menu) => {
               setWorkspaceError(null);
               setOpenMenu((currentMenu) => (currentMenu === menu ? null : menu));
@@ -249,6 +306,18 @@ export function AppSidebar(props: {
             router.replace(pathname);
             router.refresh();
           }}
+        />
+      )}
+      {isPermissionDialogOpen && (
+        <PermissionOverviewDialog
+          error={permissionError}
+          isLoading={isLoadingPermissions}
+          overview={permissionOverview}
+          onClose={() => {
+            permissionRequestId.current += 1;
+            setIsPermissionDialogOpen(false);
+          }}
+          onNavigate={openPermissionOverview}
         />
       )}
     </>

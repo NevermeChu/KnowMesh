@@ -165,8 +165,11 @@ export function PermissionOverviewDialog(props: {
               {props.error}
             </p>
           )}
+          {!props.isLoading && props.overview?.scope === 'workspace' && (
+            <p className="mb-4 text-sm leading-6 text-[#666a70]">{props.overview.description}</p>
+          )}
           {!props.isLoading && props.overview?.groups.length === 0 && (
-            <p className="py-10 text-center text-sm text-[#8a8d91]">该分区暂无项目和成员权限</p>
+            <p className="py-10 text-center text-sm text-[#8a8d91]">暂无成员权限</p>
           )}
           {!props.isLoading &&
             props.overview?.groups.map((group) => (

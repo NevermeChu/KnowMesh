@@ -1,7 +1,7 @@
 'use server';
 
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import * as z from 'zod';
 import { getDocumentAccess, getProjectAccess } from '@/features/documents/server/DocumentAccess';
 import type {
@@ -9,18 +9,51 @@ import type {
   PermissionMember,
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
-import { projectKinds, projectMemberRoles } from '@/features/projects/Project';
+import type { ProjectMemberRole } from '@/features/projects/Project';
+import { projectMemberRoles } from '@/features/projects/Project';
 import { db } from '@/libs/DB';
-import { documentsSchema, projectMembersSchema, projectsSchema } from '@/models/Schema';
-import { getProjects } from './GetProjects';
+import {
+  documentsSchema,
+  projectMembersSchema,
+  projectsSchema,
+  workspaceMembersSchema,
+  workspacesSchema,
+} from '@/models/Schema';
 
 const permissionOverviewInputSchema = z.discriminatedUnion('scope', [
-  z.object({ kind: z.enum(projectKinds), scope: z.literal('workspace'), workspaceId: z.uuid() }),
+  z.object({ scope: z.literal('workspace'), workspaceId: z.uuid() }),
   z.object({ projectId: z.uuid(), scope: z.literal('project') }),
   z.object({ documentId: z.uuid(), scope: z.literal('document') }),
 ]);
 
 const roleOrder = new Map(projectMemberRoles.map((role, index) => [role, index]));
+
+function mapPermissionMembers(options: {
+  currentUserId: string;
+  memberships: { role: ProjectMemberRole; userId: string }[];
+  profiles: Awaited<ReturnType<typeof getClerkProfiles>>;
+}) {
+  return options.memberships
+    .map((membership): PermissionMember => {
+      const profile = options.profiles.get(membership.userId);
+
+      return {
+        displayName: profile?.displayName ?? membership.userId,
+        email: profile?.email ?? null,
+        imageUrl: profile?.imageUrl ?? null,
+        isCurrentUser: membership.userId === options.currentUserId,
+        role: membership.role,
+        userId: membership.userId,
+      };
+    })
+    .toSorted((left, right) => {
+      const roleDifference =
+        (roleOrder.get(left.role) ?? Number.MAX_SAFE_INTEGER) -
+        (roleOrder.get(right.role) ?? Number.MAX_SAFE_INTEGER);
+
+      return roleDifference || left.displayName.localeCompare(right.displayName, 'zh-CN');
+    });
+}
 
 async function getClerkProfiles(userIds: string[]) {
   const client = await clerkClient();
@@ -86,33 +119,18 @@ async function getPermissionGroups(options: {
   return options.projects.map(
     (project): PermissionGroup => ({
       id: project.id,
-      members: (membershipsByProject.get(project.id) ?? [])
-        .map((membership): PermissionMember => {
-          const profile = profiles.get(membership.userId);
-
-          return {
-            displayName: profile?.displayName ?? membership.userId,
-            email: profile?.email ?? null,
-            imageUrl: profile?.imageUrl ?? null,
-            isCurrentUser: membership.userId === options.currentUserId,
-            role: membership.role,
-            userId: membership.userId,
-          };
-        })
-        .toSorted((left, right) => {
-          const roleDifference =
-            (roleOrder.get(left.role) ?? Number.MAX_SAFE_INTEGER) -
-            (roleOrder.get(right.role) ?? Number.MAX_SAFE_INTEGER);
-
-          return roleDifference || left.displayName.localeCompare(right.displayName, 'zh-CN');
-        }),
+      members: mapPermissionMembers({
+        currentUserId: options.currentUserId,
+        memberships: membershipsByProject.get(project.id) ?? [],
+        profiles,
+      }),
       name: project.name,
     }),
   );
 }
 
 /**
- * Returns the authorized permission overview for a workspace category, project, or document.
+ * Returns the authorized permission overview for a workspace, project, or document.
  *
  * @param input - Permission scope and resource identifier.
  * @returns The permission groups visible to the current member.
@@ -123,16 +141,47 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
   const permissionInput = permissionOverviewInputSchema.parse(input);
 
   if (permissionInput.scope === 'workspace') {
-    const projects = await getProjects({
-      kind: permissionInput.kind,
-      workspaceId: permissionInput.workspaceId,
-    });
+    const [workspace] = await db
+      .select({ id: workspacesSchema.id, name: workspacesSchema.name })
+      .from(workspacesSchema)
+      .innerJoin(
+        workspaceMembersSchema,
+        eq(workspaceMembersSchema.workspaceId, workspacesSchema.id),
+      )
+      .where(
+        and(
+          eq(workspacesSchema.id, permissionInput.workspaceId),
+          eq(workspaceMembersSchema.userId, userId),
+        ),
+      )
+      .limit(1);
+
+    if (!workspace) {
+      throw new Error('没有权限查看该工作区');
+    }
+
+    const memberships = await db
+      .select({
+        role: workspaceMembersSchema.role,
+        userId: workspaceMembersSchema.userId,
+      })
+      .from(workspaceMembersSchema)
+      .where(eq(workspaceMembersSchema.workspaceId, workspace.id))
+      .orderBy(asc(workspaceMembersSchema.createdAt));
+    const profiles = await getClerkProfiles(memberships.map((membership) => membership.userId));
 
     return {
-      description: '当前工作区是项目分区，没有独立成员权限。下方按项目展示实际生效的完整权限。',
-      groups: await getPermissionGroups({ currentUserId: userId, projects }),
+      description:
+        '工作区成员决定用户是否可以查看和切换此工作区；项目与文件权限仍由各项目成员关系独立决定。',
+      groups: [
+        {
+          id: workspace.id,
+          members: mapPermissionMembers({ currentUserId: userId, memberships, profiles }),
+          name: workspace.name,
+        },
+      ],
       scope: 'workspace' as const,
-      title: `${permissionInput.kind === 'personal' ? '个人工作区' : '协作区'}权限`,
+      title: '工作区权限',
     };
   }
 

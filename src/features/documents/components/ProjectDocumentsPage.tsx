@@ -19,7 +19,7 @@ export async function ProjectDocumentsPage(props: {
   const searchParams = await props.searchParams;
   const projectId = getStringParam(searchParams.project);
   const documentId = getStringParam(searchParams.document);
-  const sectionLabel = props.kind === 'personal' ? '个人工作区' : '协作区';
+  const sectionLabel = props.kind === 'personal' ? '个人区域' : '协作区域';
   const { activeWorkspace } = await getWorkspaceContext();
 
   if (!activeWorkspace) {

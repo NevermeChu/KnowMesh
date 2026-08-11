@@ -15,6 +15,7 @@ import { fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import { CreateDocumentDialog } from '@/features/documents/components/CreateDocumentDialog';
 import { canEditDocuments } from '@/features/documents/Document';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
+import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
 import type { Project, ProjectKind } from '@/features/projects/Project';
 import type { Workspace } from '@/features/workspaces/Workspace';
 
@@ -48,9 +49,6 @@ function WorkspaceSectionNavigation(props: {
             ? 'bg-black/7 text-[#202124]'
             : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
         }`}
-        onContextMenu={(event) => {
-          props.onOpenContextMenu(event, { kind: 'workspace', section: props.section });
-        }}
       >
         <button
           type="button"
@@ -219,6 +217,7 @@ export function SidebarWorkspaceNavigation(props: {
   projects: Project[];
   onCreateProject: (kind: ProjectKind) => void;
   onNavigate: () => void;
+  onOpenPermissionOverview: (input: PermissionOverviewInput) => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -244,7 +243,7 @@ export function SidebarWorkspaceNavigation(props: {
           href: '/personal',
           id: 'personal',
           icon: FileText,
-          label: '个人工作区',
+          label: '个人区域',
           projects: props.projects
             .filter((project) => project.kind === 'personal')
             .map((project) => ({
@@ -260,13 +259,12 @@ export function SidebarWorkspaceNavigation(props: {
               label: project.name,
               role: project.role,
             })),
-          workspaceId: props.activeWorkspace.id,
         },
         {
           href: '/collaboration',
           id: 'collaboration',
           icon: Users,
-          label: '协作区',
+          label: '协作区域',
           projects: props.projects
             .filter((project) => project.kind === 'collaboration')
             .map((project) => ({
@@ -282,7 +280,6 @@ export function SidebarWorkspaceNavigation(props: {
               label: project.name,
               role: project.role,
             })),
-          workspaceId: props.activeWorkspace.id,
         },
       ]
     : [];
@@ -350,10 +347,7 @@ export function SidebarWorkspaceNavigation(props: {
             setContextMenu(null);
           }}
           onCreateDocument={createDocumentForProject}
-          onCreateProject={(kind) => {
-            setExpandedSections((currentSections) => ({ ...currentSections, [kind]: true }));
-            props.onCreateProject(kind);
-          }}
+          onOpenPermissionOverview={props.onOpenPermissionOverview}
         />
       </div>
       {creatingDocumentProject && (

@@ -19,18 +19,6 @@ const state = vi.hoisted(() => {
     }>
   >();
   const clerkClient = vi.fn<() => Promise<{ users: { getUserList: typeof getUserList } }>>();
-  const getProjects = vi.fn<
-    (options: unknown) => Promise<
-      {
-        createdAt: Date;
-        id: string;
-        kind: 'personal' | 'collaboration';
-        name: string;
-        role: 'owner' | 'editor' | 'viewer';
-        updatedAt: Date;
-      }[]
-    >
-  >();
   const getProjectAccess = vi.fn<
     (options: unknown) => Promise<{
       id: string;
@@ -52,6 +40,8 @@ const state = vi.hoisted(() => {
   ];
   const resource = {
     documentTitle: '产品方案',
+    id: projectId,
+    name: '产品团队',
     projectId,
     projectName: '产品知识库',
   };
@@ -79,8 +69,8 @@ const state = vi.hoisted(() => {
     documentId,
     getDocumentAccess,
     getProjectAccess,
-    getProjects,
     getUserList,
+    limit,
     memberships,
     protect,
     projectId,
@@ -98,11 +88,6 @@ vi.mock('@clerk/nextjs/server', () => ({
 vi.mock('@/features/documents/server/DocumentAccess', () => ({
   getDocumentAccess: state.getDocumentAccess,
   getProjectAccess: state.getProjectAccess,
-}));
-
-// oxlint-disable-next-line vitest/prefer-import-in-mock -- Project discovery is isolated to test workspace grouping.
-vi.mock('./GetProjects', () => ({
-  getProjects: state.getProjects,
 }));
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates the database boundary.
@@ -146,16 +131,6 @@ describe('permission overview', () => {
         },
       ],
     });
-    state.getProjects.mockResolvedValue([
-      {
-        createdAt: new Date('2026-08-04T00:00:00.000Z'),
-        id: state.projectId,
-        kind: 'personal',
-        name: '产品知识库',
-        role: 'editor',
-        updatedAt: new Date('2026-08-04T00:00:00.000Z'),
-      },
-    ]);
     state.getProjectAccess.mockResolvedValue({
       id: state.projectId,
       kind: 'personal',
@@ -165,17 +140,13 @@ describe('permission overview', () => {
     state.getDocumentAccess.mockResolvedValue({ projectId: state.projectId, role: 'editor' });
   });
 
-  it('groups workspace permissions by accessible project', async () => {
+  it('returns workspace members after membership authorization', async () => {
     const overview = await getPermissionOverview({
-      kind: 'personal',
       scope: 'workspace',
       workspaceId: state.projectId,
     });
 
-    expect(state.getProjects).toHaveBeenCalledWith({
-      kind: 'personal',
-      workspaceId: state.projectId,
-    });
+    expect(overview).toMatchObject({ scope: 'workspace', title: '工作区权限' });
     expect(overview.groups).toHaveLength(1);
     expect(overview.groups[0]?.members.map((member) => member.role)).toStrictEqual([
       'owner',
@@ -200,6 +171,14 @@ describe('permission overview', () => {
       scope: 'project',
     });
     expect(overview.groups[0]?.members).toHaveLength(3);
+  });
+
+  it('rejects inaccessible workspaces', async () => {
+    state.limit.mockResolvedValueOnce([]);
+
+    await expect(
+      getPermissionOverview({ scope: 'workspace', workspaceId: state.projectId }),
+    ).rejects.toThrow('没有权限查看该工作区');
   });
 
   it('describes inherited document permissions', async () => {

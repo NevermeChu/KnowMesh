@@ -20,7 +20,7 @@ export function CreateProjectDialog(props: {
   const [error, setError] = useState<string>();
   const [name, setName] = useState('');
   const [isPending, startTransition] = useTransition();
-  const sectionLabel = props.kind === 'personal' ? '个人工作区' : '协作区';
+  const sectionLabel = props.kind === 'personal' ? '个人区域' : '协作区域';
 
   return (
     <ModalDialog

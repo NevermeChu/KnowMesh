@@ -62,9 +62,9 @@ PostgreSQL / 本地 PGlite
 - 当前文档编辑器与共享内容工具栏之间的命令上下文。
 - 渲染当前路由内容。
 
-左上角切换器选择真实 Workspace；侧边栏中的个人工作区和协作区仍是当前 Workspace 内同一项目业务的 Private/Shared 分类，不是嵌套 Workspace，也不是两套独立实现。
+左上角切换器选择真实 Workspace；侧边栏中的个人区域和协作区域仍是当前 Workspace 内同一项目业务的 Private/Shared 分类，不是嵌套 Workspace，也不是两套独立实现。
 
-个人工作区和协作区页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。正文以 ProseMirror JSON 通过 Server Action 保存到 PostgreSQL `JSONB`。
+个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。正文以 ProseMirror JSON 通过 Server Action 保存到 PostgreSQL `JSONB`。
 
 ## 当前页面状态
 

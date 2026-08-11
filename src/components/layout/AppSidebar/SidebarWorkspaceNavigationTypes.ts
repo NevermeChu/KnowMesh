@@ -21,11 +21,9 @@ export type WorkspaceSection = {
   icon: LucideIcon;
   label: string;
   projects: WorkspaceProject[];
-  workspaceId: string;
 };
 
 export type NavigationContextTarget =
-  | { kind: 'workspace'; section: WorkspaceSection }
   | { kind: 'project'; project: WorkspaceProject }
   | { document: WorkspaceDocument; kind: 'document'; project: WorkspaceProject };
 

@@ -7,6 +7,7 @@ import {
   LogOut,
   Plus,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
@@ -113,6 +114,8 @@ export function WorkspaceSwitcher(props: {
 export function SettingsMenu(props: {
   isOpen: boolean;
   isSettingsRoute: boolean;
+  isWorkspaceAvailable: boolean;
+  onManageWorkspace: () => void;
   onNavigate: () => void;
   onToggle: () => void;
 }) {
@@ -146,6 +149,15 @@ export function SettingsMenu(props: {
         placement={{ kind: 'anchor', side: 'top' }}
       >
         <PopupMenuLabel>设置</PopupMenuLabel>
+        <button
+          type="button"
+          className={popupMenuItemClassName}
+          disabled={!props.isWorkspaceAvailable}
+          onClick={props.onManageWorkspace}
+        >
+          <ShieldCheck aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+          <span>工作区管理</span>
+        </button>
         <Link
           href="/settings/preferences"
           className={popupMenuItemClassName}
