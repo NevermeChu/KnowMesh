@@ -17,22 +17,20 @@ export async function createProject(input: CreateProjectInput) {
     workspaceId: projectInput.workspaceId,
   });
 
-  const project = await db.transaction(async (transaction) => {
+  if (authorization.workspace.kind === 'personal' && authorization.workspace.ownerId !== userId) {
+    throw new Error('个人项目只能创建在自己的个人空间');
+  }
+
+  await db.transaction(async (transaction) => {
     const [createdProject] = await transaction
       .insert(projectsSchema)
       .values({
-        kind: projectInput.kind,
         name: projectInput.name,
         ownerId: userId,
         workspaceId: authorization.workspace.id,
       })
       .returning({
-        createdAt: projectsSchema.createdAt,
         id: projectsSchema.id,
-        kind: projectsSchema.kind,
-        name: projectsSchema.name,
-        updatedAt: projectsSchema.updatedAt,
-        workspaceId: projectsSchema.workspaceId,
       });
 
     if (!createdProject) {
@@ -44,10 +42,7 @@ export async function createProject(input: CreateProjectInput) {
       role: 'owner',
       userId,
     });
-
-    return createdProject;
   });
 
   revalidatePath('/(workspace)', 'layout');
-  return project;
 }

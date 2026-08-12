@@ -37,6 +37,10 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
     workspaceId: invitationInput.workspaceId,
   });
 
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不支持邀请成员');
+  }
+
   const client = await clerkClient();
   const existingUsers = await client.users.getUserList({ emailAddress: [invitationInput.email] });
   const existingUser = existingUsers.data.find((user) =>
@@ -151,6 +155,10 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
     workspaceId: memberInput.workspaceId,
   });
 
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不支持成员角色修改');
+  }
+
   if (memberInput.memberUserId === authorization.workspace.ownerId) {
     throw new Error('工作区所有者角色不可修改');
   }
@@ -183,24 +191,27 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
     workspaceId: memberInput.workspaceId,
   });
 
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不支持移除成员');
+  }
+
   if (memberInput.memberUserId === authorization.workspace.ownerId) {
     throw new Error('工作区所有者不可移除');
   }
 
-  const ownedPersonalProjects = await db
+  const ownedProjects = await db
     .select({ id: projectsSchema.id })
     .from(projectsSchema)
     .where(
       and(
         eq(projectsSchema.workspaceId, memberInput.workspaceId),
         eq(projectsSchema.ownerId, memberInput.memberUserId),
-        eq(projectsSchema.kind, 'personal'),
       ),
     )
     .limit(1);
 
-  if (ownedPersonalProjects.length > 0) {
-    throw new Error('该成员仍拥有个人项目，请先删除这些项目');
+  if (ownedProjects.length > 0) {
+    throw new Error('该成员仍拥有项目，请先转让或删除这些项目');
   }
 
   await db.transaction(async (transaction) => {

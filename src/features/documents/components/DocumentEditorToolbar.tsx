@@ -149,7 +149,7 @@ export type DocumentEditorCommand = {
   toolbar: 'history' | 'overflow' | 'primary';
 };
 
-export function partitionDocumentEditorCommands(commands: DocumentEditorCommand[]) {
+function partitionDocumentEditorCommands(commands: DocumentEditorCommand[]) {
   const primaryCommands = commands.filter((command) => command.toolbar === 'primary');
 
   return {

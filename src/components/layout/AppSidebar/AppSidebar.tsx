@@ -14,7 +14,7 @@ import type {
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
 import { isSamePermissionOverviewInput } from '@/features/projects/PermissionOverview';
-import type { Project, ProjectKind } from '@/features/projects/Project';
+import type { Project, ProjectArea } from '@/features/projects/Project';
 import { getPermissionOverview } from '@/features/projects/server/GetPermissionOverview';
 import { CreateWorkspaceDialog } from '@/features/workspaces/components/CreateWorkspaceDialog';
 import { selectWorkspace } from '@/features/workspaces/server/SelectWorkspace';
@@ -39,7 +39,7 @@ function SidebarContent(props: {
   isSwitchingWorkspace: boolean;
   onCloseMenu: () => void;
   onCreateWorkspace: () => void;
-  onCreateProject: (kind: ProjectKind) => void;
+  onCreateProject: (area: ProjectArea) => void;
   onManageWorkspace: () => void;
   onNavigate: () => void;
   onOpenPermissionOverview: (input: PermissionOverviewInput) => void;
@@ -106,7 +106,7 @@ export function AppSidebar(props: {
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [creatingProjectKind, setCreatingProjectKind] = useState<ProjectKind | null>(null);
+  const [creatingProjectArea, setCreatingProjectArea] = useState<ProjectArea | null>(null);
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<SidebarMenu>(null);
@@ -147,7 +147,7 @@ export function AppSidebar(props: {
 
   const closeNavigation = () => {
     setIsOpen(false);
-    setCreatingProjectKind(null);
+    setCreatingProjectArea(null);
     setOpenMenu(null);
   };
 
@@ -222,7 +222,7 @@ export function AppSidebar(props: {
             onCloseMenu={() => {
               setOpenMenu(null);
             }}
-            onCreateProject={setCreatingProjectKind}
+            onCreateProject={setCreatingProjectArea}
             onCreateWorkspace={() => {
               setOpenMenu(null);
               setIsCreatingWorkspace(true);
@@ -251,7 +251,14 @@ export function AppSidebar(props: {
                 try {
                   await selectWorkspace({ workspaceId });
                   setOpenMenu(null);
-                  router.replace(pathname);
+                  const selectedWorkspace = props.workspaces.find(
+                    (workspace) => workspace.id === workspaceId,
+                  );
+                  router.replace(
+                    selectedWorkspace?.kind === 'personal' && pathname.startsWith('/collaboration')
+                      ? '/personal'
+                      : pathname,
+                  );
                   router.refresh();
                 } catch {
                   setWorkspaceError('切换工作区失败，请稍后重试');
@@ -287,12 +294,16 @@ export function AppSidebar(props: {
         />
       </aside>
 
-      {creatingProjectKind && props.activeWorkspace && (
+      {creatingProjectArea && props.activeWorkspace && (
         <CreateProjectDialog
-          kind={creatingProjectKind}
-          workspaceId={props.activeWorkspace.id}
+          area={creatingProjectArea}
+          workspaceId={
+            creatingProjectArea === 'personal'
+              ? (props.workspaces.find((workspace) => workspace.kind === 'personal')?.id ?? '')
+              : props.activeWorkspace.id
+          }
           onClose={() => {
-            setCreatingProjectKind(null);
+            setCreatingProjectArea(null);
           }}
         />
       )}

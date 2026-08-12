@@ -13,6 +13,7 @@ const state = vi.hoisted(() => {
       updatedAt: new Date('2026-08-04T01:00:00.000Z'),
     },
   ];
+  const documentList = documents.map((document) => ({ id: document.id, title: document.title }));
   const selectedContent = [
     {
       content: { content: [{ type: 'paragraph' }], type: 'doc' },
@@ -26,9 +27,9 @@ const state = vi.hoisted(() => {
       decision: { grants: never[]; isResourceOwner: boolean; permissions: string[] };
       project: {
         id: string;
-        kind: 'collaboration' | 'personal';
         name: string;
         workspaceId: string;
+        workspaceKind: 'personal' | 'team';
       };
     } | null>
   >();
@@ -55,6 +56,7 @@ const state = vi.hoisted(() => {
 
   return {
     documentId,
+    documentList,
     documents,
     getProjectAuthorization,
     projectId,
@@ -99,9 +101,9 @@ describe('project document queries', () => {
       },
       project: {
         id: state.projectId,
-        kind: 'personal',
         name: '产品知识库',
         workspaceId: state.workspaceId,
+        workspaceKind: 'personal',
       },
     });
   });
@@ -110,9 +112,9 @@ describe('project document queries', () => {
     await expect(
       getProjectDocuments({
         documentId: state.documentId,
-        kind: 'personal',
         projectId: state.projectId,
         workspaceId: state.workspaceId,
+        workspaceKind: 'personal',
       }),
     ).resolves.toStrictEqual({
       access: {
@@ -120,7 +122,7 @@ describe('project document queries', () => {
         isResourceOwner: true,
         permissions: ['project.read', 'document.read'],
       },
-      documents: state.documents,
+      documents: state.documentList,
       selectedDocument: {
         ...state.documents[0],
         ...state.selectedContent[0],
@@ -133,9 +135,9 @@ describe('project document queries', () => {
 
     await expect(
       getProjectDocuments({
-        kind: 'personal',
         projectId: state.projectId,
         workspaceId: state.workspaceId,
+        workspaceKind: 'personal',
       }),
     ).resolves.toBeNull();
     expect(state.select).not.toHaveBeenCalled();
@@ -146,17 +148,17 @@ describe('project document queries', () => {
       decision: { grants: [], isResourceOwner: true, permissions: ['project.read'] },
       project: {
         id: state.projectId,
-        kind: 'collaboration',
         name: '产品知识库',
         workspaceId: state.workspaceId,
+        workspaceKind: 'team',
       },
     });
 
     await expect(
       getProjectDocuments({
-        kind: 'personal',
         projectId: state.projectId,
         workspaceId: state.workspaceId,
+        workspaceKind: 'personal',
       }),
     ).resolves.toBeNull();
     expect(state.select).not.toHaveBeenCalled();
@@ -167,17 +169,17 @@ describe('project document queries', () => {
       decision: { grants: [], isResourceOwner: true, permissions: ['project.read'] },
       project: {
         id: state.projectId,
-        kind: 'personal',
         name: '产品知识库',
         workspaceId: '01987654-3210-7000-8000-000000000011',
+        workspaceKind: 'personal',
       },
     });
 
     await expect(
       getProjectDocuments({
-        kind: 'personal',
         projectId: state.projectId,
         workspaceId: state.workspaceId,
+        workspaceKind: 'personal',
       }),
     ).resolves.toBeNull();
     expect(state.select).not.toHaveBeenCalled();

@@ -1,5 +1,4 @@
-import type { Permission } from '@/features/permissions/Permission';
-import type { ProjectMemberRole } from './Project';
+import type { MemberRole, Permission } from '@/features/permissions/Permission';
 
 export type PermissionOverviewInput =
   | { scope: 'workspace'; workspaceId: string }
@@ -32,7 +31,7 @@ export type PermissionMember = {
   email: string | null;
   imageUrl: string | null;
   isCurrentUser: boolean;
-  role: ProjectMemberRole;
+  role: MemberRole;
   userId: string;
 };
 
@@ -44,7 +43,6 @@ export type PermissionGroup = {
 
 export type PermissionOverview =
   | {
-      canManageMembers: boolean;
       description: string;
       groups: PermissionGroup[];
       permissions: Permission[];
@@ -53,7 +51,6 @@ export type PermissionOverview =
       workspaceId: string;
     }
   | {
-      canManageMembers: boolean;
       groups: PermissionGroup[];
       permissions: Permission[];
       project: { id: string; name: string };
@@ -61,11 +58,9 @@ export type PermissionOverview =
       workspaceMembers: PermissionMember[];
     }
   | {
-      canManageMembers: boolean;
       document: { id: string; title: string };
       groups: PermissionGroup[];
       permissions: Permission[];
       project: { id: string; name: string };
       scope: 'document';
-      workspaceMembers: PermissionMember[];
     };

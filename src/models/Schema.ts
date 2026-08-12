@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -15,7 +16,8 @@ import {
   EMPTY_DOCUMENT_CONTENT,
 } from '@/features/documents/Document';
 import type { DocumentContent } from '@/features/documents/Document';
-import { projectKinds, projectMemberRoles } from '@/features/projects/Project';
+import { memberRoles } from '@/features/permissions/Permission';
+import { workspaceKinds } from '@/features/workspaces/Workspace';
 
 // This file defines the structure of your database tables using the Drizzle ORM.
 
@@ -26,13 +28,14 @@ import { projectKinds, projectMemberRoles } from '@/features/projects/Project';
 // Development startup applies migrations before Next.js starts.
 // Alternatively, if the database is running, use `npm run db:migrate` without restarting the server.
 
-export const projectKindEnum = pgEnum('project_kind', projectKinds);
-export const projectMemberRoleEnum = pgEnum('project_member_role', projectMemberRoles);
+export const projectMemberRoleEnum = pgEnum('project_member_role', memberRoles);
+export const workspaceKindEnum = pgEnum('workspace_kind', workspaceKinds);
 
 export const workspacesSchema = pgTable(
   'workspaces',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    kind: workspaceKindEnum('kind').notNull(),
     name: varchar('name', { length: 80 }).notNull(),
     ownerId: varchar('owner_id', { length: 255 }).notNull(),
     updatedAt: timestamp('updated_at', { mode: 'date' })
@@ -41,7 +44,11 @@ export const workspacesSchema = pgTable(
       .notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
-  (table) => [index('workspaces_owner_idx').on(table.ownerId)],
+  (table) => [
+    uniqueIndex('workspaces_personal_owner_idx')
+      .on(table.ownerId)
+      .where(sql`${table.kind} = 'personal'`),
+  ],
 );
 
 export const workspaceMembersSchema = pgTable(
@@ -60,11 +67,6 @@ export const workspaceMembersSchema = pgTable(
   ],
 );
 
-export const userOnboardingSchema = pgTable('user_onboarding', {
-  userId: varchar('user_id', { length: 255 }).primaryKey(),
-  initializedAt: timestamp('initialized_at', { mode: 'date' }).defaultNow().notNull(),
-});
-
 export const workspaceInvitationsSchema = pgTable(
   'workspace_invitations',
   {
@@ -82,10 +84,7 @@ export const workspaceInvitationsSchema = pgTable(
     expiresAt: timestamp('expires_at', { mode: 'date' }).notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
-  (table) => [
-    uniqueIndex('workspace_invitations_token_hash_idx').on(table.tokenHash),
-    index('workspace_invitations_workspace_email_idx').on(table.workspaceId, table.email),
-  ],
+  (table) => [uniqueIndex('workspace_invitations_token_hash_idx').on(table.tokenHash)],
 );
 
 export const projectsSchema = pgTable(
@@ -96,7 +95,6 @@ export const projectsSchema = pgTable(
       .notNull()
       .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 80 }).notNull(),
-    kind: projectKindEnum('kind').notNull(),
     ownerId: varchar('owner_id', { length: 255 }).notNull(),
     updatedAt: timestamp('updated_at', { mode: 'date' })
       .defaultNow()
@@ -104,7 +102,7 @@ export const projectsSchema = pgTable(
       .notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
-  (table) => [index('projects_workspace_kind_idx').on(table.workspaceId, table.kind)],
+  (table) => [index('projects_workspace_created_idx').on(table.workspaceId, table.createdAt)],
 );
 
 export const projectMembersSchema = pgTable(
@@ -117,10 +115,7 @@ export const projectMembersSchema = pgTable(
     role: projectMemberRoleEnum('role').notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
-  (table) => [
-    primaryKey({ columns: [table.projectId, table.userId] }),
-    index('project_members_user_project_idx').on(table.userId, table.projectId),
-  ],
+  (table) => [primaryKey({ columns: [table.projectId, table.userId] })],
 );
 
 export const documentsSchema = pgTable(

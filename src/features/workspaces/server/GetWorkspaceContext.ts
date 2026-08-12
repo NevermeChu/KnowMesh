@@ -2,22 +2,22 @@ import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import { asc, eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { getWorkspacePermissions } from '@/features/permissions/PermissionPolicy';
 import { db } from '@/libs/DB';
 import { workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
 import { ACTIVE_WORKSPACE_COOKIE } from '../Workspace';
 import { ensureUserWorkspace } from './EnsureUserWorkspace';
 
-export async function getWorkspaceContext() {
+export const getWorkspaceContext = cache(async () => {
   const { userId } = await auth.protect();
   await ensureUserWorkspace(userId);
   const workspaces = await db
     .select({
-      createdAt: workspacesSchema.createdAt,
       id: workspacesSchema.id,
+      kind: workspacesSchema.kind,
       name: workspacesSchema.name,
       role: workspaceMembersSchema.role,
-      updatedAt: workspacesSchema.updatedAt,
     })
     .from(workspacesSchema)
     .innerJoin(workspaceMembersSchema, eq(workspaceMembersSchema.workspaceId, workspacesSchema.id))
@@ -25,14 +25,19 @@ export async function getWorkspaceContext() {
     .orderBy(asc(workspacesSchema.createdAt));
   const authorizedWorkspaces = workspaces.map((workspace) => ({
     ...workspace,
-    permissions: getWorkspacePermissions(workspace.role),
+    permissions: getWorkspacePermissions(workspace.role, workspace.kind),
   }));
   const cookieStore = await cookies();
   const requestedWorkspaceId = cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value;
+  const personalWorkspace =
+    authorizedWorkspaces.find(
+      (workspace) => workspace.kind === 'personal' && workspace.role === 'owner',
+    ) ?? null;
   const activeWorkspace =
     authorizedWorkspaces.find((workspace) => workspace.id === requestedWorkspaceId) ??
+    personalWorkspace ??
     authorizedWorkspaces[0] ??
     null;
 
-  return { activeWorkspace, workspaces: authorizedWorkspaces };
-}
+  return { activeWorkspace, personalWorkspace, workspaces: authorizedWorkspaces };
+});

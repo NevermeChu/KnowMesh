@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { AppShell } from '@/components/layout/AppShell';
-import { getDocumentNavigation } from '@/features/documents/server/GetDocumentNavigation';
-import { getProjects } from '@/features/projects/server/GetProjects';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
+import { getWorkspaceNavigation } from '@/features/workspaces/server/GetWorkspaceNavigation';
 import { AppConfig } from '@/utils/AppConfig';
 
 export const metadata: Metadata = {
@@ -12,12 +11,17 @@ export const metadata: Metadata = {
 
 export default async function WorkspaceLayout(props: { children: React.ReactNode }) {
   const workspaceContext = await getWorkspaceContext();
-  const [documents, projects] = workspaceContext.activeWorkspace
-    ? await Promise.all([
-        getDocumentNavigation({ workspaceId: workspaceContext.activeWorkspace.id }),
-        getProjects({ workspaceId: workspaceContext.activeWorkspace.id }),
-      ])
-    : [[], []];
+  const workspaceIds = [
+    workspaceContext.personalWorkspace?.id,
+    workspaceContext.activeWorkspace?.kind === 'team'
+      ? workspaceContext.activeWorkspace.id
+      : undefined,
+  ].filter((workspaceId): workspaceId is string => typeof workspaceId === 'string');
+  const workspaceResources = await Promise.all(
+    workspaceIds.map(async (workspaceId) => await getWorkspaceNavigation({ workspaceId })),
+  );
+  const documents = workspaceResources.flatMap((resources) => resources.documents);
+  const projects = workspaceResources.flatMap((resources) => resources.projects);
 
   return (
     <AppShell

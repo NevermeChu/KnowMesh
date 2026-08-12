@@ -19,6 +19,9 @@ export async function deleteWorkspace(input: DeleteWorkspaceInput) {
     userId,
     workspaceId: workspaceInput.workspaceId,
   });
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不可删除');
+  }
   const [workspace] = await db
     .delete(workspacesSchema)
     .where(eq(workspacesSchema.id, authorization.workspace.id))
@@ -34,5 +37,4 @@ export async function deleteWorkspace(input: DeleteWorkspaceInput) {
   }
 
   revalidatePath('/(workspace)', 'layout');
-  return workspace;
 }

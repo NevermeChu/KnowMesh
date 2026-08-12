@@ -15,7 +15,7 @@ import { fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import { CreateDocumentDialog } from '@/features/documents/components/CreateDocumentDialog';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
-import type { Project, ProjectKind } from '@/features/projects/Project';
+import type { Project, ProjectArea } from '@/features/projects/Project';
 import type { Workspace } from '@/features/workspaces/Workspace';
 
 const isActiveRoute = (pathname: string, href: string) => pathname.startsWith(href);
@@ -215,7 +215,7 @@ export function SidebarWorkspaceNavigation(props: {
   documents: DocumentNavigationItem[];
   pathname: string;
   projects: Project[];
-  onCreateProject: (kind: ProjectKind) => void;
+  onCreateProject: (area: ProjectArea) => void;
   onNavigate: () => void;
   onOpenPermissionOverview: (input: PermissionOverviewInput) => void;
 }) {
@@ -223,12 +223,12 @@ export function SidebarWorkspaceNavigation(props: {
   const searchParams = useSearchParams();
   const selectedDocumentId = searchParams.get('document') ?? undefined;
   const selectedProjectId = searchParams.get('project') ?? undefined;
-  const selectedProjectKind = props.projects.find(
+  const selectedProjectArea = props.projects.find(
     (project) => project.id === selectedProjectId,
-  )?.kind;
-  const [expandedSections, setExpandedSections] = useState<Record<ProjectKind, boolean>>({
-    collaboration: selectedProjectKind === 'collaboration',
-    personal: selectedProjectKind === 'personal',
+  )?.workspaceKind;
+  const [expandedSections, setExpandedSections] = useState<Record<ProjectArea, boolean>>({
+    collaboration: selectedProjectArea === 'team',
+    personal: selectedProjectArea === 'personal',
   });
   const [expandedProjectIds, setExpandedProjectIds] = useState<Record<string, boolean>>(
     selectedProjectId ? { [selectedProjectId]: true } : {},
@@ -241,12 +241,12 @@ export function SidebarWorkspaceNavigation(props: {
     ? [
         {
           href: '/personal',
-          canCreateProject: props.activeWorkspace.permissions.includes('project.create'),
+          canCreateProject: true,
           id: 'personal',
           icon: FileText,
           label: '个人区域',
           projects: props.projects
-            .filter((project) => project.kind === 'personal')
+            .filter((project) => project.workspaceKind === 'personal')
             .map((project) => ({
               documents: props.documents
                 .filter((document) => document.projectId === project.id)
@@ -259,32 +259,34 @@ export function SidebarWorkspaceNavigation(props: {
               id: project.id,
               label: project.name,
               permissions: project.permissions,
-              role: project.role,
             })),
         },
-        {
-          href: '/collaboration',
-          canCreateProject: props.activeWorkspace.permissions.includes('project.create'),
-          id: 'collaboration',
-          icon: Users,
-          label: '协作区域',
-          projects: props.projects
-            .filter((project) => project.kind === 'collaboration')
-            .map((project) => ({
-              documents: props.documents
-                .filter((document) => document.projectId === project.id)
-                .map((document) => ({
-                  href: `/collaboration?project=${project.id}&document=${document.id}`,
-                  id: document.id,
-                  label: document.title,
-                })),
-              href: `/collaboration?project=${project.id}`,
-              id: project.id,
-              label: project.name,
-              permissions: project.permissions,
-              role: project.role,
-            })),
-        },
+        ...(props.activeWorkspace.kind === 'team'
+          ? [
+              {
+                href: '/collaboration',
+                canCreateProject: props.activeWorkspace.permissions.includes('project.create'),
+                id: 'collaboration',
+                icon: Users,
+                label: '协作区域',
+                projects: props.projects
+                  .filter((project) => project.workspaceKind === 'team')
+                  .map((project) => ({
+                    documents: props.documents
+                      .filter((document) => document.projectId === project.id)
+                      .map((document) => ({
+                        href: `/collaboration?project=${project.id}&document=${document.id}`,
+                        id: document.id,
+                        label: document.title,
+                      })),
+                    href: `/collaboration?project=${project.id}`,
+                    id: project.id,
+                    label: project.name,
+                    permissions: project.permissions,
+                  })),
+              } satisfies WorkspaceSection,
+            ]
+          : []),
       ]
     : [];
 

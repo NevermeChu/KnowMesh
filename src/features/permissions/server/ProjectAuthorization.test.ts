@@ -3,12 +3,12 @@ import { authorizeProject, getProjectAuthorization } from './ProjectAuthorizatio
 
 type AccessRow = {
   id: string;
-  kind: 'collaboration' | 'personal';
   name: string;
   ownerId: string;
   projectRole: 'editor' | 'owner' | 'viewer' | null;
   workspaceId: string;
   workspaceRole: 'editor' | 'owner' | 'viewer';
+  workspaceKind: 'personal' | 'team';
 };
 
 const state = vi.hoisted(() => {
@@ -17,13 +17,26 @@ const state = vi.hoisted(() => {
   const leftJoin = vi.fn<(table: unknown, condition: unknown) => { where: typeof where }>(() => ({
     where,
   }));
-  const innerJoin = vi.fn<(table: unknown, condition: unknown) => { leftJoin: typeof leftJoin }>(
+  let innerJoinCount = 0;
+  const memberJoin = vi.fn<(table: unknown, condition: unknown) => { leftJoin: typeof leftJoin }>(
     () => ({ leftJoin }),
+  );
+  const innerJoin = vi.fn<() => { innerJoin: typeof memberJoin } | { leftJoin: typeof leftJoin }>(
+    () => {
+      innerJoinCount += 1;
+      return innerJoinCount === 1 ? { innerJoin: memberJoin } : { leftJoin };
+    },
   );
   const from = vi.fn<(table: unknown) => { innerJoin: typeof innerJoin }>(() => ({ innerJoin }));
   const select = vi.fn<(selection: unknown) => { from: typeof from }>(() => ({ from }));
 
-  return { limit, select };
+  return {
+    limit,
+    reset: () => {
+      innerJoinCount = 0;
+    },
+    select,
+  };
 });
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The marker module has no runtime behavior in unit tests.
@@ -35,18 +48,19 @@ vi.mock('@/libs/DB', () => ({ db: { select: state.select } }));
 describe('project authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    state.reset();
   });
 
   it('inherits collaboration editing from workspace editor', async () => {
     state.limit.mockResolvedValueOnce([
       {
         id: '01987654-3210-7000-8000-000000000001',
-        kind: 'collaboration',
         name: '协作知识库',
         ownerId: 'user_owner',
         projectRole: null,
         workspaceId: '01987654-3210-7000-8000-000000000010',
         workspaceRole: 'editor',
+        workspaceKind: 'team',
       },
     ]);
 
@@ -64,12 +78,12 @@ describe('project authorization', () => {
     state.limit.mockResolvedValueOnce([
       {
         id: '01987654-3210-7000-8000-000000000001',
-        kind: 'personal',
         name: '个人知识库',
         ownerId: 'user_owner',
         projectRole: null,
         workspaceId: '01987654-3210-7000-8000-000000000010',
         workspaceRole: 'owner',
+        workspaceKind: 'personal',
       },
     ]);
 

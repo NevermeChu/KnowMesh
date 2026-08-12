@@ -36,6 +36,27 @@
       "when": 1786503176634,
       "tag": "0004_tricky_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786520208427,
+      "tag": "0005_add-workspace-kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786520305790,
+      "tag": "0006_remove-project-kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786523513882,
+      "tag": "0007_remove-redundant-indexes",
+      "breakpoints": true
     }
   ]
 }

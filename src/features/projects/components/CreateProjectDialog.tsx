@@ -9,18 +9,18 @@ import {
   ModalDialogHeader,
 } from '@/components/ui/ModalDialog';
 import { createProjectSchema } from '../CreateProjectSchema';
-import type { ProjectKind } from '../Project';
+import type { ProjectArea } from '../Project';
 import { createProject } from '../server/CreateProject';
 
 export function CreateProjectDialog(props: {
-  kind: ProjectKind;
+  area: ProjectArea;
   workspaceId: string;
   onClose: () => void;
 }) {
   const [error, setError] = useState<string>();
   const [name, setName] = useState('');
   const [isPending, startTransition] = useTransition();
-  const sectionLabel = props.kind === 'personal' ? '个人区域' : '协作区域';
+  const sectionLabel = props.area === 'personal' ? '个人区域' : '协作区域';
 
   return (
     <ModalDialog
@@ -43,7 +43,6 @@ export function CreateProjectDialog(props: {
           event.preventDefault();
           setError(undefined);
           const result = createProjectSchema.safeParse({
-            kind: props.kind,
             name,
             workspaceId: props.workspaceId,
           });

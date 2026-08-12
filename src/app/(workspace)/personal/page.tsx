@@ -3,5 +3,5 @@ import { ProjectDocumentsPage } from '@/features/documents/components/ProjectDoc
 export default function PersonalPage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return <ProjectDocumentsPage kind="personal" searchParams={props.searchParams} />;
+  return <ProjectDocumentsPage area="personal" searchParams={props.searchParams} />;
 }

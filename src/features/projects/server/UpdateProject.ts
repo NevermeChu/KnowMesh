@@ -21,12 +21,11 @@ export async function updateProject(input: UpdateProjectInput) {
     .update(projectsSchema)
     .set({ name: projectInput.name, updatedAt: new Date() })
     .where(eq(projectsSchema.id, authorization.project.id))
-    .returning({ id: projectsSchema.id, name: projectsSchema.name });
+    .returning({ id: projectsSchema.id });
 
   if (!project) {
     throw new Error('项目保存失败');
   }
 
   revalidatePath('/(workspace)', 'layout');
-  return project;
 }

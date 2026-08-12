@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { AppSectionPlaceholder } from '@/components/layout/AppSectionPlaceholder';
-import type { ProjectKind } from '@/features/projects/Project';
+import type { ProjectArea } from '@/features/projects/Project';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
 import { createDocumentSchema } from '../DocumentSchema';
 import { getProjectDocuments } from '../server/GetProjectDocuments';
@@ -12,21 +12,22 @@ const getStringParam = (value: string | string[] | undefined) =>
   typeof value === 'string' ? value : undefined;
 
 export async function ProjectDocumentsPage(props: {
-  kind: ProjectKind;
+  area: ProjectArea;
   searchParams: SearchParams;
 }) {
   const searchParams = await props.searchParams;
   const projectId = getStringParam(searchParams.project);
   const documentId = getStringParam(searchParams.document);
-  const sectionLabel = props.kind === 'personal' ? '个人区域' : '协作区域';
-  const { activeWorkspace } = await getWorkspaceContext();
+  const sectionLabel = props.area === 'personal' ? '个人区域' : '协作区域';
+  const { activeWorkspace, personalWorkspace } = await getWorkspaceContext();
+  const targetWorkspace = props.area === 'personal' ? personalWorkspace : activeWorkspace;
 
-  if (!activeWorkspace) {
+  if (!targetWorkspace || (props.area === 'collaboration' && targetWorkspace.kind !== 'team')) {
     return (
       <AppSectionPlaceholder
         eyebrow="工作区"
-        title="创建或选择工作区"
-        description="使用左上角工作区切换器创建工作区后开始整理项目。"
+        title="创建或选择团队工作区"
+        description="协作区域只在团队工作区中可用。"
       />
     );
   }
@@ -47,9 +48,9 @@ export async function ProjectDocumentsPage(props: {
 
   const result = await getProjectDocuments({
     documentId,
-    kind: props.kind,
     projectId,
-    workspaceId: activeWorkspace.id,
+    workspaceId: targetWorkspace.id,
+    workspaceKind: targetWorkspace.kind,
   });
 
   if (!result) {

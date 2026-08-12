@@ -2,21 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProject } from './CreateProject';
 
 type ProjectRecord = {
-  createdAt: Date;
   id: string;
-  kind: 'personal';
-  name: string;
-  updatedAt: Date;
   workspaceId: string;
 };
 
 const state = vi.hoisted(() => {
   const project: ProjectRecord = {
-    createdAt: new Date('2026-08-04T00:00:00.000Z'),
     id: '01987654-3210-7000-8000-000000000001',
-    kind: 'personal',
-    name: '产品知识库',
-    updatedAt: new Date('2026-08-04T00:00:00.000Z'),
     workspaceId: '01987654-3210-7000-8000-000000000010',
   };
   const protect = vi.fn<() => Promise<{ userId: string }>>();
@@ -93,15 +85,13 @@ describe('project creation action', () => {
   it('creates project with owner membership', async () => {
     await expect(
       createProject({
-        kind: 'personal',
         name: '  产品知识库  ',
         workspaceId: state.project.workspaceId,
       }),
-    ).resolves.toStrictEqual(state.project);
+    ).resolves.toBeUndefined();
 
     expect(state.transaction).toHaveBeenCalledOnce();
     expect(state.projectValues).toHaveBeenCalledWith({
-      kind: 'personal',
       name: '产品知识库',
       ownerId: 'user_1',
       workspaceId: state.project.workspaceId,
@@ -116,7 +106,7 @@ describe('project creation action', () => {
 
   it('rejects invalid input before transaction', async () => {
     await expect(
-      createProject({ kind: 'personal', name: '   ', workspaceId: state.project.workspaceId }),
+      createProject({ name: '   ', workspaceId: state.project.workspaceId }),
     ).rejects.toThrow('请输入项目名称');
 
     expect(state.transaction).not.toHaveBeenCalled();
@@ -128,7 +118,6 @@ describe('project creation action', () => {
 
     await expect(
       createProject({
-        kind: 'personal',
         name: '产品知识库',
         workspaceId: state.project.workspaceId,
       }),
@@ -143,7 +132,6 @@ describe('project creation action', () => {
 
     await expect(
       createProject({
-        kind: 'personal',
         name: '产品知识库',
         workspaceId: state.project.workspaceId,
       }),

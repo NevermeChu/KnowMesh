@@ -6,10 +6,11 @@ import { AuthorizationError } from '../AuthorizationError';
 import type { Permission } from '../Permission';
 import { getWorkspacePermissions } from '../PermissionPolicy';
 
-export async function getWorkspaceAuthorization(options: { userId: string; workspaceId: string }) {
+async function getWorkspaceAuthorization(options: { userId: string; workspaceId: string }) {
   const [access] = await db
     .select({
       id: workspacesSchema.id,
+      kind: workspacesSchema.kind,
       name: workspacesSchema.name,
       ownerId: workspacesSchema.ownerId,
       role: workspaceMembersSchema.role,
@@ -34,7 +35,7 @@ export async function getWorkspaceAuthorization(options: { userId: string; works
     decision: {
       grants: [{ role, source: 'workspace' as const }],
       isResourceOwner: access.ownerId === options.userId,
-      permissions: getWorkspacePermissions(role),
+      permissions: getWorkspacePermissions(role, access.kind),
     },
     workspace: access,
   };

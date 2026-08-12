@@ -3,6 +3,8 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { asc, eq, inArray } from 'drizzle-orm';
 import * as z from 'zod';
+import { memberRoles } from '@/features/permissions/Permission';
+import type { MemberRole } from '@/features/permissions/Permission';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
@@ -11,8 +13,7 @@ import type {
   PermissionMember,
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
-import type { ProjectMemberRole } from '@/features/projects/Project';
-import { projectMemberRoles } from '@/features/projects/Project';
+import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
 import { projectMembersSchema, workspaceMembersSchema } from '@/models/Schema';
 
@@ -22,11 +23,11 @@ const permissionOverviewInputSchema = z.discriminatedUnion('scope', [
   z.object({ documentId: z.uuid(), scope: z.literal('document') }),
 ]);
 
-const roleOrder = new Map(projectMemberRoles.map((role, index) => [role, index]));
+const roleOrder = new Map(memberRoles.map((role, index) => [role, index]));
 
 function mapPermissionMembers(options: {
   currentUserId: string;
-  memberships: { role: ProjectMemberRole; userId: string }[];
+  memberships: { role: MemberRole; userId: string }[];
   profiles: Awaited<ReturnType<typeof getClerkProfiles>>;
 }) {
   return options.memberships
@@ -154,14 +155,14 @@ async function getWorkspacePermissionGroup(options: {
 
 async function getProjectPermissionGroups(options: {
   currentUserId: string;
-  project: { id: string; kind: 'collaboration' | 'personal'; name: string; workspaceId: string };
+  project: { id: string; name: string; workspaceId: string; workspaceKind: WorkspaceKind };
 }) {
   const directGroups = await getPermissionGroups({
     currentUserId: options.currentUserId,
     projects: [{ id: options.project.id, name: '项目直接权限' }],
   });
 
-  if (options.project.kind === 'personal') {
+  if (options.project.workspaceKind === 'personal') {
     return directGroups;
   }
 
@@ -200,13 +201,14 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
     });
 
     return {
-      canManageMembers: authorization.decision.permissions.includes('workspace.members.manage'),
       description:
-        '工作区角色决定工作区操作，并向协作项目及其文件继承；个人项目仍只使用项目直接权限。',
+        authorization.workspace.kind === 'personal'
+          ? '个人空间永久属于当前用户，只承载不参与协作的个人项目。'
+          : '团队工作区角色决定工作区操作，并向其中的项目和文件继承。',
       groups: [workspaceGroup],
       permissions: authorization.decision.permissions,
       scope: 'workspace' as const,
-      title: '工作区权限',
+      title: authorization.workspace.kind === 'personal' ? '个人空间' : '工作区权限',
       workspaceId: authorization.workspace.id,
     };
   }
@@ -218,15 +220,17 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
       userId,
     });
 
-    const workspaceGroup = await getWorkspacePermissionGroup({
-      currentUserId: userId,
-      groupId: authorization.project.workspaceId,
-      groupName: '工作区成员',
-      workspaceId: authorization.project.workspaceId,
-    });
+    const workspaceGroup =
+      authorization.project.workspaceKind === 'team'
+        ? await getWorkspacePermissionGroup({
+            currentUserId: userId,
+            groupId: authorization.project.workspaceId,
+            groupName: '工作区成员',
+            workspaceId: authorization.project.workspaceId,
+          })
+        : null;
 
     return {
-      canManageMembers: authorization.decision.permissions.includes('project.members.manage'),
       groups: await getProjectPermissionGroups({
         currentUserId: userId,
         project: authorization.project,
@@ -234,7 +238,7 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
       permissions: authorization.decision.permissions,
       project: { id: authorization.project.id, name: authorization.project.name },
       scope: 'project' as const,
-      workspaceMembers: workspaceGroup.members,
+      workspaceMembers: workspaceGroup?.members ?? [],
     };
   }
 
@@ -245,7 +249,6 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
   });
 
   return {
-    canManageMembers: false,
     document: { id: authorization.document.id, title: authorization.document.title },
     groups: await getProjectPermissionGroups({
       currentUserId: userId,
@@ -254,6 +257,5 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
     permissions: authorization.decision.permissions,
     project: { id: authorization.project.id, name: authorization.project.name },
     scope: 'document' as const,
-    workspaceMembers: [],
   };
 }

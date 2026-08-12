@@ -18,6 +18,10 @@ async function authorizeProjectMemberMutation(input: ProjectMemberMutationInput)
     userId,
   });
 
+  if (authorization.project.workspaceKind === 'personal') {
+    throw new Error('个人空间不支持项目成员');
+  }
+
   if (memberInput.memberUserId === authorization.project.ownerId) {
     throw new Error('项目所有者角色不可修改或移除');
   }

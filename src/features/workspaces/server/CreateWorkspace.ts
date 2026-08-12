@@ -15,12 +15,9 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
   const workspace = await db.transaction(async (transaction) => {
     const [createdWorkspace] = await transaction
       .insert(workspacesSchema)
-      .values({ name: workspaceInput.name, ownerId: userId })
+      .values({ kind: 'team', name: workspaceInput.name, ownerId: userId })
       .returning({
-        createdAt: workspacesSchema.createdAt,
         id: workspacesSchema.id,
-        name: workspacesSchema.name,
-        updatedAt: workspacesSchema.updatedAt,
       });
 
     if (!createdWorkspace) {
@@ -42,6 +39,4 @@ export async function createWorkspace(input: CreateWorkspaceInput) {
     sameSite: 'lax',
   });
   revalidatePath('/(workspace)', 'layout');
-
-  return workspace;
 }

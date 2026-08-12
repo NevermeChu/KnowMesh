@@ -2,28 +2,28 @@ import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq } from 'drizzle-orm';
 import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
-import type { ProjectKind } from '@/features/projects/Project';
+import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
 import { documentsSchema } from '@/models/Schema';
 
 export async function getProjectDocuments(options: {
   documentId?: string;
-  kind: ProjectKind;
   projectId: string;
   workspaceId: string;
+  workspaceKind: WorkspaceKind;
 }) {
   const { userId } = await auth.protect();
   const authorization = await getProjectAuthorization({ projectId: options.projectId, userId });
 
   if (
     !authorization?.decision.permissions.includes('project.read') ||
-    authorization.project.kind !== options.kind ||
-    authorization.project.workspaceId !== options.workspaceId
+    authorization.project.workspaceId !== options.workspaceId ||
+    authorization.project.workspaceKind !== options.workspaceKind
   ) {
     return null;
   }
 
-  const documents = await db
+  const documentMetadata = await db
     .select({
       createdAt: documentsSchema.createdAt,
       id: documentsSchema.id,
@@ -34,8 +34,12 @@ export async function getProjectDocuments(options: {
     .where(eq(documentsSchema.projectId, options.projectId))
     .orderBy(desc(documentsSchema.updatedAt));
 
+  const documents = documentMetadata.map((document) => ({
+    id: document.id,
+    title: document.title,
+  }));
   const selectedMetadata = options.documentId
-    ? documents.find((document) => document.id === options.documentId)
+    ? documentMetadata.find((document) => document.id === options.documentId)
     : undefined;
 
   if (!selectedMetadata) {

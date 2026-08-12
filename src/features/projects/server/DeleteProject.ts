@@ -27,5 +27,4 @@ export async function deleteProject(input: DeleteProjectInput) {
   }
 
   revalidatePath('/(workspace)', 'layout');
-  return project;
 }

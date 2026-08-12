@@ -6,7 +6,7 @@ import { AuthorizationError } from '../AuthorizationError';
 import type { Permission } from '../Permission';
 import { getProjectAuthorization } from './ProjectAuthorization';
 
-export async function getDocumentAuthorization(options: { documentId: string; userId: string }) {
+async function getDocumentAuthorization(options: { documentId: string; userId: string }) {
   const [document] = await db
     .select({
       id: documentsSchema.id,

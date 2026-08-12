@@ -1,6 +1,6 @@
 export const memberRoles = ['owner', 'editor', 'viewer'] as const;
 
-export const permissions = [
+const permissions = [
   'workspace.read',
   'workspace.update',
   'workspace.delete',

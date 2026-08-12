@@ -32,5 +32,4 @@ export async function deleteDocument(input: DeleteDocumentInput) {
   }
 
   revalidatePath('/(workspace)', 'layout');
-  return document;
 }

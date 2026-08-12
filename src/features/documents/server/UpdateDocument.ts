@@ -30,14 +30,9 @@ export async function updateDocument(input: UpdateDocumentInput) {
         eq(documentsSchema.projectId, authorization.document.projectId),
       ),
     )
-    .returning({
-      id: documentsSchema.id,
-      updatedAt: documentsSchema.updatedAt,
-    });
+    .returning({ id: documentsSchema.id });
 
   if (!document) {
     throw new Error('文档保存失败');
   }
-
-  return document;
 }

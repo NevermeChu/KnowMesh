@@ -10,7 +10,10 @@ const state = vi.hoisted(() => {
   const projectId = '01987654-3210-7000-8000-000000000001';
   const documentId = '01987654-3210-7000-8000-000000000002';
   const protect = vi.fn<() => Promise<{ userId: string }>>();
-  const authorizeWorkspace = vi.fn<(options: unknown) => Promise<{ workspace: { id: string } }>>();
+  const authorizeWorkspace =
+    vi.fn<
+      (options: unknown) => Promise<{ workspace: { id: string; kind: 'personal' | 'team' } }>
+    >();
   const authorizeProject = vi.fn<(options: unknown) => Promise<{ project: { id: string } }>>();
   const authorizeDocument =
     vi.fn<(options: unknown) => Promise<{ document: { id: string; projectId: string } }>>();
@@ -72,7 +75,9 @@ describe('resource mutation authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.protect.mockResolvedValue({ userId: 'user_1' });
-    state.authorizeWorkspace.mockResolvedValue({ workspace: { id: state.workspaceId } });
+    state.authorizeWorkspace.mockResolvedValue({
+      workspace: { id: state.workspaceId, kind: 'team' },
+    });
     state.authorizeProject.mockResolvedValue({ project: { id: state.projectId } });
     state.authorizeDocument.mockResolvedValue({
       document: { id: state.documentId, projectId: state.projectId },
@@ -106,6 +111,17 @@ describe('resource mutation authorization', () => {
       workspaceId: state.workspaceId,
     });
     expect(state.cookieDelete).toHaveBeenCalledWith('knowmesh-active-workspace');
+  });
+
+  it('preserves permanent personal workspace', async () => {
+    state.authorizeWorkspace.mockResolvedValueOnce({
+      workspace: { id: state.workspaceId, kind: 'personal' },
+    });
+
+    await expect(deleteWorkspace({ workspaceId: state.workspaceId })).rejects.toThrow(
+      '个人空间不可删除',
+    );
+    expect(state.remove).not.toHaveBeenCalled();
   });
 
   it('updates project after capability authorization', async () => {

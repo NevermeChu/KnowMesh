@@ -1,45 +1,46 @@
 import 'server-only';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/libs/DB';
-import { userOnboardingSchema, workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
+import { workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
 
 const DEFAULT_WORKSPACE_NAME = '我的工作区';
 
 /**
- * Initializes a user's ordinary default workspace exactly once.
+ * Ensures that a user owns one permanent personal workspace.
  *
  * @param userId - Authenticated Clerk user identifier.
- * @returns The created workspace, or null when initialization already ran or membership exists.
+ * @returns The existing or newly created personal workspace.
  */
 export async function ensureUserWorkspace(userId: string) {
   return await db.transaction(async (transaction) => {
-    const [onboarding] = await transaction
-      .insert(userOnboardingSchema)
-      .values({ userId })
-      .onConflictDoNothing()
-      .returning({ userId: userOnboardingSchema.userId });
-
-    if (!onboarding) {
-      return null;
-    }
-
-    const [existingMembership] = await transaction
-      .select({ workspaceId: workspaceMembersSchema.workspaceId })
-      .from(workspaceMembersSchema)
-      .where(eq(workspaceMembersSchema.userId, userId))
+    const [existingWorkspace] = await transaction
+      .select({ id: workspacesSchema.id })
+      .from(workspacesSchema)
+      .where(and(eq(workspacesSchema.kind, 'personal'), eq(workspacesSchema.ownerId, userId)))
       .limit(1);
 
-    if (existingMembership) {
-      return null;
+    if (existingWorkspace) {
+      return existingWorkspace;
     }
 
     const [workspace] = await transaction
       .insert(workspacesSchema)
-      .values({ name: DEFAULT_WORKSPACE_NAME, ownerId: userId })
+      .values({ kind: 'personal', name: DEFAULT_WORKSPACE_NAME, ownerId: userId })
+      .onConflictDoNothing()
       .returning({ id: workspacesSchema.id });
 
     if (!workspace) {
-      throw new Error('默认工作区创建失败');
+      const [concurrentWorkspace] = await transaction
+        .select({ id: workspacesSchema.id })
+        .from(workspacesSchema)
+        .where(and(eq(workspacesSchema.kind, 'personal'), eq(workspacesSchema.ownerId, userId)))
+        .limit(1);
+
+      if (!concurrentWorkspace) {
+        throw new Error('个人空间创建失败');
+      }
+
+      return concurrentWorkspace;
     }
 
     await transaction.insert(workspaceMembersSchema).values({

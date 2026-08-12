@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/ModalDialog';
 import { deleteDocument } from '@/features/documents/server/DeleteDocument';
 import { updateDocument } from '@/features/documents/server/UpdateDocument';
-import type { Permission } from '@/features/permissions/Permission';
+import type { MemberRole, Permission } from '@/features/permissions/Permission';
 import {
   addProjectMember,
   removeProjectMember,
@@ -28,13 +28,12 @@ import type {
   PermissionOverview,
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
-import type { ProjectMemberRole } from '@/features/projects/Project';
 import { deleteProject } from '@/features/projects/server/DeleteProject';
 import { updateProject } from '@/features/projects/server/UpdateProject';
 import { deleteWorkspace } from '@/features/workspaces/server/DeleteWorkspace';
 import { updateWorkspace } from '@/features/workspaces/server/UpdateWorkspace';
 
-const roles: { id: ProjectMemberRole; label: string }[] = [
+const roles: { id: MemberRole; label: string }[] = [
   { id: 'owner', label: 'Owner' },
   { id: 'editor', label: 'Editor' },
   { id: 'viewer', label: 'Viewer' },
@@ -52,7 +51,12 @@ function PermissionMemberManager(props: {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  if (!props.overview.canManageMembers || props.overview.scope === 'document') {
+  if (
+    props.overview.scope === 'document' ||
+    !props.overview.permissions.includes(
+      props.overview.scope === 'workspace' ? 'workspace.members.manage' : 'project.members.manage',
+    )
+  ) {
     return null;
   }
 
@@ -162,8 +166,10 @@ function PermissionMemberActions(props: {
   const [isPending, startTransition] = useTransition();
 
   if (
-    !props.overview.canManageMembers ||
     props.overview.scope === 'document' ||
+    !props.overview.permissions.includes(
+      props.overview.scope === 'workspace' ? 'workspace.members.manage' : 'project.members.manage',
+    ) ||
     props.member.role === 'owner'
   ) {
     return null;

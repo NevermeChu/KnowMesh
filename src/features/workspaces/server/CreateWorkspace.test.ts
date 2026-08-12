@@ -3,10 +3,7 @@ import { createWorkspace } from './CreateWorkspace';
 
 const state = vi.hoisted(() => {
   const workspace = {
-    createdAt: new Date('2026-08-10T00:00:00.000Z'),
     id: '01987654-3210-7000-8000-000000000010',
-    name: '产品团队',
-    updatedAt: new Date('2026-08-10T00:00:00.000Z'),
   };
   const protect = vi.fn<() => Promise<{ userId: string }>>();
   const returning = vi.fn<() => Promise<(typeof workspace)[]>>();
@@ -76,8 +73,12 @@ describe(createWorkspace, () => {
   });
 
   it('creates workspace with owner membership', async () => {
-    await expect(createWorkspace({ name: '  产品团队  ' })).resolves.toStrictEqual(state.workspace);
-    expect(state.workspaceValues).toHaveBeenCalledWith({ name: '产品团队', ownerId: 'user_1' });
+    await expect(createWorkspace({ name: '  产品团队  ' })).resolves.toBeUndefined();
+    expect(state.workspaceValues).toHaveBeenCalledWith({
+      kind: 'team',
+      name: '产品团队',
+      ownerId: 'user_1',
+    });
     expect(state.memberValues).toHaveBeenCalledWith({
       role: 'owner',
       userId: 'user_1',

@@ -4,18 +4,16 @@ import { getWorkspaceContext } from './GetWorkspaceContext';
 const state = vi.hoisted(() => {
   const workspaces = [
     {
-      createdAt: new Date('2026-08-10T00:00:00.000Z'),
       id: '01987654-3210-7000-8000-000000000010',
+      kind: 'personal' as const,
       name: '产品团队',
       role: 'owner' as const,
-      updatedAt: new Date('2026-08-10T00:00:00.000Z'),
     },
     {
-      createdAt: new Date('2026-08-11T00:00:00.000Z'),
       id: '01987654-3210-7000-8000-000000000011',
+      kind: 'team' as const,
       name: '技术团队',
       role: 'editor' as const,
-      updatedAt: new Date('2026-08-11T00:00:00.000Z'),
     },
   ];
   const protect = vi.fn<() => Promise<{ userId: string }>>();
@@ -31,7 +29,7 @@ const state = vi.hoisted(() => {
     await Promise.resolve();
     return { get: cookieGet };
   });
-  const ensureUserWorkspace = vi.fn<(userId: string) => Promise<null>>();
+  const ensureUserWorkspace = vi.fn<(userId: string) => Promise<{ id: string }>>();
 
   return { cookieGet, cookies, ensureUserWorkspace, orderBy, protect, select, workspaces };
 });
@@ -60,7 +58,7 @@ describe(getWorkspaceContext, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.protect.mockResolvedValue({ userId: 'user_1' });
-    state.ensureUserWorkspace.mockResolvedValue(null);
+    state.ensureUserWorkspace.mockResolvedValue({ id: state.workspaces[0]?.id ?? '' });
     state.orderBy.mockResolvedValue(state.workspaces);
   });
 
@@ -70,18 +68,13 @@ describe(getWorkspaceContext, () => {
       ...workspace,
       permissions:
         workspace.role === 'owner'
-          ? [
-              'workspace.read',
-              'workspace.update',
-              'workspace.delete',
-              'workspace.members.manage',
-              'project.create',
-            ]
+          ? ['workspace.read', 'workspace.update', 'project.create']
           : ['workspace.read', 'project.create'],
     }));
 
     await expect(getWorkspaceContext()).resolves.toStrictEqual({
       activeWorkspace: workspaces[1],
+      personalWorkspace: workspaces[0],
       workspaces,
     });
   });
@@ -92,18 +85,13 @@ describe(getWorkspaceContext, () => {
       ...workspace,
       permissions:
         workspace.role === 'owner'
-          ? [
-              'workspace.read',
-              'workspace.update',
-              'workspace.delete',
-              'workspace.members.manage',
-              'project.create',
-            ]
+          ? ['workspace.read', 'workspace.update', 'project.create']
           : ['workspace.read', 'project.create'],
     }));
 
     await expect(getWorkspaceContext()).resolves.toStrictEqual({
       activeWorkspace: workspaces[0],
+      personalWorkspace: workspaces[0],
       workspaces,
     });
   });

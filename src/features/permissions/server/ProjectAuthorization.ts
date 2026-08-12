@@ -1,7 +1,12 @@
 import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/libs/DB';
-import { projectMembersSchema, projectsSchema, workspaceMembersSchema } from '@/models/Schema';
+import {
+  projectMembersSchema,
+  projectsSchema,
+  workspaceMembersSchema,
+  workspacesSchema,
+} from '@/models/Schema';
 import { AuthorizationError } from '../AuthorizationError';
 import type { Permission } from '../Permission';
 import { getProjectPermissionDecision } from '../PermissionPolicy';
@@ -10,14 +15,15 @@ export async function getProjectAuthorization(options: { projectId: string; user
   const [access] = await db
     .select({
       id: projectsSchema.id,
-      kind: projectsSchema.kind,
       name: projectsSchema.name,
       ownerId: projectsSchema.ownerId,
       projectRole: projectMembersSchema.role,
       workspaceId: projectsSchema.workspaceId,
       workspaceRole: workspaceMembersSchema.role,
+      workspaceKind: workspacesSchema.kind,
     })
     .from(projectsSchema)
+    .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
     .innerJoin(
       workspaceMembersSchema,
       and(
@@ -41,9 +47,9 @@ export async function getProjectAuthorization(options: { projectId: string; user
 
   const decision = getProjectPermissionDecision({
     isProjectOwner: access.ownerId === options.userId,
-    kind: access.kind,
     projectRole: access.projectRole,
     workspaceRole: access.workspaceRole,
+    workspaceKind: access.workspaceKind,
   });
 
   return { decision, project: access };

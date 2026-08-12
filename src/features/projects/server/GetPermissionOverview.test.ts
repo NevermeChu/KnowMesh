@@ -27,14 +27,14 @@ const state = vi.hoisted(() => {
   };
   const project = {
     id: projectId,
-    kind: 'personal' as const,
     name: '产品知识库',
     workspaceId,
+    workspaceKind: 'personal' as const,
   };
   const authorizeWorkspace = vi.fn<
     () => Promise<{
       decision: { permissions: string[] };
-      workspace: { id: string; name: string };
+      workspace: { id: string; kind: 'personal' | 'team'; name: string };
     }>
   >();
   const authorizeProject =
@@ -137,7 +137,7 @@ describe('permission overview', () => {
     });
     state.authorizeWorkspace.mockResolvedValue({
       decision: { permissions: ['workspace.read', 'workspace.update'] },
-      workspace: { id: state.workspaceId, name: '产品团队' },
+      workspace: { id: state.workspaceId, kind: 'team', name: '产品团队' },
     });
     state.authorizeProject.mockResolvedValue({ decision: state.decision, project: state.project });
     state.authorizeDocument.mockResolvedValue({

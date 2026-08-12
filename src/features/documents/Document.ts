@@ -33,10 +33,7 @@ export type Document = {
   updatedAt: Date;
 };
 
-export type DocumentNavigationItem = Pick<
-  Document,
-  'createdAt' | 'id' | 'projectId' | 'title' | 'updatedAt'
->;
+export type DocumentNavigationItem = Pick<Document, 'id' | 'projectId' | 'title'>;
 
 export const EMPTY_DOCUMENT_CONTENT: DocumentContent = {
   content: [{ type: 'paragraph' }],

@@ -21,12 +21,11 @@ export async function updateWorkspace(input: UpdateWorkspaceInput) {
     .update(workspacesSchema)
     .set({ name: workspaceInput.name, updatedAt: new Date() })
     .where(eq(workspacesSchema.id, authorization.workspace.id))
-    .returning({ id: workspacesSchema.id, name: workspacesSchema.name });
+    .returning({ id: workspacesSchema.id });
 
   if (!workspace) {
     throw new Error('工作区保存失败');
   }
 
   revalidatePath('/(workspace)', 'layout');
-  return workspace;
 }
