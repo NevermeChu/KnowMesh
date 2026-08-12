@@ -24,12 +24,12 @@
 公开页面与认证页面
         │
         └─ 登录后的 (workspace) 路由布局
-             ├─ 服务端解析活动 Workspace 并查询其中的项目
+             ├─ 服务端解析永久个人空间与活动 Team Workspace
              └─ AppShell 客户端应用外壳
                   ├─ AppSidebar
                   │    ├─ Workspace 切换器
-                  │    ├─ Private 项目及文档
-                  │    └─ Shared 项目及文档
+                  │    ├─ Personal Workspace 项目及文档
+                  │    └─ 活动 Team Workspace 项目及文档
                   └─ ContentToolbar（含文档格式命令）+ 路由内容
 
 项目业务

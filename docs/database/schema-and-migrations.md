@@ -20,8 +20,9 @@
 ### `workspaces`
 
 - UUID 主键，名称最长 80 字符。
+- `kind` 为 `personal` 或 `team`，决定其中所有项目的权限模式。
 - `owner_id` 保存唯一所有者的 Clerk 用户 ID，是 Workspace 所有权的权威字段。
-- `(owner_id)` 索引支持按所有者定位 Workspace。
+- Personal Workspace 的 `(owner_id) WHERE kind = 'personal'` 部分唯一索引同时支持按 owner 定位个人空间，并保证同一 owner 最多拥有一个。
 - 包含创建和更新时间。
 
 ### `workspace_members`
@@ -30,16 +31,16 @@
 - `workspace_id` 外键指向 `workspaces.id`，删除 Workspace 时级联删除。
 - 角色复用 `owner`、`editor`、`viewer` 枚举，并由应用权限策略映射为能力。
 - `(user_id, workspace_id)` 索引支持查询用户可切换的 Workspace。
-- Workspace 成员关系控制 Workspace 可见性和操作，并向 Collaboration 项目及文件继承能力；Personal 项目不继承内容权限。
+- Team Workspace 成员关系控制可见性和操作，并向项目及文件继承能力；Personal Workspace 只允许 owner。
 
 ### `projects`
 
 - UUID 主键。
 - 名称最长 80 字符。
-- 类型为 `personal` 或 `collaboration`。
 - `workspace_id` 非空外键指向 `workspaces.id`；删除 Workspace 时级联删除其项目。
 - `owner_id` 保存 Clerk 用户 ID。
-- 定义 `(workspace_id, kind)` 索引，支持读取选中 Workspace 内的 Private/Shared 分区。
+- 项目的个人或协作语义由所属 Workspace 的 `kind` 推导，不重复保存项目类型。
+- 定义 `(workspace_id, created_at)` 索引，支持读取 Workspace 项目列表。
 - 包含创建和更新时间；`updated_at` 的 `$onUpdate` 是 Drizzle 写入行为，迁移中没有数据库自动更新时间的触发器。
 
 ### `project_members`
@@ -47,10 +48,10 @@
 - `(project_id, user_id)` 联合主键。
 - `project_id` 外键指向 `projects.id`，删除项目时级联删除。
 - 角色为 `owner`、`editor` 或 `viewer`。
-- `(user_id, project_id)` 索引支持查询当前用户参与的项目。
+- 联合主键以 `project_id` 开头，支持当前按项目进行的授权、成员读取和清理查询；当前没有从 `user_id` 开始扫描项目成员的查询，因此不保留反向索引。
 - 包含成员关系创建时间。
-- `user_onboarding` 保存用户默认 Workspace 是否已经初始化；删除 Workspace 不删除此标记。
 - `workspace_invitations` 保存邮箱、预设角色、令牌哈希、有效期和接受状态；原始令牌不持久化。
+- 邀请通过令牌哈希接受；当前没有按 Workspace 与邮箱列出邀请的查询，因此只保留令牌哈希唯一索引。
 
 ### `documents`
 
@@ -72,8 +73,8 @@
 
 - `projects.owner_id` 对应的成员一定存在且角色为 `owner`。
 - `workspaces.owner_id` 对应的 Workspace 成员一定存在且角色为 `owner`。
-- Workspace 角色如何映射为 Collaboration 项目能力；该规则由应用权限策略执行，数据库不理解项目类型对应的授权语义。
-- `personal` 项目没有 `editor` 或 `viewer`。
+- Workspace 类型和角色如何映射为项目能力；该规则由应用权限策略执行。
+- Personal Workspace 没有额外成员，且其中项目没有 `editor` 或 `viewer`。
 - 修改项目所有权时，成员关系同步更新。
 - `documents.content` 中的 JSON 符合 ProseMirror Schema。
 - `content_schema_version` 与实际 JSON 结构语义一致。
@@ -103,6 +104,8 @@
 
 `0003_add-workspaces.sql` 为已有项目所有者创建 Workspace，将项目按原 `owner_id` 归入对应 Workspace，并把既有 `project_members` 汇总回填为 `workspace_members`。同一用户在同一 Workspace 参与多个项目时保留最高角色（`owner` 高于 `editor`，`editor` 高于 `viewer`）；完成回填后才把 `projects.workspace_id` 设为非空。
 
+`0005_add-workspace-kind.sql` 识别个人空间、为缺少个人空间的已知用户补建 Workspace，并将旧 Personal 项目迁移到 owner 的个人空间。`0006_remove-project-kind.sql` 随后删除 `projects.kind`、旧枚举、分类索引和冗余的 `user_onboarding` 表。`0007_remove-redundant-indexes.sql` 删除已经被部分唯一索引或联合主键覆盖、且没有当前查询消费者的三个索引。
+
 ## 迁移不变量
 
 - 已共享或已用于生产的迁移不得改写历史，应新增后续迁移。
@@ -114,7 +117,7 @@
 
 ## 创建项目的一致性
 
-创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。创建项目前必须验证当前用户具有目标 Workspace 的 `project.create` 能力；项目与 owner 的 `project_members` 也必须在同一事务写入，避免产生无成员项目。删除 Workspace 或项目通过数据库外键级联清理下级资源和成员关系，应用层必须在删除前验证对应能力。
+创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。Personal Workspace 由初始化流程创建且不可删除，用户创建的普通 Workspace 一律为 Team。创建项目前必须验证当前用户具有目标 Workspace 的 `project.create` 能力；项目与 owner 的 `project_members` 也必须在同一事务写入。删除 Team Workspace 或项目通过数据库外键级联清理下级资源，应用层必须在删除前验证对应能力。
 
 ## 本地操作
 

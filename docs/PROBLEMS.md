@@ -14,7 +14,7 @@
 
 ### 解决方法
 
-- `createProject` 和 `createDocument` 在写入成功后调用 `revalidatePath('/(workspace)', 'layout')`，让共享布局重新执行 `getProjects` 和 `getDocumentNavigation`。
+- `createProject` 和 `createDocument` 在写入成功后调用 `revalidatePath('/(workspace)', 'layout')`，让共享布局重新执行 `getWorkspaceNavigation`。
 - 文档创建返回新 ID 后，客户端只负责导航到新文档，不再紧接调用 `router.refresh()`。
 - 单元测试覆盖成功写入后的布局失效，以及无效输入、无权限和写入失败时不得失效布局。
 
@@ -131,3 +131,55 @@ Workspace 资源归属与权限继承分阶段上线后，第二阶段缺少统�
 - Clerk 仅负责注册、登录和已验证邮箱身份，Workspace 邀请状态完全由 `workspace_invitations` 管理。
 - Resend 只发送包含本地一次性令牌的事务邮件，不参与授权判断。
 - 邮件发送失败时删除刚创建的本地邀请，避免显示无法使用的待接受邀请。
+
+## 9. 移除工作区成员可能破坏项目所有权不变量
+
+### 问题
+
+移除 Workspace 成员时会清理该用户在 Workspace 内的项目直接成员关系，但项目所有权仍由 `projects.owner_id` 独立保存。当前流程只拒绝移除仍拥有 Personal 项目的成员；如果该成员拥有 Collaboration 项目，移除操作会删除其 `project_members` owner 记录和 Workspace 成员关系，却保留项目的 `owner_id`，产生所有者不再属于上级 Workspace、也不再存在于项目成员表的孤立项目。
+
+### 根因
+
+所有权和成员身份分别存储在资源表、项目成员表与 Workspace 成员表中，“项目 owner 必须同时是项目 owner 成员和所属 Workspace 成员”是由应用事务维护的跨表不变量，普通外键无法完整表达。成员移除流程只考虑了 Personal 项目的访问语义，没有统一处理两类项目的所有权生命周期；同时系统尚未提供项目所有权转让能力。
+
+### 解决方法
+
+- 在移除 Workspace 成员前查询其在该 Workspace 中拥有的所有项目，不按 `kind` 排除 Collaboration 项目；只要仍拥有项目，就拒绝直接移除。
+- 实现项目所有权转让，并在同一事务中更新 `projects.owner_id`、新旧 owner 的 `project_members` 角色和成员关系；新 owner 必须已经属于所属 Workspace。
+- 完成所有权处理后，再在同一事务中清理该用户的项目直接成员关系与 Workspace 成员关系，防止中途留下跨表不一致状态。
+- 为 Personal 和 Collaboration 项目所有者、普通成员、Workspace owner 以及失败回滚分别增加集成测试；在转让流程完成前，不把“移除成员”描述为已覆盖所有资源生命周期。
+
+## 10. 项目类型与工作区归属重复表达权限模式
+
+### 问题
+
+项目同时保存 `workspace_id` 和 `kind`，导致个人或协作语义存在两个事实来源。个人项目仍属于当前团队 Workspace，会随团队 Workspace 删除；业务代码还必须防止 Personal Workspace 与 Collaboration Project 等非法组合。
+
+### 根因
+
+`projects.kind` 是引入真实 Workspace 时保留的过渡分类。个人空间后来被确定为用户跨团队 Workspace 永久拥有的资源边界后，分类职责已经上移到 Workspace，但旧字段、`user_onboarding` 标记和对应查询分支仍然保留。
+
+### 解决方法
+
+- 使用 `workspaces.kind = personal | team` 作为唯一权限模式来源，删除 `projects.kind`、`project_kind` 枚举和按项目类型建立的索引。
+- 每个 owner 通过部分唯一索引只拥有一个 Personal Workspace；Personal Workspace 本身替代 `user_onboarding` 初始化标记。
+- 将旧 Personal 项目迁移到 owner 的 Personal Workspace，并由查询和授权连接 Workspace 推导项目模式。
+- 代码审计只保留 Personal/Collaboration 作为界面区域标识，不再把它持久化为 Project 业务状态。
+
+## 11. 侧边栏导航重复查询权限并维护脆弱测试
+
+### 问题
+
+侧边栏分别读取项目和文档导航，两条查询都认证当前用户、连接 Workspace 与两级成员关系，并计算同一项目权限；共享 Layout 和具体页面还会在同一渲染请求中重复解析 Workspace 上下文。查询返回值同时携带界面未使用的时间戳、Workspace ID、成员角色和可由能力数组推导的管理布尔值。对应单元测试各自模拟完整 Drizzle 链，结构重复且会因无行为变化的查询重排而失败。
+
+### 根因
+
+项目列表与文档导航按功能文件逐步增加时，各自形成了完整的授权查询，没有把“文档导航只能来自已授权项目”作为共享查询边界。数据库行模型也被直接用作客户端导航模型，导致存储字段自然泄漏到传输类型；测试因此验证 ORM 调用形状，而不是最小的授权与返回行为。
+
+### 解决方法
+
+- 使用 `getWorkspaceNavigation` 一次认证并计算可访问项目，再按这些项目 ID 读取文档导航，删除两条重复查询。
+- 使用 React 请求级缓存复用同一次 Server Component 渲染中的 Workspace 上下文，不跨请求缓存身份或权限。
+- 收窄 Workspace、Project、Document 导航返回类型和 Server Action 返回值，只保留客户端消费字段；成员管理能力直接从权限数组推导。
+- 将两套 ORM 链式模拟测试合并为 Workspace 导航边界测试，覆盖可访问项目与文档返回，以及没有可访问项目时跳过文档查询。
+- 删除被部分唯一索引或联合主键覆盖且没有当前查询消费者的索引；所有权权威字段、owner 成员关系和邀请审计状态继续保留。

@@ -1,6 +1,6 @@
 # ADR 0003：引入真实 Workspace 资源边界
 
-- 状态：Accepted
+- 状态：Superseded by [ADR 0005](0005-use-workspace-kind-as-project-mode.md)
 - 日期：2026-08-10
 
 ## 背景

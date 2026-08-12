@@ -62,7 +62,7 @@ PostgreSQL / 本地 PGlite
 - 当前文档编辑器与共享内容工具栏之间的命令上下文。
 - 渲染当前路由内容。
 
-左上角切换器选择真实 Workspace；侧边栏中的个人区域和协作区域仍是当前 Workspace 内同一项目业务的 Private/Shared 分类，不是嵌套 Workspace，也不是两套独立实现。
+左上角切换器选择真实 Workspace。个人区域始终读取当前用户永久的 Personal Workspace；协作区域只在活动 Workspace 为 Team 时显示。两个区域复用同一项目与文档实现，但不是 Project 数据字段。
 
 个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。正文以 ProseMirror JSON 通过 Server Action 保存到 PostgreSQL `JSONB`。
 
@@ -83,13 +83,13 @@ PostgreSQL / 本地 PGlite
 - 登录后共享应用外壳。
 - 个人与协作项目创建。
 - Workspace 创建、切换和项目归属。
-- 用户首次进入工作台时幂等创建一个可删除的普通默认 Workspace；完成初始化后允许保持零 Workspace。
+- 用户首次进入工作台时幂等创建永久 Personal Workspace；该空间不可删除，用户可以不拥有任何 Team Workspace。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
 - 项目内文档创建、列表和读取。
 - 基于 Tiptap 的单人富文本编辑与 JSONB 自动保存。
-- Personal 项目直接授权、Collaboration 项目 Workspace 权限继承，以及文件的项目权限继承。
+- Personal Workspace 项目仅 owner 授权、Team Workspace 项目继承成员能力，以及文件的项目权限继承。
 
 尚未实现：
 

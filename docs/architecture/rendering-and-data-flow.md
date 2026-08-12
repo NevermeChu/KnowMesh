@@ -26,17 +26,17 @@
 → Next.js 执行 WorkspaceLayout
 → WorkspaceLayout 调用 getWorkspaceContext()
 → 服务端按当前 Clerk 用户的 workspace_members 校验 HttpOnly cookie 并确定当前 Workspace
-→ WorkspaceLayout 按当前 workspaceId 并行调用 getProjects() 和 getDocumentNavigation()
-→ 两个 server-only 查询按当前 Workspace、项目直接成员和权限继承策略读取可访问项目及文档元数据
+→ WorkspaceLayout 为 Personal Workspace 与可选的活动 Team Workspace 调用 getWorkspaceNavigation()
+→ server-only 导航查询认证一次，计算可访问项目后按这些项目 ID 读取文档元数据
 → 项目及文档导航数据作为 props 传给 AppShell
 → 页面结构和序列化数据发送给浏览器
 ```
 
-`getWorkspaceContext`、`getProjects` 和 `getDocumentNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到第一个可访问 Workspace。
+`getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。`getWorkspaceContext` 使用 React 请求级缓存，使 Layout 与具体页面在同一次 Server Component 渲染中复用结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
 
-`getWorkspaceContext` 在查询前调用 `ensureUserWorkspace`。`user_onboarding` 的一次性标记保证新用户只初始化一次普通默认 Workspace；该 Workspace 可删除，标记保留，因此删除最后一个 Workspace 后不会自动重建。
+`getWorkspaceContext` 在查询前调用 `ensureUserWorkspace`。Personal Workspace 及 owner 部分唯一索引共同表达初始化状态；个人空间永久存在且不可删除，不再需要独立的 onboarding 标记。
 
-项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。当前导航查询返回所有可访问文档的元数据，没有分页；正文仍只由具体文档页面按需读取。
+项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。项目权限只计算一次，文档查询复用已经授权的项目 ID；当前导航查询没有分页，正文仍只由具体文档页面按需读取。
 
 ## 创建项目
 
@@ -50,13 +50,13 @@
 → 服务端 Zod 校验
 → 验证当前用户具有目标 Workspace 的 project.create 能力
 → 数据库事务写 projects 和 project_members
-→ 客户端 router.refresh()
+→ Server Action 使 Workspace Layout 失效
 → WorkspaceLayout 重新查询并更新侧边栏
 ```
 
 `createProject` 文件顶部的 `'use server'` 声明了服务器执行边界；客户端只调用该 Action，数据库访问仍位于服务器模块。
 
-项目或文档创建成功后，对应 Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 使共享工作区布局失效。因此侧边栏会重新执行 `getProjects` 和 `getDocumentNavigation`，而不依赖客户端刷新与导航的时序。新文档创建返回 ID 后，客户端只负责导航到该文档。
+项目或文档创建成功后，对应 Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 使共享工作区布局失效。因此侧边栏会重新执行 `getWorkspaceNavigation`，而不依赖客户端刷新与导航的时序。新文档创建返回 ID 后，客户端只负责导航到该文档。
 
 ## 文档读取与保存
 
@@ -82,7 +82,7 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 侧边栏管理入口按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证读取能力；验证通过后查询直接与继承成员，并通过 Clerk 用户目录补充姓名和主邮箱。响应同时返回服务端计算的能力，客户端据此呈现重命名、删除和成员管理操作；对应 Server Action 仍会再次授权。Workspace 邀请由应用生成令牌并通过 Resend 发送邮件，接受页校验令牌、有效期和当前 Clerk 用户已验证邮箱；Project 只能从所属 Workspace 的现有成员中添加直接成员。文件继续继承项目权限。
 
-Private 和 Shared 是选中 Workspace 内的项目分类。Personal 只使用项目直接权限；Collaboration 合并 Workspace 继承权限和项目直接权限。文件没有独立 ACL，因此文件总览验证文件读取能力后返回所属项目的直接与继承权限；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
+Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Personal 区域始终读取当前用户的 Personal Workspace；Collaboration 区域只在活动 Workspace 为 Team 时显示并读取该 Team 的项目。文件没有独立 ACL，因此文件总览验证文件读取能力后返回所属项目的授权来源；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
 
 ## 安全不变量
 
@@ -107,8 +107,7 @@ Private 和 Shared 是选中 Workspace 内的项目分类。Personal 只使用�
 - `src/features/workspaces/server/CreateWorkspace.ts`：创建 Workspace 与 owner 成员。
 - `src/features/workspaces/server/SelectWorkspace.ts`：校验选择并写入当前 Workspace cookie。
 - `src/proxy.ts`：当前页面路由保护范围和 `/api` matcher 排除规则。
-- `src/features/projects/server/GetProjects.ts`：server-only 项目查询。
-- `src/features/documents/server/GetDocumentNavigation.ts`：server-only 文档导航元数据查询。
+- `src/features/workspaces/server/GetWorkspaceNavigation.ts`：server-only 项目与文档导航查询。
 - `src/features/projects/components/CreateProjectDialog.tsx`：客户端表单。
 - `src/features/projects/server/CreateProject.ts`：创建项目 Server Action。
 - `src/features/projects/server/GetPermissionOverview.ts`：按需授权并读取权限总览。

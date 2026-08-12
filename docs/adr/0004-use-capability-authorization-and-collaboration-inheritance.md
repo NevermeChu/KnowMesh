@@ -1,6 +1,6 @@
 # ADR 0004：使用能力授权并继承协作项目权限
 
-- 状态：Accepted
+- 状态：Superseded by [ADR 0005](0005-use-workspace-kind-as-project-mode.md)
 - 日期：2026-08-11
 
 ## 背景
@@ -61,8 +61,7 @@ ADR 0003 已建立 Workspace 资源边界，但有意推迟角色继承。随着
 ## 相关代码和文档
 
 - `src/features/permissions/`
-- `src/features/projects/server/GetProjects.ts`
-- `src/features/documents/server/GetDocumentNavigation.ts`
+- `src/features/workspaces/server/GetWorkspaceNavigation.ts`
 - `src/features/projects/server/GetPermissionOverview.ts`
 - [项目业务](../features/projects.md)
 - [文档业务](../features/documents.md)

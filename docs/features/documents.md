@@ -21,11 +21,11 @@
 | 修改标题或内容 | `owner`、`editor` | `updateDocument` Server Action |
 | 删除文档 | `owner`、`editor` | `deleteDocument` Server Action |
 
-客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须从 Clerk 会话取得 `userId`，再由统一权限模块解析资源及其项目。Personal 项目只使用项目直接权限；Collaboration 项目合并 Workspace 继承权限与项目直接权限。
+客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须从 Clerk 会话取得 `userId`，再由统一权限模块解析资源、项目及所属 Workspace。Personal Workspace 中的项目只允许 owner；Team Workspace 中的项目合并 Workspace 继承权限与项目直接权限。
 
 ## 读取和编辑流程
 
-`/personal` 与 `/collaboration` 表示当前选中 Workspace 内的 Private/Shared 项目分区，通过查询参数选择项目和文档，两者复用同一个文档页面组件。Workspace Layout 先解析当前 Workspace，再调用 `getDocumentNavigation`，把该 Workspace 内当前成员可访问的文档元数据放入全局侧边栏并按项目分组；页面 Server Component 调用 `getProjectDocuments`，同时验证项目属于当前 Workspace，只把当前项目的文档元数据及所选文档内容传给编辑区。
+`/personal` 与 `/collaboration` 是两个界面区域，通过查询参数选择项目和文档，并复用同一个文档页面组件。Workspace Layout 先解析永久 Personal Workspace 和活动 Workspace：个人区域读取前者，协作区域仅在活动 Workspace 为 Team 时读取后者。页面 Server Component 调用 `getProjectDocuments`，同时验证项目所属 Workspace 及其类型，只把当前项目的文档元数据及所选文档内容传给编辑区。
 
 全局侧边栏是当前唯一的项目和文档导航层。当前项目节点提供创建文档入口；编辑区不再重复呈现项目名称和文档列表。格式工具栏通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例，并由共享 `ContentToolbar` 在内容全屏按钮左侧呈现。工具栏直接显示最多八个常用格式命令，左侧箭头使用共享 `PopupMenu` 展开其余 StarterKit 格式命令，每行最多八个；该浮层只由同一箭头切换开关。撤销和重做独立固定在工具栏右侧。ContentToolbar 和编辑器正文右键菜单复用 `useDocumentEditorCommands`，因此两处使用相同的格式命令、激活状态和撤销/重做可用状态；右键菜单通过共享 `ContextMenu` 和 `PopupMenu` 纵向呈现。
 
@@ -65,7 +65,7 @@
 - `src/features/permissions/server/ProjectAuthorization.ts`
 - `src/features/permissions/server/DocumentAuthorization.ts`
 - `src/features/documents/server/GetProjectDocuments.ts`
-- `src/features/documents/server/GetDocumentNavigation.ts`
+- `src/features/workspaces/server/GetWorkspaceNavigation.ts`
 - `src/features/documents/server/CreateDocument.ts`
 - `src/features/documents/server/UpdateDocument.ts`
 - `src/features/documents/server/DeleteDocument.ts`

@@ -15,7 +15,7 @@
 
 ## 决策
 
-在 `src/app/(workspace)/layout.tsx` 中调用 server-only 的 `getProjects()`，把结果作为 props 传给 `AppShell`。
+在 `src/app/(workspace)/layout.tsx` 中调用 server-only 的 `getWorkspaceNavigation()`，把项目和文档导航结果作为 props 传给 `AppShell`。
 
 当前项目创建使用 Server Action。写入成功后客户端调用 `router.refresh()`，由 Workspace Layout 重新查询最新数据。
 
@@ -59,7 +59,7 @@
 ## 相关代码和文档
 
 - `src/app/(workspace)/layout.tsx`
-- `src/features/projects/server/GetProjects.ts`
+- `src/features/workspaces/server/GetWorkspaceNavigation.ts`
 - `src/features/projects/server/CreateProject.ts`
 - `src/features/projects/components/CreateProjectDialog.tsx`
 - [渲染与数据流](../architecture/rendering-and-data-flow.md)
