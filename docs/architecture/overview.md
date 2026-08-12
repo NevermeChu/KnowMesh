@@ -83,18 +83,18 @@ PostgreSQL / 本地 PGlite
 - 登录后共享应用外壳。
 - 个人与协作项目创建。
 - Workspace 创建、切换和项目归属。
+- 用户首次进入工作台时幂等创建一个可删除的普通默认 Workspace；完成初始化后允许保持零 Workspace。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
-- 工作区、项目和文件的分层右键菜单与只读权限总览。
+- 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
 - 项目内文档创建、列表和读取。
 - 基于 Tiptap 的单人富文本编辑与 JSONB 自动保存。
-- 文档读取和写入的项目成员授权。
+- Personal 项目直接授权、Collaboration 项目 Workspace 权限继承，以及文件的项目权限继承。
 
 尚未实现：
 
-- 文档层级树、删除、移动、版本历史和 Markdown 导入导出。
-- 邀请成员、角色修改、所有权转移、评论和实时协作。
-- Workspace 角色继承和基于 Workspace 成员的 Shared 项目自动访问。
+- 文档层级树、移动、版本历史和 Markdown 导入导出。
+- 所有权转移、评论和实时协作。
 - 面向外部客户端的稳定 API。
 
 未实现内容只表示当前边界，不构成已经批准的实现方案。
@@ -108,3 +108,4 @@ PostgreSQL / 本地 PGlite
 - [文档业务](../features/documents.md)
 - [ADR 0002](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0003](../adr/0003-introduce-workspace-resource-boundary.md)
+- [ADR 0004](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)

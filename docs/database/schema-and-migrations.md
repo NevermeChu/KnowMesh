@@ -20,7 +20,7 @@
 ### `workspaces`
 
 - UUID 主键，名称最长 80 字符。
-- `owner_id` 保存创建者的 Clerk 用户 ID；当前用于记录所有者，不代表完整的 Workspace 权限矩阵已经实现。
+- `owner_id` 保存唯一所有者的 Clerk 用户 ID，是 Workspace 所有权的权威字段。
 - `(owner_id)` 索引支持按所有者定位 Workspace。
 - 包含创建和更新时间。
 
@@ -28,9 +28,9 @@
 
 - `(workspace_id, user_id)` 联合主键。
 - `workspace_id` 外键指向 `workspaces.id`，删除 Workspace 时级联删除。
-- 角色复用 `owner`、`editor`、`viewer` 枚举；第一阶段只用于记录成员身份和展示。
+- 角色复用 `owner`、`editor`、`viewer` 枚举，并由应用权限策略映射为能力。
 - `(user_id, workspace_id)` 索引支持查询用户可切换的 Workspace。
-- 第一阶段中，该表只控制 Workspace 可见性和切换资格，不向项目或文档继承权限。
+- Workspace 成员关系控制 Workspace 可见性和操作，并向 Collaboration 项目及文件继承能力；Personal 项目不继承内容权限。
 
 ### `projects`
 
@@ -49,6 +49,8 @@
 - 角色为 `owner`、`editor` 或 `viewer`。
 - `(user_id, project_id)` 索引支持查询当前用户参与的项目。
 - 包含成员关系创建时间。
+- `user_onboarding` 保存用户默认 Workspace 是否已经初始化；删除 Workspace 不删除此标记。
+- `workspace_invitations` 保存邮箱、预设角色、令牌哈希、有效期和接受状态；原始令牌不持久化。
 
 ### `documents`
 
@@ -70,7 +72,7 @@
 
 - `projects.owner_id` 对应的成员一定存在且角色为 `owner`。
 - `workspaces.owner_id` 对应的 Workspace 成员一定存在且角色为 `owner`。
-- Workspace 成员自动获得其下项目的访问权；第一阶段明确不做权限继承。
+- Workspace 角色如何映射为 Collaboration 项目能力；该规则由应用权限策略执行，数据库不理解项目类型对应的授权语义。
 - `personal` 项目没有 `editor` 或 `viewer`。
 - 修改项目所有权时，成员关系同步更新。
 - `documents.content` 中的 JSON 符合 ProseMirror Schema。
@@ -112,7 +114,7 @@
 
 ## 创建项目的一致性
 
-创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。创建项目前必须验证当前用户属于目标 Workspace；项目与 owner 的 `project_members` 也必须在同一事务写入，避免产生无成员项目。
+创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。创建项目前必须验证当前用户具有目标 Workspace 的 `project.create` 能力；项目与 owner 的 `project_members` 也必须在同一事务写入，避免产生无成员项目。删除 Workspace 或项目通过数据库外键级联清理下级资源和成员关系，应用层必须在删除前验证对应能力。
 
 ## 本地操作
 

@@ -27,12 +27,14 @@
 → WorkspaceLayout 调用 getWorkspaceContext()
 → 服务端按当前 Clerk 用户的 workspace_members 校验 HttpOnly cookie 并确定当前 Workspace
 → WorkspaceLayout 按当前 workspaceId 并行调用 getProjects() 和 getDocumentNavigation()
-→ 两个 server-only 查询按当前 Workspace 和 project_members 读取可访问项目及文档元数据
+→ 两个 server-only 查询按当前 Workspace、项目直接成员和权限继承策略读取可访问项目及文档元数据
 → 项目及文档导航数据作为 props 传给 AppShell
 → 页面结构和序列化数据发送给浏览器
 ```
 
 `getWorkspaceContext`、`getProjects` 和 `getDocumentNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到第一个可访问 Workspace。
+
+`getWorkspaceContext` 在查询前调用 `ensureUserWorkspace`。`user_onboarding` 的一次性标记保证新用户只初始化一次普通默认 Workspace；该 Workspace 可删除，标记保留，因此删除最后一个 Workspace 后不会自动重建。
 
 项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。当前导航查询返回所有可访问文档的元数据，没有分页；正文仍只由具体文档页面按需读取。
 
@@ -46,7 +48,7 @@
 → 客户端调用标记了 `'use server'` 的 `createProject`
 → Clerk 服务端鉴权
 → 服务端 Zod 校验
-→ 验证当前用户属于目标 Workspace
+→ 验证当前用户具有目标 Workspace 的 project.create 能力
 → 数据库事务写 projects 和 project_members
 → 客户端 router.refresh()
 → WorkspaceLayout 重新查询并更新侧边栏
@@ -64,13 +66,13 @@
 页面取得 project 和 document 参数
 → getWorkspaceContext 确定当前 Workspace
 → getProjectDocuments 从 Clerk 会话取得 userId
-→ getProjectAccess 验证 project_members
+→ getProjectAuthorization 合并项目直接权限与允许的 Workspace 继承权限
 → 验证项目属于当前 Workspace
 → 查询项目文档元数据和所选文档内容
 → DocumentWorkspace 与 DocumentEditor 接收所选文档数据
 ```
 
-创建和更新均使用 Server Action。客户端的 `projectId` 或 `documentId` 只用于定位候选资源，服务端仍会重新查询成员关系。`viewer` 可以读取，不能创建或修改；`owner` 和 `editor` 可以写入。
+创建、更新和删除均使用 Server Action。客户端的 `projectId`、`documentId` 或能力只用于定位候选资源和界面呈现，服务端仍会重新计算授权。`viewer` 可以读取，不能创建、修改或删除文件；`owner` 和 `editor` 可以管理文件。
 
 Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服务端再次验证 ProseMirror JSON 结构后写入 `documents.content`。当前没有实时通道或冲突合并，多客户端编辑采用数据库最后写入结果。
 
@@ -78,9 +80,9 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 ## 权限总览
 
-侧边栏右键菜单按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证可访问项目或文件；验证通过后查询完整项目成员，并通过 Clerk 用户目录补充用于显示的姓名和主邮箱。当前用户标记由服务端计算。项目和文件响应同时返回授权后确认的资源 ID 与名称，客户端使用这些字段渲染可切换的权限路径；路径指向当前作用域时由客户端直接忽略，不重复调用 Server Action。
+侧边栏管理入口按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证读取能力；验证通过后查询直接与继承成员，并通过 Clerk 用户目录补充姓名和主邮箱。响应同时返回服务端计算的能力，客户端据此呈现重命名、删除和成员管理操作；对应 Server Action 仍会再次授权。Workspace 邀请由应用生成令牌并通过 Resend 发送邮件，接受页校验令牌、有效期和当前 Clerk 用户已验证邮箱；Project 只能从所属 Workspace 的现有成员中添加直接成员。文件继续继承项目权限。
 
-Private 和 Shared 是选中 Workspace 内的项目分类。分区权限总览先限定当前 Workspace，再调用成员过滤后的项目查询并按项目分组读取权限；它不代表 Workspace 权限继承。文件没有独立 ACL，因此文件总览先验证文件访问权，再返回所属项目权限；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
+Private 和 Shared 是选中 Workspace 内的项目分类。Personal 只使用项目直接权限；Collaboration 合并 Workspace 继承权限和项目直接权限。文件没有独立 ACL，因此文件总览验证文件读取能力后返回所属项目的直接与继承权限；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
 
 ## 安全不变量
 
@@ -92,7 +94,7 @@ Private 和 Shared 是选中 Workspace 内的项目分类。分区权限总览�
 
 ## 当前传输边界
 
-- 当前项目创建、文档创建、文档更新和交互式权限总览使用 Server Action。
+- 当前项目创建、资源重命名和删除、文档创建与更新、交互式权限总览使用 Server Action。
 - 当前没有 Route Handler、公开 API、Webhook、文件传输或实时连接实现。
 - `src/proxy.ts` 的 matcher 排除了 `/api`；这只描述当前 matcher 范围，不代表仓库已经存在 API 鉴权方案。
 
@@ -110,14 +112,19 @@ Private 和 Shared 是选中 Workspace 内的项目分类。分区权限总览�
 - `src/features/projects/components/CreateProjectDialog.tsx`：客户端表单。
 - `src/features/projects/server/CreateProject.ts`：创建项目 Server Action。
 - `src/features/projects/server/GetPermissionOverview.ts`：按需授权并读取权限总览。
+- `src/features/permissions/`：能力矩阵与服务端资源授权。
 - `src/components/layout/AppShell.tsx`：客户端工作区外壳。
 - `src/features/documents/components/ProjectDocumentsPage.tsx`：项目文档服务端页面组合。
 - `src/features/documents/server/GetProjectDocuments.ts`：文档 server-only 查询。
 - `src/features/documents/server/CreateDocument.ts`：文档创建 Server Action。
 - `src/features/documents/server/UpdateDocument.ts`：文档更新 Server Action。
+- `src/features/documents/server/DeleteDocument.ts`：文档删除 Server Action。
+- `src/features/projects/server/UpdateProject.ts` 和 `DeleteProject.ts`：项目管理 Server Action。
+- `src/features/workspaces/server/UpdateWorkspace.ts` 和 `DeleteWorkspace.ts`：Workspace 管理 Server Action。
 
 ## 相关决策
 
 - [ADR 0001：工作区初始数据使用 Server Component](../adr/0001-use-server-components-for-workspace-data.md)
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
+- [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)

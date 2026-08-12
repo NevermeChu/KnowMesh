@@ -13,7 +13,7 @@
 
 两类项目使用同一张 `projects` 表、同一套创建逻辑和同一套成员查询。`kind` 当前用于创建输入、数据库分类、侧边栏分组和分区权限总览；Private/Shared 是选中 Workspace 内的项目分类，不是额外的实体或导航层。
 
-第一阶段只建立 Workspace 的数据归属和切换边界。`workspace_members` 当前只决定用户可以看到和切换哪些 Workspace，不向下继承项目权限；项目及文档授权仍由 `project_members` 独立决定。成员邀请、角色升降级、退出、删除、转让和 Workspace 到项目的权限继承属于第二阶段，当前尚未实现。
+Workspace 成员角色决定 Workspace 操作，并向 `collaboration` 项目继承能力；`personal` 项目只使用 `project_members` 和项目所有权，不继承 Workspace 内容权限。文件完全继承所属项目能力，没有独立 ACL。Workspace 邮箱邀请、成员角色修改和移除，以及 Project 直接成员管理已经实现；退出、所有权转让和文件独立成员管理尚未实现。
 
 ## 成员与所有权不变量
 
@@ -22,10 +22,10 @@
 - 每个项目必须有一个 `projects.owner_id`。
 - 每个项目必须通过 `projects.workspace_id` 属于一个 Workspace。
 - owner 必须同时存在于 `project_members`，角色为 `owner`。
-- 当前唯一的成员写入路径只为新项目创建一个 owner 成员，不区分个人或协作项目。
-- Schema 定义了 `editor` 和 `viewer` 枚举值，但当前没有代码写入这两个角色，也没有基于角色的授权逻辑。
-- 可访问项目列表通过 `project_members.user_id` 查询，不使用“个人查 owner、协作查成员”的分支逻辑。
-- 项目查询还必须限定当前选中的 `workspace_id`；仅有 Workspace 成员关系不会自动获得项目访问权。
+- 新项目创建事务写入 owner 成员；具有 `project.members.manage` 的用户还可从所属 Workspace 成员中添加 `editor` 或 `viewer`。
+- Schema 定义 `owner`、`editor`、`viewer`；当前创建流程只写入 owner，权限策略已经执行全部三个角色的能力。
+- Personal 项目必须具有直接项目权限；Collaboration 项目同时合并项目直接权限与 Workspace 继承权限。
+- 项目查询必须限定当前选中的 `workspace_id`，并验证 Workspace 成员关系；Workspace 权限只向 Collaboration 项目继承。
 - `(project_id, user_id)` 必须唯一。
 - 删除项目必须级联删除成员关系。
 
@@ -39,7 +39,7 @@
 | 删除项目级联删除成员 | 数据库外键 | 删除流程不得绕过数据库约束 |
 | owner 同时是 `owner` 成员 | `createProject` 事务和成员迁移回填 | 数据库没有跨表约束，无法阻止其他直接数据库写入造成不一致 |
 | 新项目当前只有 owner 成员 | `createProject` 是唯一成员写入路径 | 这是当前写入结果，不是数据库约束；Schema 允许 `editor`、`viewer` |
-| 仅返回当前用户可访问的项目 | `getProjects` 成员连接查询 | 新增项目读取入口必须复用或等价实现成员过滤 |
+| 仅返回当前用户可访问的项目 | `getProjects` 与权限策略 | 新增项目读取入口必须复用统一授权语义 |
 
 ## 创建流程
 
@@ -49,7 +49,7 @@
 
 1. 使用 Clerk 获取当前 `userId`。
 2. 使用 `createProjectSchema` 校验 Workspace、名称和类型。
-3. 验证当前用户是目标 Workspace 的成员，防止客户端把项目写入不可访问的 Workspace。
+3. 验证当前用户具有目标 Workspace 的 `project.create` 能力；viewer 不得创建项目。
 4. 在同一事务中写入 `projects`。
 5. 在同一事务中写入 owner 的 `project_members` 记录。
 6. 返回界面需要的项目字段，不返回不必要的身份字段。
@@ -58,14 +58,14 @@
 
 ## 查询流程
 
-`getProjects` 只在服务端使用，并通过成员表限制当前用户：
+`getProjects` 只在服务端使用，先限定当前 Workspace 成员，再通过权限策略过滤：
 
 ```text
 projects
-INNER JOIN project_members
-  ON project_members.project_id = projects.id
-WHERE project_members.user_id = 当前 Clerk 用户
-  AND projects.workspace_id = 当前选中的 Workspace
+INNER JOIN workspace_members 当前 Workspace 成员
+LEFT JOIN project_members 当前项目直接成员
+→ Personal 只接受直接权限
+→ Collaboration 合并 Workspace 与项目直接权限
 ```
 
 可选的 `kind` 过滤只负责个人/协作分类。结果按创建时间倒序返回。
@@ -82,25 +82,28 @@ WHERE project_members.user_id = 当前 Clerk 用户
 - 当前没有额外的 TanStack Query 或全局项目缓存。
 - 当前项目链接把 ID 写入个人或协作页面的 `project` 查询参数。页面会按成员关系读取项目文档；`document` 查询参数进一步选择当前文档。
 
-## 角色与权限现状
+## 角色与能力
 
-- `owner`、`editor`、`viewer` 目前只是 Schema 和 TypeScript 中的允许值。
-- 当前代码只写入 `owner`；没有成员邀请、角色变更或所有权转移写入入口。
-- `getProjects` 只验证当前用户存在成员记录，不检查成员角色。
-- 当前代码没有定义或执行 owner、editor、viewer 的权限矩阵。
-- 文档功能已执行最小角色权限：所有成员可读，只有 `owner` 和 `editor` 可创建及编辑。项目管理仍没有完整权限矩阵。
+- Workspace owner 可查看、修改、删除 Workspace 并创建项目；editor 可查看和创建项目；viewer 只读。
+- Project owner 可查看、修改、删除项目并管理文件；editor 可修改项目并管理文件；viewer 只读。
+- Workspace 角色只向 Collaboration 项目继承。Workspace owner 的继承管理能力不改变 `projects.owner_id`。
+- 文件读取、创建、修改和删除完全继承项目能力。
+- 权限映射与继承由 `src/features/permissions/PermissionPolicy.ts` 执行；服务端授权查询返回能力和授权来源。
 
 ## 权限总览
 
-设置菜单中的“工作区管理”以及右键菜单中的“管理项目”“管理文件”当前都是只读权限总览，不提供成员或角色修改：
+设置菜单中的“工作区管理”以及右键菜单中的“管理项目”“管理文件”提供资源基本信息、删除操作和成员权限总览：
 
 - 工作区管理：服务端先验证当前用户是工作区成员，再返回该工作区的全部 `workspace_members`；它不代表项目权限继承。
-- 管理项目：服务端先验证当前用户是项目成员，再返回该项目的全部 `project_members`。
-- 管理文件：服务端先验证文件访问权，再显示所属项目的全部成员，并明确文件没有独立 ACL。
+- Workspace owner 可通过 Resend 按邮箱发送本地 Workspace 邀请并指定 `editor` 或 `viewer`。接受邀请时必须登录 Clerk，并使用与邀请邮箱匹配的已验证邮箱。
+- Workspace owner 可修改普通成员角色或移除成员；owner 不可修改或移除。成员仍拥有 Personal 项目时拒绝移除，成功移除会同时清理其项目直接成员关系。
+- Project owner 可从所属 Workspace 的现有成员中添加、修改或移除直接成员；项目 owner 不可修改或移除。
+- 管理项目：服务端验证 `project.read`，返回项目直接权限；Collaboration 项目同时显示 Workspace 继承权限。
+- 管理文件：服务端验证 `document.read`，显示所属项目的直接与继承权限，并明确文件没有独立 ACL。
 - 成员身份由服务端通过 Clerk 用户目录解析为姓名和主邮箱；无法解析时回退到 Clerk `userId`。
 - 返回结果标记当前登录用户，客户端在权限列表中高亮“你”。
 
-项目权限弹窗以项目名称作为可点击标题；文件权限弹窗以“项目名称 \ 文件名称”作为可点击路径。点击项目名称可从文件权限切换到所属项目权限，点击当前已经打开的项目或文件不会重复调用权限查询。项目和文件弹窗底部显示“申请权限”和对应的“退出项目”或“退出文件”操作入口，退出操作会先显示二次确认窗口，但当前尚未接入对应请求。工作区总览显示当前工作区名称和工作区成员，项目和文件总览不再在成员列表前重复显示项目名称。
+项目权限弹窗以项目名称作为可点击标题；文件权限弹窗以“项目名称 \ 文件名称”作为可点击路径。有更新能力时弹窗允许修改名称；有删除能力时显示删除操作并二次确认。删除 Workspace 或项目会提示其数据库级联影响。工作区总览显示当前工作区名称和工作区成员，项目和文件总览区分项目直接权限与 Workspace 继承权限。
 
 权限总览入口不替代服务端资源授权。客户端传入的工作区 ID、项目 ID 或文件 ID 都只用于定位候选资源。
 
@@ -110,6 +113,8 @@ WHERE project_members.user_id = 当前 Clerk 用户
 - `src/features/projects/CreateProjectSchema.ts`
 - `src/features/projects/components/CreateProjectDialog.tsx`
 - `src/features/projects/server/CreateProject.ts`
+- `src/features/projects/server/UpdateProject.ts`
+- `src/features/projects/server/DeleteProject.ts`
 - `src/features/projects/server/CreateProject.test.ts`
 - `src/features/projects/server/GetProjects.ts`
 - `src/features/projects/server/GetProjects.test.ts`
@@ -129,6 +134,9 @@ WHERE project_members.user_id = 当前 Clerk 用户
 - `src/features/workspaces/server/GetWorkspaceContext.ts`
 - `src/features/workspaces/server/CreateWorkspace.ts`
 - `src/features/workspaces/server/SelectWorkspace.ts`
+- `src/features/workspaces/server/UpdateWorkspace.ts`
+- `src/features/workspaces/server/DeleteWorkspace.ts`
+- `src/features/permissions/`
 
 ## 相关文档
 
@@ -136,3 +144,4 @@ WHERE project_members.user_id = 当前 Clerk 用户
 - [数据库与迁移](../database/schema-and-migrations.md)
 - [文档业务](documents.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
+- [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)

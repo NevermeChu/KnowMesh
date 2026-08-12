@@ -16,11 +16,12 @@
 
 | 操作 | 允许角色 | 执行位置 |
 | --- | --- | --- |
-| 列出和读取文档 | `owner`、`editor`、`viewer` | `getProjectDocuments` 和 `getProjectAccess` |
+| 列出和读取文档 | `owner`、`editor`、`viewer` | `getProjectDocuments` 和 `getProjectAuthorization` |
 | 创建文档 | `owner`、`editor` | `createDocument` Server Action |
 | 修改标题或内容 | `owner`、`editor` | `updateDocument` Server Action |
+| 删除文档 | `owner`、`editor` | `deleteDocument` Server Action |
 
-客户端传入的 `workspaceId`、`projectId`、`documentId` 和角色都不能作为授权依据。Server Action 必须从 Clerk 会话取得 `userId`，再通过 `project_members` 验证资源级权限。第一阶段的 `workspace_members` 只控制 Workspace 可见性和切换资格，不会替代或向下继承项目权限。
+客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须从 Clerk 会话取得 `userId`，再由统一权限模块解析资源及其项目。Personal 项目只使用项目直接权限；Collaboration 项目合并 Workspace 继承权限与项目直接权限。
 
 ## 读取和编辑流程
 
@@ -30,7 +31,7 @@
 
 应用根布局通过客户端事件边界禁用浏览器默认右键菜单。工作区、项目、文件和可编辑正文等明确注册了自定义菜单的区域显示对应菜单；其他区域右键不显示任何菜单。只读正文不会显示格式菜单。
 
-项目节点本身可以折叠，展开后才显示其文档。项目节点的加号和右键菜单中的“新建文件”共用同一创建弹窗；用户输入文件名并提交后，应用创建文档、展开所属项目并导航到新文件。创建文件、链接编辑和权限总览使用共享 `ModalDialog`，其遮罩与 Escape 关闭行为由调用方显式开启；创建请求进行中会临时禁用关闭。右键文件节点还可以查看文件权限；文件权限完全继承项目成员关系，当前没有文档级 ACL。
+项目节点本身可以折叠，展开后才显示其文档。项目节点的加号和右键菜单中的“新建文件”共用同一创建弹窗；只有具有 `document.create` 能力时入口才可用。右键文件节点可以查看权限、修改名称和删除文件；服务端仍会独立验证对应能力。文件权限完全继承项目，当前没有文档级 ACL。
 
 编辑器使用 Tiptap，初始内容来自 ProseMirror JSON。标题失焦时保存；正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，避免较早的请求覆盖较新的本地内容。
 
@@ -61,14 +62,18 @@
 - `src/components/ui/ContextMenu.tsx`
 - `src/components/ui/ModalDialog.tsx`
 - `src/components/ui/PopupMenu.tsx`
-- `src/features/documents/server/DocumentAccess.ts`
+- `src/features/permissions/server/ProjectAuthorization.ts`
+- `src/features/permissions/server/DocumentAuthorization.ts`
 - `src/features/documents/server/GetProjectDocuments.ts`
 - `src/features/documents/server/GetDocumentNavigation.ts`
 - `src/features/documents/server/CreateDocument.ts`
 - `src/features/documents/server/UpdateDocument.ts`
+- `src/features/documents/server/DeleteDocument.ts`
+- `src/features/permissions/`
 - `src/models/Schema.ts`
 
 ## 相关决策
 
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
+- [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)

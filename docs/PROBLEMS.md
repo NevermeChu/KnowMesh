@@ -81,4 +81,53 @@
 
 - 第一阶段新增 `workspaces`、`workspace_members` 和 `projects.workspace_id`，左上角切换真实 Workspace；`projects.kind` 暂时继续表示 Workspace 内的 Private/Shared 项目区域。
 - 第一阶段的 Workspace 成员关系只控制可见和可切换范围，项目与文件仍由现有 `project_members` 授权，避免把未完成的权限继承描述为已实现。
-- 第二阶段再实现 Workspace 角色继承、邀请、退出、角色管理和所有权转让，并统一有效权限计算。
+- 后续通过统一能力授权完成 Workspace 到 Collaboration 项目的角色继承；邀请、退出、角色管理和所有权转让继续保持为独立后续范围。
+
+## 6. 成员角色存在但资源权限没有统一执行
+
+### 问题
+
+Schema 已定义 `owner`、`editor`、`viewer`，但不同读取和写入入口各自查询成员或比较角色。创建项目只检查是否为 Workspace 成员，导致 viewer 也能创建项目；Workspace、项目和文件的修改与删除也没有一致的能力边界。
+
+### 根因
+
+Workspace 资源归属与权限继承分阶段上线后，第二阶段缺少统一的授权模型。角色既被用于所有权展示，又被直接当作操作权限，无法表达 Workspace owner 继承协作项目管理能力但不是 Project owner。
+
+### 解决方法
+
+- 新增 `src/features/permissions/`，把角色映射为 Workspace、项目和文件能力，并集中查询授权来源。
+- Personal 项目只使用直接项目权限，Collaboration 项目合并 Workspace 继承权限；文件完全继承项目能力。
+- 所有资源读取、创建、更新和删除在服务端重新计算能力，客户端能力只控制界面呈现。
+- 为角色矩阵、继承边界、资源写入和跨 Workspace 查询补充单元测试。
+
+## 7. 默认工作区初始化与可删除语义冲突
+
+### 问题
+
+新用户需要自动获得默认 Workspace，但允许用户删除最后一个 Workspace；如果每次查询发现为空就创建，会让用户删除的 Workspace 立即复活。
+
+### 根因
+
+“从未初始化”和“主动删除后为空”都表现为没有成员关系，仅查询 Workspace 数量无法区分两种状态。
+
+### 解决方法
+
+- 使用 `user_onboarding` 持久化一次性初始化标记，并在同一事务中创建默认 Workspace 与 owner 成员。
+- 初始化标记发生冲突时不再创建默认 Workspace，即使用户当前没有任何 Workspace。
+- 删除 Workspace 只级联业务资源，不删除初始化标记，从而允许稳定的零 Workspace 状态。
+
+## 8. 应用邀请与工作区邀请存在双重状态
+
+### 问题
+
+使用 Clerk Application Invitations 发送 Workspace 邀请时，Clerk 管理的是加入整个应用，本地数据库管理的是加入具体 Workspace；两套邀请在撤销、过期和接受状态上可能不一致。
+
+### 根因
+
+身份提供方的应用级邀请语义与 KnowMesh 的 Workspace 资源边界不同，邮件投递和成员授权被错误地绑定到同一个外部邀请对象。
+
+### 解决方法
+
+- Clerk 仅负责注册、登录和已验证邮箱身份，Workspace 邀请状态完全由 `workspace_invitations` 管理。
+- Resend 只发送包含本地一次性令牌的事务邮件，不参与授权判断。
+- 邮件发送失败时删除刚创建的本地邀请，避免显示无法使用的待接受邀请。
