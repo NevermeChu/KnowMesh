@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 const protectedRoutePrefixes = [
   '/collaboration',
   '/dashboard',
+  '/invitations',
   '/personal',
   '/search',
   '/settings',

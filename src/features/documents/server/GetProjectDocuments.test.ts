@@ -21,13 +21,15 @@ const state = vi.hoisted(() => {
     },
   ];
   const protect = vi.fn<() => Promise<{ userId: string }>>();
-  const getProjectAccess = vi.fn<
+  const getProjectAuthorization = vi.fn<
     (options: { projectId: string; userId: string }) => Promise<{
-      id: string;
-      kind: 'collaboration' | 'personal';
-      name: string;
-      role: 'editor' | 'owner' | 'viewer';
-      workspaceId: string;
+      decision: { grants: never[]; isResourceOwner: boolean; permissions: string[] };
+      project: {
+        id: string;
+        kind: 'collaboration' | 'personal';
+        name: string;
+        workspaceId: string;
+      };
     } | null>
   >();
   const listOrderBy = vi.fn<(order: unknown) => Promise<typeof documents>>(async () => {
@@ -54,7 +56,7 @@ const state = vi.hoisted(() => {
   return {
     documentId,
     documents,
-    getProjectAccess,
+    getProjectAuthorization,
     projectId,
     protect,
     resetSelectCount: () => {
@@ -80,8 +82,8 @@ vi.mock('@/libs/DB', () => ({
 }));
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The mock isolates the membership query from document selection.
-vi.mock('./DocumentAccess', () => ({
-  getProjectAccess: state.getProjectAccess,
+vi.mock('@/features/permissions/server/ProjectAuthorization', () => ({
+  getProjectAuthorization: state.getProjectAuthorization,
 }));
 
 describe('project document queries', () => {
@@ -89,12 +91,18 @@ describe('project document queries', () => {
     vi.clearAllMocks();
     state.resetSelectCount();
     state.protect.mockResolvedValue({ userId: 'user_1' });
-    state.getProjectAccess.mockResolvedValue({
-      id: state.projectId,
-      kind: 'personal',
-      name: '产品知识库',
-      role: 'owner',
-      workspaceId: state.workspaceId,
+    state.getProjectAuthorization.mockResolvedValue({
+      decision: {
+        grants: [],
+        isResourceOwner: true,
+        permissions: ['project.read', 'document.read'],
+      },
+      project: {
+        id: state.projectId,
+        kind: 'personal',
+        name: '产品知识库',
+        workspaceId: state.workspaceId,
+      },
     });
   });
 
@@ -108,11 +116,9 @@ describe('project document queries', () => {
       }),
     ).resolves.toStrictEqual({
       access: {
-        id: state.projectId,
-        kind: 'personal',
-        name: '产品知识库',
-        role: 'owner',
-        workspaceId: state.workspaceId,
+        grants: [],
+        isResourceOwner: true,
+        permissions: ['project.read', 'document.read'],
       },
       documents: state.documents,
       selectedDocument: {
@@ -123,7 +129,7 @@ describe('project document queries', () => {
   });
 
   it('rejects inaccessible project before document query', async () => {
-    state.getProjectAccess.mockResolvedValueOnce(null);
+    state.getProjectAuthorization.mockResolvedValueOnce(null);
 
     await expect(
       getProjectDocuments({
@@ -136,12 +142,14 @@ describe('project document queries', () => {
   });
 
   it('rejects project from another workspace kind', async () => {
-    state.getProjectAccess.mockResolvedValueOnce({
-      id: state.projectId,
-      kind: 'collaboration',
-      name: '产品知识库',
-      role: 'owner',
-      workspaceId: state.workspaceId,
+    state.getProjectAuthorization.mockResolvedValueOnce({
+      decision: { grants: [], isResourceOwner: true, permissions: ['project.read'] },
+      project: {
+        id: state.projectId,
+        kind: 'collaboration',
+        name: '产品知识库',
+        workspaceId: state.workspaceId,
+      },
     });
 
     await expect(
@@ -155,12 +163,14 @@ describe('project document queries', () => {
   });
 
   it('rejects project from another workspace', async () => {
-    state.getProjectAccess.mockResolvedValueOnce({
-      id: state.projectId,
-      kind: 'personal',
-      name: '产品知识库',
-      role: 'owner',
-      workspaceId: '01987654-3210-7000-8000-000000000011',
+    state.getProjectAuthorization.mockResolvedValueOnce({
+      decision: { grants: [], isResourceOwner: true, permissions: ['project.read'] },
+      project: {
+        id: state.projectId,
+        kind: 'personal',
+        name: '产品知识库',
+        workspaceId: '01987654-3210-7000-8000-000000000011',
+      },
     });
 
     await expect(

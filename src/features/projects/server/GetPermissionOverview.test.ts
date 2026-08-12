@@ -4,6 +4,7 @@ import { getPermissionOverview } from './GetPermissionOverview';
 const state = vi.hoisted(() => {
   const projectId = '01987654-3210-7000-8000-000000000001';
   const documentId = '01987654-3210-7000-8000-000000000002';
+  const workspaceId = '01987654-3210-7000-8000-000000000010';
   const protect = vi.fn<() => Promise<{ userId: string }>>();
   const getUserList = vi.fn<
     (options: unknown) => Promise<{
@@ -19,87 +20,90 @@ const state = vi.hoisted(() => {
     }>
   >();
   const clerkClient = vi.fn<() => Promise<{ users: { getUserList: typeof getUserList } }>>();
-  const getProjectAccess = vi.fn<
-    (options: unknown) => Promise<{
-      id: string;
-      kind: 'personal' | 'collaboration';
-      name: string;
-      role: 'owner' | 'editor' | 'viewer';
-    } | null>
+  const decision = {
+    grants: [],
+    isResourceOwner: false,
+    permissions: ['project.read', 'project.update', 'document.read', 'document.update'],
+  };
+  const project = {
+    id: projectId,
+    kind: 'personal' as const,
+    name: '产品知识库',
+    workspaceId,
+  };
+  const authorizeWorkspace = vi.fn<
+    () => Promise<{
+      decision: { permissions: string[] };
+      workspace: { id: string; name: string };
+    }>
   >();
-  const getDocumentAccess = vi.fn<
-    (options: unknown) => Promise<{
-      projectId: string;
-      role: 'owner' | 'editor' | 'viewer';
-    } | null>
+  const authorizeProject =
+    vi.fn<() => Promise<{ decision: typeof decision; project: typeof project }>>();
+  const authorizeDocument = vi.fn<
+    () => Promise<{
+      decision: typeof decision;
+      document: { id: string; projectId: string; title: string };
+      project: typeof project;
+    }>
   >();
   const memberships = [
     { projectId, role: 'owner' as const, userId: 'user_owner' },
     { projectId, role: 'editor' as const, userId: 'user_1' },
     { projectId, role: 'viewer' as const, userId: 'user_viewer' },
   ];
-  const resource = {
-    documentTitle: '产品方案',
-    id: projectId,
-    name: '产品团队',
-    projectId,
-    projectName: '产品知识库',
-  };
-  const orderBy = vi.fn<(order: unknown) => Promise<typeof memberships>>(async () => {
-    await Promise.resolve();
-    return memberships;
-  });
-  const limit = vi.fn<(count: number) => Promise<(typeof resource)[]>>(async () => {
-    await Promise.resolve();
-    return [resource];
-  });
-  const where = vi.fn<(condition: unknown) => { limit: typeof limit; orderBy: typeof orderBy }>(
-    () => ({ limit, orderBy }),
-  );
-  const innerJoin = vi.fn<(table: unknown, condition: unknown) => { where: typeof where }>(() => ({
-    where,
-  }));
-  const from = vi.fn<(table: unknown) => { innerJoin: typeof innerJoin; where: typeof where }>(
-    () => ({ innerJoin, where }),
-  );
+  const orderBy = vi.fn<(order: unknown) => Promise<typeof memberships>>();
+  const where = vi.fn<(condition: unknown) => { orderBy: typeof orderBy }>(() => ({ orderBy }));
+  const from = vi.fn<(table: unknown) => { where: typeof where }>(() => ({ where }));
   const select = vi.fn<(selection: unknown) => { from: typeof from }>(() => ({ from }));
 
   return {
+    authorizeDocument,
+    authorizeProject,
+    authorizeWorkspace,
     clerkClient,
+    decision,
     documentId,
-    getDocumentAccess,
-    getProjectAccess,
     getUserList,
-    limit,
     memberships,
-    protect,
+    orderBy,
+    project,
     projectId,
+    protect,
     select,
+    workspaceId,
   };
 });
 
-// oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock intentionally omits Clerk's unrelated exports.
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial Clerk mock isolates identity lookup.
 vi.mock('@clerk/nextjs/server', () => ({
   auth: { protect: state.protect },
   clerkClient: state.clerkClient,
 }));
 
-// oxlint-disable-next-line vitest/prefer-import-in-mock -- Access helpers are isolated to test permission overview composition.
-vi.mock('@/features/documents/server/DocumentAccess', () => ({
-  getDocumentAccess: state.getDocumentAccess,
-  getProjectAccess: state.getProjectAccess,
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Authorization is tested independently from overview composition.
+vi.mock('@/features/permissions/server/WorkspaceAuthorization', () => ({
+  authorizeWorkspace: state.authorizeWorkspace,
 }));
 
-// oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates the database boundary.
-vi.mock('@/libs/DB', () => ({
-  db: { select: state.select },
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Authorization is tested independently from overview composition.
+vi.mock('@/features/permissions/server/ProjectAuthorization', () => ({
+  authorizeProject: state.authorizeProject,
 }));
+
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Authorization is tested independently from overview composition.
+vi.mock('@/features/permissions/server/DocumentAuthorization', () => ({
+  authorizeDocument: state.authorizeDocument,
+}));
+
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial database mock isolates membership lookup.
+vi.mock('@/libs/DB', () => ({ db: { select: state.select } }));
 
 describe('permission overview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.protect.mockResolvedValue({ userId: 'user_1' });
     state.clerkClient.mockResolvedValue({ users: { getUserList: state.getUserList } });
+    state.orderBy.mockResolvedValue(state.memberships);
     state.getUserList.mockResolvedValue({
       data: [
         {
@@ -131,79 +135,71 @@ describe('permission overview', () => {
         },
       ],
     });
-    state.getProjectAccess.mockResolvedValue({
-      id: state.projectId,
-      kind: 'personal',
-      name: '产品知识库',
-      role: 'editor',
+    state.authorizeWorkspace.mockResolvedValue({
+      decision: { permissions: ['workspace.read', 'workspace.update'] },
+      workspace: { id: state.workspaceId, name: '产品团队' },
     });
-    state.getDocumentAccess.mockResolvedValue({ projectId: state.projectId, role: 'editor' });
+    state.authorizeProject.mockResolvedValue({ decision: state.decision, project: state.project });
+    state.authorizeDocument.mockResolvedValue({
+      decision: state.decision,
+      document: { id: state.documentId, projectId: state.projectId, title: '产品方案' },
+      project: state.project,
+    });
   });
 
-  it('returns workspace members after membership authorization', async () => {
+  it('returns workspace members after authorization', async () => {
     const overview = await getPermissionOverview({
       scope: 'workspace',
-      workspaceId: state.projectId,
+      workspaceId: state.workspaceId,
     });
 
-    expect(overview).toMatchObject({ scope: 'workspace', title: '工作区权限' });
-    expect(overview.groups).toHaveLength(1);
+    expect(overview).toMatchObject({
+      permissions: ['workspace.read', 'workspace.update'],
+      scope: 'workspace',
+      title: '工作区权限',
+    });
     expect(overview.groups[0]?.members.map((member) => member.role)).toStrictEqual([
       'owner',
       'editor',
       'viewer',
     ]);
-    expect(overview.groups[0]?.members[1]).toMatchObject({
-      displayName: '当前 用户',
-      isCurrentUser: true,
-    });
   });
 
-  it('returns project members after resource authorization', async () => {
+  it('returns direct project members and capabilities', async () => {
     const overview = await getPermissionOverview({ projectId: state.projectId, scope: 'project' });
 
-    expect(state.getProjectAccess).toHaveBeenCalledWith({
+    expect(state.authorizeProject).toHaveBeenCalledWith({
+      permission: 'project.read',
       projectId: state.projectId,
       userId: 'user_1',
     });
     expect(overview).toMatchObject({
+      permissions: state.decision.permissions,
       project: { id: state.projectId, name: '产品知识库' },
       scope: 'project',
     });
-    expect(overview.groups[0]?.members).toHaveLength(3);
   });
 
-  it('rejects inaccessible workspaces', async () => {
-    state.limit.mockResolvedValueOnce([]);
-
-    await expect(
-      getPermissionOverview({ scope: 'workspace', workspaceId: state.projectId }),
-    ).rejects.toThrow('没有权限查看该工作区');
-  });
-
-  it('describes inherited document permissions', async () => {
+  it('returns inherited document capabilities', async () => {
     const overview = await getPermissionOverview({
       documentId: state.documentId,
       scope: 'document',
     });
 
-    expect(state.getDocumentAccess).toHaveBeenCalledWith({
-      documentId: state.documentId,
-      userId: 'user_1',
-    });
     expect(overview).toMatchObject({
       document: { id: state.documentId, title: '产品方案' },
+      permissions: state.decision.permissions,
       project: { id: state.projectId, name: '产品知识库' },
       scope: 'document',
     });
   });
 
-  it('rejects inaccessible projects', async () => {
-    state.getProjectAccess.mockResolvedValueOnce(null);
+  it('rejects inaccessible projects before member lookup', async () => {
+    state.authorizeProject.mockRejectedValueOnce(new Error('没有权限执行该操作'));
 
     await expect(
       getPermissionOverview({ projectId: state.projectId, scope: 'project' }),
-    ).rejects.toThrow('没有权限查看该项目');
+    ).rejects.toThrow('没有权限执行该操作');
     expect(state.select).not.toHaveBeenCalled();
   });
 });

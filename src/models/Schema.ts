@@ -8,6 +8,7 @@ import {
   timestamp,
   uuid,
   varchar,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import {
   DOCUMENT_CONTENT_SCHEMA_VERSION,
@@ -56,6 +57,34 @@ export const workspaceMembersSchema = pgTable(
   (table) => [
     primaryKey({ columns: [table.workspaceId, table.userId] }),
     index('workspace_members_user_workspace_idx').on(table.userId, table.workspaceId),
+  ],
+);
+
+export const userOnboardingSchema = pgTable('user_onboarding', {
+  userId: varchar('user_id', { length: 255 }).primaryKey(),
+  initializedAt: timestamp('initialized_at', { mode: 'date' }).defaultNow().notNull(),
+});
+
+export const workspaceInvitationsSchema = pgTable(
+  'workspace_invitations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
+    email: varchar('email', { length: 320 }).notNull(),
+    role: projectMemberRoleEnum('role').notNull(),
+    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+    invitedById: varchar('invited_by_id', { length: 255 }).notNull(),
+    acceptedById: varchar('accepted_by_id', { length: 255 }),
+    acceptedAt: timestamp('accepted_at', { mode: 'date' }),
+    revokedAt: timestamp('revoked_at', { mode: 'date' }),
+    expiresAt: timestamp('expires_at', { mode: 'date' }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('workspace_invitations_token_hash_idx').on(table.tokenHash),
+    index('workspace_invitations_workspace_email_idx').on(table.workspaceId, table.email),
   ],
 );
 

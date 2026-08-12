@@ -1,30 +1,21 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
-import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import { db } from '@/libs/DB';
-import { projectMembersSchema, projectsSchema, workspaceMembersSchema } from '@/models/Schema';
+import { projectMembersSchema, projectsSchema } from '@/models/Schema';
 import { createProjectSchema } from '../CreateProjectSchema';
 import type { CreateProjectInput } from '../CreateProjectSchema';
 
 export async function createProject(input: CreateProjectInput) {
   const { userId } = await auth.protect();
   const projectInput = createProjectSchema.parse(input);
-  const [workspaceMembership] = await db
-    .select({ workspaceId: workspaceMembersSchema.workspaceId })
-    .from(workspaceMembersSchema)
-    .where(
-      and(
-        eq(workspaceMembersSchema.workspaceId, projectInput.workspaceId),
-        eq(workspaceMembersSchema.userId, userId),
-      ),
-    )
-    .limit(1);
-
-  if (!workspaceMembership) {
-    throw new Error('没有权限在该工作区创建项目');
-  }
+  const authorization = await authorizeWorkspace({
+    permission: 'project.create',
+    userId,
+    workspaceId: projectInput.workspaceId,
+  });
 
   const project = await db.transaction(async (transaction) => {
     const [createdProject] = await transaction
@@ -33,7 +24,7 @@ export async function createProject(input: CreateProjectInput) {
         kind: projectInput.kind,
         name: projectInput.name,
         ownerId: userId,
-        workspaceId: workspaceMembership.workspaceId,
+        workspaceId: authorization.workspace.id,
       })
       .returning({
         createdAt: projectsSchema.createdAt,

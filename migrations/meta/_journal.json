@@ -29,6 +29,13 @@
       "when": 1786351174646,
       "tag": "0003_add-workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786503176634,
+      "tag": "0004_tricky_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

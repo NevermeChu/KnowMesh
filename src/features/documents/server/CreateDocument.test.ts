@@ -9,13 +9,16 @@ const state = vi.hoisted(() => {
   };
   const protect = vi.fn<() => Promise<{ userId: string }>>();
   const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
-  const getProjectAccess =
-    vi.fn<(options: { projectId: string; userId: string }) => Promise<{ role: string } | null>>();
+  const authorizeProject = vi.fn<
+    (options: { permission: string; projectId: string; userId: string }) => Promise<{
+      project: { id: string };
+    }>
+  >();
   const returning = vi.fn<() => Promise<(typeof document)[]>>();
   const values = vi.fn<(values: unknown) => { returning: typeof returning }>(() => ({ returning }));
   const insert = vi.fn<(table: unknown) => { values: typeof values }>(() => ({ values }));
 
-  return { document, getProjectAccess, insert, protect, revalidatePath, returning, values };
+  return { authorizeProject, document, insert, protect, revalidatePath, returning, values };
 });
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock intentionally omits Clerk's unrelated exports.
@@ -34,15 +37,15 @@ vi.mock('next/cache', () => ({
 }));
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The mock isolates resource authorization from action persistence.
-vi.mock('./DocumentAccess', () => ({
-  getProjectAccess: state.getProjectAccess,
+vi.mock('@/features/permissions/server/ProjectAuthorization', () => ({
+  authorizeProject: state.authorizeProject,
 }));
 
 describe('document creation action', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.protect.mockResolvedValue({ userId: 'user_1' });
-    state.getProjectAccess.mockResolvedValue({ role: 'owner' });
+    state.authorizeProject.mockResolvedValue({ project: { id: state.document.projectId } });
     state.returning.mockResolvedValue([state.document]);
   });
 
@@ -51,7 +54,8 @@ describe('document creation action', () => {
       createDocument({ projectId: state.document.projectId, title: state.document.title }),
     ).resolves.toStrictEqual(state.document);
 
-    expect(state.getProjectAccess).toHaveBeenCalledWith({
+    expect(state.authorizeProject).toHaveBeenCalledWith({
+      permission: 'document.create',
       projectId: state.document.projectId,
       userId: 'user_1',
     });
@@ -64,21 +68,21 @@ describe('document creation action', () => {
   });
 
   it('rejects viewer creation', async () => {
-    state.getProjectAccess.mockResolvedValueOnce({ role: 'viewer' });
+    state.authorizeProject.mockRejectedValueOnce(new Error('没有权限执行该操作'));
 
     await expect(
       createDocument({ projectId: state.document.projectId, title: state.document.title }),
-    ).rejects.toThrow('没有权限在该项目中创建文档');
+    ).rejects.toThrow('没有权限执行该操作');
     expect(state.insert).not.toHaveBeenCalled();
     expect(state.revalidatePath).not.toHaveBeenCalled();
   });
 
   it('rejects inaccessible project', async () => {
-    state.getProjectAccess.mockResolvedValueOnce(null);
+    state.authorizeProject.mockRejectedValueOnce(new Error('没有权限执行该操作'));
 
     await expect(
       createDocument({ projectId: state.document.projectId, title: state.document.title }),
-    ).rejects.toThrow('没有权限在该项目中创建文档');
+    ).rejects.toThrow('没有权限执行该操作');
     expect(state.insert).not.toHaveBeenCalled();
     expect(state.revalidatePath).not.toHaveBeenCalled();
   });

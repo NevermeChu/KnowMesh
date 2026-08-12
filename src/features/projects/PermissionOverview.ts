@@ -1,3 +1,4 @@
+import type { Permission } from '@/features/permissions/Permission';
 import type { ProjectMemberRole } from './Project';
 
 export type PermissionOverviewInput =
@@ -43,19 +44,28 @@ export type PermissionGroup = {
 
 export type PermissionOverview =
   | {
+      canManageMembers: boolean;
       description: string;
       groups: PermissionGroup[];
+      permissions: Permission[];
       scope: 'workspace';
       title: string;
+      workspaceId: string;
     }
   | {
+      canManageMembers: boolean;
       groups: PermissionGroup[];
+      permissions: Permission[];
       project: { id: string; name: string };
       scope: 'project';
+      workspaceMembers: PermissionMember[];
     }
   | {
+      canManageMembers: boolean;
       document: { id: string; title: string };
       groups: PermissionGroup[];
+      permissions: Permission[];
       project: { id: string; name: string };
       scope: 'document';
+      workspaceMembers: PermissionMember[];
     };

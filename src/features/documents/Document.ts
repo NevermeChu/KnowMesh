@@ -1,5 +1,3 @@
-import type { ProjectMemberRole } from '@/features/projects/Project';
-
 export const DOCUMENT_CONTENT_SCHEMA_VERSION = 1;
 
 export type JsonValue = boolean | number | string | null | JsonValue[] | JsonObject;
@@ -39,8 +37,6 @@ export type DocumentNavigationItem = Pick<
   Document,
   'createdAt' | 'id' | 'projectId' | 'title' | 'updatedAt'
 >;
-
-export const canEditDocuments = (role: ProjectMemberRole) => role !== 'viewer';
 
 export const EMPTY_DOCUMENT_CONTENT: DocumentContent = {
   content: [{ type: 'paragraph' }],

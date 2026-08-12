@@ -1,9 +1,11 @@
 'use server';
 
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import * as z from 'zod';
-import { getDocumentAccess, getProjectAccess } from '@/features/documents/server/DocumentAccess';
+import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
+import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
+import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import type {
   PermissionGroup,
   PermissionMember,
@@ -12,13 +14,7 @@ import type {
 import type { ProjectMemberRole } from '@/features/projects/Project';
 import { projectMemberRoles } from '@/features/projects/Project';
 import { db } from '@/libs/DB';
-import {
-  documentsSchema,
-  projectMembersSchema,
-  projectsSchema,
-  workspaceMembersSchema,
-  workspacesSchema,
-} from '@/models/Schema';
+import { projectMembersSchema, workspaceMembersSchema } from '@/models/Schema';
 
 const permissionOverviewInputSchema = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('workspace'), workspaceId: z.uuid() }),
@@ -129,6 +125,56 @@ async function getPermissionGroups(options: {
   );
 }
 
+async function getWorkspacePermissionGroup(options: {
+  currentUserId: string;
+  groupId: string;
+  groupName: string;
+  workspaceId: string;
+}) {
+  const memberships = await db
+    .select({
+      role: workspaceMembersSchema.role,
+      userId: workspaceMembersSchema.userId,
+    })
+    .from(workspaceMembersSchema)
+    .where(eq(workspaceMembersSchema.workspaceId, options.workspaceId))
+    .orderBy(asc(workspaceMembersSchema.createdAt));
+  const profiles = await getClerkProfiles(memberships.map((membership) => membership.userId));
+
+  return {
+    id: options.groupId,
+    members: mapPermissionMembers({
+      currentUserId: options.currentUserId,
+      memberships,
+      profiles,
+    }),
+    name: options.groupName,
+  };
+}
+
+async function getProjectPermissionGroups(options: {
+  currentUserId: string;
+  project: { id: string; kind: 'collaboration' | 'personal'; name: string; workspaceId: string };
+}) {
+  const directGroups = await getPermissionGroups({
+    currentUserId: options.currentUserId,
+    projects: [{ id: options.project.id, name: '项目直接权限' }],
+  });
+
+  if (options.project.kind === 'personal') {
+    return directGroups;
+  }
+
+  const workspaceGroup = await getWorkspacePermissionGroup({
+    currentUserId: options.currentUserId,
+    groupId: `workspace-${options.project.workspaceId}`,
+    groupName: '工作区继承权限',
+    workspaceId: options.project.workspaceId,
+  });
+
+  return [...directGroups, workspaceGroup];
+}
+
 /**
  * Returns the authorized permission overview for a workspace, project, or document.
  *
@@ -141,92 +187,73 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
   const permissionInput = permissionOverviewInputSchema.parse(input);
 
   if (permissionInput.scope === 'workspace') {
-    const [workspace] = await db
-      .select({ id: workspacesSchema.id, name: workspacesSchema.name })
-      .from(workspacesSchema)
-      .innerJoin(
-        workspaceMembersSchema,
-        eq(workspaceMembersSchema.workspaceId, workspacesSchema.id),
-      )
-      .where(
-        and(
-          eq(workspacesSchema.id, permissionInput.workspaceId),
-          eq(workspaceMembersSchema.userId, userId),
-        ),
-      )
-      .limit(1);
-
-    if (!workspace) {
-      throw new Error('没有权限查看该工作区');
-    }
-
-    const memberships = await db
-      .select({
-        role: workspaceMembersSchema.role,
-        userId: workspaceMembersSchema.userId,
-      })
-      .from(workspaceMembersSchema)
-      .where(eq(workspaceMembersSchema.workspaceId, workspace.id))
-      .orderBy(asc(workspaceMembersSchema.createdAt));
-    const profiles = await getClerkProfiles(memberships.map((membership) => membership.userId));
+    const authorization = await authorizeWorkspace({
+      permission: 'workspace.read',
+      userId,
+      workspaceId: permissionInput.workspaceId,
+    });
+    const workspaceGroup = await getWorkspacePermissionGroup({
+      currentUserId: userId,
+      groupId: authorization.workspace.id,
+      groupName: authorization.workspace.name,
+      workspaceId: authorization.workspace.id,
+    });
 
     return {
+      canManageMembers: authorization.decision.permissions.includes('workspace.members.manage'),
       description:
-        '工作区成员决定用户是否可以查看和切换此工作区；项目与文件权限仍由各项目成员关系独立决定。',
-      groups: [
-        {
-          id: workspace.id,
-          members: mapPermissionMembers({ currentUserId: userId, memberships, profiles }),
-          name: workspace.name,
-        },
-      ],
+        '工作区角色决定工作区操作，并向协作项目及其文件继承；个人项目仍只使用项目直接权限。',
+      groups: [workspaceGroup],
+      permissions: authorization.decision.permissions,
       scope: 'workspace' as const,
       title: '工作区权限',
+      workspaceId: authorization.workspace.id,
     };
   }
 
   if (permissionInput.scope === 'project') {
-    const access = await getProjectAccess({ projectId: permissionInput.projectId, userId });
+    const authorization = await authorizeProject({
+      permission: 'project.read',
+      projectId: permissionInput.projectId,
+      userId,
+    });
 
-    if (!access) {
-      throw new Error('没有权限查看该项目');
-    }
+    const workspaceGroup = await getWorkspacePermissionGroup({
+      currentUserId: userId,
+      groupId: authorization.project.workspaceId,
+      groupName: '工作区成员',
+      workspaceId: authorization.project.workspaceId,
+    });
 
     return {
-      groups: await getPermissionGroups({ currentUserId: userId, projects: [access] }),
-      project: { id: access.id, name: access.name },
+      canManageMembers: authorization.decision.permissions.includes('project.members.manage'),
+      groups: await getProjectPermissionGroups({
+        currentUserId: userId,
+        project: authorization.project,
+      }),
+      permissions: authorization.decision.permissions,
+      project: { id: authorization.project.id, name: authorization.project.name },
       scope: 'project' as const,
+      workspaceMembers: workspaceGroup.members,
     };
   }
 
-  const access = await getDocumentAccess({ documentId: permissionInput.documentId, userId });
-
-  if (!access) {
-    throw new Error('没有权限查看该文件');
-  }
-
-  const [resource] = await db
-    .select({
-      documentTitle: documentsSchema.title,
-      projectId: projectsSchema.id,
-      projectName: projectsSchema.name,
-    })
-    .from(documentsSchema)
-    .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
-    .where(eq(documentsSchema.id, permissionInput.documentId))
-    .limit(1);
-
-  if (!resource) {
-    throw new Error('文件不存在');
-  }
+  const authorization = await authorizeDocument({
+    documentId: permissionInput.documentId,
+    permission: 'document.read',
+    userId,
+  });
 
   return {
-    document: { id: permissionInput.documentId, title: resource.documentTitle },
-    groups: await getPermissionGroups({
+    canManageMembers: false,
+    document: { id: authorization.document.id, title: authorization.document.title },
+    groups: await getProjectPermissionGroups({
       currentUserId: userId,
-      projects: [{ id: resource.projectId, name: resource.projectName }],
+      project: authorization.project,
     }),
-    project: { id: resource.projectId, name: resource.projectName },
+    permissions: authorization.decision.permissions,
+    project: { id: authorization.project.id, name: authorization.project.name },
     scope: 'document' as const,
+    workspaceMembers: [],
   };
 }

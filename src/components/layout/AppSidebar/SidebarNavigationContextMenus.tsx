@@ -3,7 +3,6 @@
 import { FilePlus, Settings } from 'lucide-react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
-import { canEditDocuments } from '@/features/documents/Document';
 import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
 import type { NavigationContextMenu, WorkspaceProject } from './SidebarWorkspaceNavigationTypes';
 
@@ -39,7 +38,7 @@ export function SidebarNavigationContextMenus(props: {
         },
       },
       {
-        disabled: !canEditDocuments(target.project.role),
+        disabled: !target.project.permissions.includes('document.create'),
         icon: <FilePlus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />,
         label: '新建文件',
         onSelect: () => {

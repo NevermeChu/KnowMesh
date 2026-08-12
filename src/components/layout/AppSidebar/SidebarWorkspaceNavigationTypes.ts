@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { Permission } from '@/features/permissions/Permission';
 import type { Project, ProjectKind } from '@/features/projects/Project';
 
 export type WorkspaceDocument = {
@@ -12,6 +13,7 @@ export type WorkspaceProject = {
   href: string;
   id: string;
   label: string;
+  permissions: Permission[];
   role: Project['role'];
 };
 
@@ -20,6 +22,7 @@ export type WorkspaceSection = {
   id: ProjectKind;
   icon: LucideIcon;
   label: string;
+  canCreateProject: boolean;
   projects: WorkspaceProject[];
 };
 

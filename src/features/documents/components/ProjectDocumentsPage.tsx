@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { AppSectionPlaceholder } from '@/components/layout/AppSectionPlaceholder';
 import type { ProjectKind } from '@/features/projects/Project';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
-import { canEditDocuments } from '../Document';
 import { createDocumentSchema } from '../DocumentSchema';
 import { getProjectDocuments } from '../server/GetProjectDocuments';
 import { DocumentWorkspace } from './DocumentWorkspace';
@@ -59,7 +58,7 @@ export async function ProjectDocumentsPage(props: {
 
   return (
     <DocumentWorkspace
-      canEdit={canEditDocuments(result.access.role)}
+      canEdit={result.access.permissions.includes('document.update')}
       documentCount={result.documents.length}
       selectedDocument={result.selectedDocument}
     />

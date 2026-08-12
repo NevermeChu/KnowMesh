@@ -20,21 +20,16 @@ const state = vi.hoisted(() => {
     workspaceId: '01987654-3210-7000-8000-000000000010',
   };
   const protect = vi.fn<() => Promise<{ userId: string }>>();
+  const authorizeWorkspace = vi.fn<
+    (options: { permission: string; userId: string; workspaceId: string }) => Promise<{
+      workspace: { id: string };
+    }>
+  >();
   const returning = vi.fn<() => Promise<ProjectRecord[]>>();
   const projectValues = vi.fn<(values: unknown) => { returning: typeof returning }>(() => ({
     returning,
   }));
   const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
-  const workspaceLimit = vi.fn<(limit: number) => Promise<{ workspaceId: string }[]>>();
-  const workspaceWhere = vi.fn<(condition: unknown) => { limit: typeof workspaceLimit }>(() => ({
-    limit: workspaceLimit,
-  }));
-  const workspaceFrom = vi.fn<(table: unknown) => { where: typeof workspaceWhere }>(() => ({
-    where: workspaceWhere,
-  }));
-  const select = vi.fn<(selection: unknown) => { from: typeof workspaceFrom }>(() => ({
-    from: workspaceFrom,
-  }));
   const memberValues = vi.fn<(values: unknown) => Promise<void>>(async () => {
     await Promise.resolve();
   });
@@ -52,6 +47,7 @@ const state = vi.hoisted(() => {
   /* oxlint-enable promise/prefer-await-to-callbacks */
 
   return {
+    authorizeWorkspace,
     memberValues,
     project,
     projectValues,
@@ -61,9 +57,7 @@ const state = vi.hoisted(() => {
       insertCallCount = 0;
     },
     returning,
-    select,
     transaction,
-    workspaceLimit,
   };
 });
 
@@ -74,7 +68,12 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates the database boundary.
 vi.mock('@/libs/DB', () => ({
-  db: { select: state.select, transaction: state.transaction },
+  db: { transaction: state.transaction },
+}));
+
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- The mock isolates capability authorization from persistence.
+vi.mock('@/features/permissions/server/WorkspaceAuthorization', () => ({
+  authorizeWorkspace: state.authorizeWorkspace,
 }));
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The partial runtime mock isolates cache invalidation.
@@ -88,7 +87,7 @@ describe('project creation action', () => {
     state.resetInsertCount();
     state.protect.mockResolvedValue({ userId: 'user_1' });
     state.returning.mockResolvedValue([state.project]);
-    state.workspaceLimit.mockResolvedValue([{ workspaceId: state.project.workspaceId }]);
+    state.authorizeWorkspace.mockResolvedValue({ workspace: { id: state.project.workspaceId } });
   });
 
   it('creates project with owner membership', async () => {
@@ -125,7 +124,7 @@ describe('project creation action', () => {
   });
 
   it('rejects project creation outside accessible workspace', async () => {
-    state.workspaceLimit.mockResolvedValueOnce([]);
+    state.authorizeWorkspace.mockRejectedValueOnce(new Error('没有权限执行该操作'));
 
     await expect(
       createProject({
@@ -133,7 +132,7 @@ describe('project creation action', () => {
         name: '产品知识库',
         workspaceId: state.project.workspaceId,
       }),
-    ).rejects.toThrow('没有权限在该工作区创建项目');
+    ).rejects.toThrow('没有权限执行该操作');
 
     expect(state.transaction).not.toHaveBeenCalled();
     expect(state.revalidatePath).not.toHaveBeenCalled();

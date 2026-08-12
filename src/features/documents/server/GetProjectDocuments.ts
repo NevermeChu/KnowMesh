@@ -1,10 +1,10 @@
 import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq } from 'drizzle-orm';
+import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
 import type { ProjectKind } from '@/features/projects/Project';
 import { db } from '@/libs/DB';
 import { documentsSchema } from '@/models/Schema';
-import { getProjectAccess } from './DocumentAccess';
 
 export async function getProjectDocuments(options: {
   documentId?: string;
@@ -13,9 +13,13 @@ export async function getProjectDocuments(options: {
   workspaceId: string;
 }) {
   const { userId } = await auth.protect();
-  const access = await getProjectAccess({ projectId: options.projectId, userId });
+  const authorization = await getProjectAuthorization({ projectId: options.projectId, userId });
 
-  if (!access || access.kind !== options.kind || access.workspaceId !== options.workspaceId) {
+  if (
+    !authorization?.decision.permissions.includes('project.read') ||
+    authorization.project.kind !== options.kind ||
+    authorization.project.workspaceId !== options.workspaceId
+  ) {
     return null;
   }
 
@@ -35,7 +39,7 @@ export async function getProjectDocuments(options: {
     : undefined;
 
   if (!selectedMetadata) {
-    return { access, documents, selectedDocument: null };
+    return { access: authorization.decision, documents, selectedDocument: null };
   }
 
   const [selectedContent] = await db
@@ -54,7 +58,7 @@ export async function getProjectDocuments(options: {
     .limit(1);
 
   return {
-    access,
+    access: authorization.decision,
     documents,
     selectedDocument: selectedContent ? { ...selectedMetadata, ...selectedContent } : null,
   };

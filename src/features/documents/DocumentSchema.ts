@@ -74,6 +74,8 @@ export const createDocumentSchema = z.object({
   title: z.string().trim().min(1, '文件名不能为空').max(200, '文件名不能超过 200 个字符'),
 });
 
+export const deleteDocumentSchema = z.object({ documentId: z.uuid() });
+
 export const updateDocumentSchema = z
   .object({
     content: z.custom<DocumentContent>(isDocumentContent, '文档内容格式无效').optional(),
@@ -90,4 +92,5 @@ export const updateDocumentSchema = z
   });
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
+export type DeleteDocumentInput = z.infer<typeof deleteDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;

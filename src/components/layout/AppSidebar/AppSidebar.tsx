@@ -317,6 +317,14 @@ export function AppSidebar(props: {
             permissionRequestId.current += 1;
             setIsPermissionDialogOpen(false);
           }}
+          onMutated={(operation) => {
+            permissionRequestId.current += 1;
+            setIsPermissionDialogOpen(false);
+            if (operation === 'delete') {
+              router.replace(pathname);
+            }
+            router.refresh();
+          }}
           onNavigate={openPermissionOverview}
         />
       )}

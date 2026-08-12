@@ -1,7 +1,9 @@
 'use client';
 
-import { ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
+/* oxlint-disable eslint/complexity, eslint/prefer-destructuring, unicorn/prefer-ternary -- Member management keeps scope-specific actions together for reviewability. */
+
+import { ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { useState, useTransition } from 'react';
 import {
   ModalDialog,
   ModalDialogBody,
@@ -9,17 +11,224 @@ import {
   ModalDialogFooter,
   ModalDialogHeader,
 } from '@/components/ui/ModalDialog';
+import { deleteDocument } from '@/features/documents/server/DeleteDocument';
+import { updateDocument } from '@/features/documents/server/UpdateDocument';
+import type { Permission } from '@/features/permissions/Permission';
+import {
+  addProjectMember,
+  removeProjectMember,
+  updateProjectMemberRole,
+} from '@/features/permissions/server/ProjectMembers';
+import {
+  inviteWorkspaceMember,
+  removeWorkspaceMember,
+  updateWorkspaceMemberRole,
+} from '@/features/permissions/server/WorkspaceMembers';
 import type {
   PermissionOverview,
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
 import type { ProjectMemberRole } from '@/features/projects/Project';
+import { deleteProject } from '@/features/projects/server/DeleteProject';
+import { updateProject } from '@/features/projects/server/UpdateProject';
+import { deleteWorkspace } from '@/features/workspaces/server/DeleteWorkspace';
+import { updateWorkspace } from '@/features/workspaces/server/UpdateWorkspace';
 
 const roles: { id: ProjectMemberRole; label: string }[] = [
   { id: 'owner', label: 'Owner' },
   { id: 'editor', label: 'Editor' },
   { id: 'viewer', label: 'Viewer' },
 ];
+
+const assignableRoles = roles.filter((role) => role.id !== 'owner');
+
+function PermissionMemberManager(props: {
+  overview: PermissionOverview;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [role, setRole] = useState<'editor' | 'viewer'>('viewer');
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  if (!props.overview.canManageMembers || props.overview.scope === 'document') {
+    return null;
+  }
+
+  const directGroup = props.overview.groups[0];
+  const directMemberIds = new Set(directGroup?.members.map((member) => member.userId));
+  const candidates =
+    props.overview.scope === 'project'
+      ? props.overview.workspaceMembers.filter((member) => !directMemberIds.has(member.userId))
+      : [];
+
+  return (
+    <section className="mb-5 rounded-lg border border-black/8 p-3">
+      <h3 className="mb-2 text-sm font-semibold text-[#202124]">成员管理</h3>
+      <form
+        className="flex flex-col gap-2 sm:flex-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setError(null);
+          startTransition(async () => {
+            try {
+              if (props.overview.scope === 'workspace') {
+                await inviteWorkspaceMember({
+                  email,
+                  role,
+                  workspaceId: props.overview.workspaceId,
+                });
+              } else {
+                await addProjectMember({
+                  memberUserId: selectedUserId,
+                  projectId: props.overview.project.id,
+                  role,
+                });
+              }
+              props.onMutated('update', props.overview.scope);
+            } catch {
+              setError(
+                props.overview.scope === 'workspace'
+                  ? '邀请发送失败，请确认邮箱和邮件配置。'
+                  : '项目成员添加失败。',
+              );
+            }
+          });
+        }}
+      >
+        {props.overview.scope === 'workspace' ? (
+          <input
+            required
+            type="email"
+            aria-label="受邀成员邮箱"
+            placeholder="成员邮箱"
+            value={email}
+            className="h-9 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+            disabled={isPending}
+            onChange={(event) => {
+              setEmail(event.target.value);
+            }}
+          />
+        ) : (
+          <select
+            required
+            aria-label="工作区成员"
+            value={selectedUserId}
+            className="h-9 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+            disabled={isPending}
+            onChange={(event) => {
+              setSelectedUserId(event.target.value);
+            }}
+          >
+            <option value="">选择工作区成员</option>
+            {candidates.map((member) => (
+              <option key={member.userId} value={member.userId}>
+                {member.displayName}
+              </option>
+            ))}
+          </select>
+        )}
+        <select
+          aria-label="成员角色"
+          value={role}
+          className="h-9 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+          disabled={isPending}
+          onChange={(event) => {
+            setRole(event.target.value === 'editor' ? 'editor' : 'viewer');
+          }}
+        >
+          {assignableRoles.map((assignableRole) => (
+            <option key={assignableRole.id} value={assignableRole.id}>
+              {assignableRole.label}
+            </option>
+          ))}
+        </select>
+        <ModalDialogButton type="submit" variant="primary" disabled={isPending}>
+          <UserPlus aria-hidden="true" className="size-3.5" />
+          {props.overview.scope === 'workspace' ? '发送邀请' : '添加成员'}
+        </ModalDialogButton>
+      </form>
+      {error && <p className="mt-2 text-xs text-[#b52e2e]">{error}</p>}
+    </section>
+  );
+}
+
+function PermissionMemberActions(props: {
+  member: PermissionOverview['groups'][number]['members'][number];
+  overview: PermissionOverview;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  if (
+    !props.overview.canManageMembers ||
+    props.overview.scope === 'document' ||
+    props.member.role === 'owner'
+  ) {
+    return null;
+  }
+
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <select
+        aria-label={`${props.member.displayName}的角色`}
+        value={props.member.role}
+        className="h-8 rounded-md border border-black/10 bg-white px-2 text-xs"
+        disabled={isPending}
+        onChange={(event) => {
+          const role = event.target.value === 'editor' ? 'editor' : 'viewer';
+          startTransition(async () => {
+            if (props.overview.scope === 'workspace') {
+              await updateWorkspaceMemberRole({
+                memberUserId: props.member.userId,
+                role,
+                workspaceId: props.overview.workspaceId,
+              });
+            } else {
+              await updateProjectMemberRole({
+                memberUserId: props.member.userId,
+                projectId: props.overview.project.id,
+                role,
+              });
+            }
+            props.onMutated('update', props.overview.scope);
+          });
+        }}
+      >
+        {assignableRoles.map((assignableRole) => (
+          <option key={assignableRole.id} value={assignableRole.id}>
+            {assignableRole.label}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        aria-label={`移除${props.member.displayName}`}
+        className="grid size-8 place-items-center rounded-md text-[#b52e2e] hover:bg-[#d14343]/8"
+        disabled={isPending}
+        onClick={() => {
+          startTransition(async () => {
+            if (props.overview.scope === 'workspace') {
+              await removeWorkspaceMember({
+                memberUserId: props.member.userId,
+                workspaceId: props.overview.workspaceId,
+              });
+            } else {
+              await removeProjectMember({
+                memberUserId: props.member.userId,
+                projectId: props.overview.project.id,
+              });
+            }
+            props.onMutated('update', props.overview.scope);
+          });
+        }}
+      >
+        <Trash2 aria-hidden="true" className="size-3.5" />
+      </button>
+    </span>
+  );
+}
 
 function PermissionDocumentTitle(props: {
   overview: Extract<PermissionOverview, { scope: 'document' }>;
@@ -82,36 +291,190 @@ function PermissionOverviewTitle(props: {
   );
 }
 
-function PermissionExitConfirmationDialog(props: {
-  resourceLabel: '文件' | '项目';
-  resourceName: string;
-  onClose: () => void;
+function getResourceDetails(overview: PermissionOverview) {
+  if (overview.scope === 'workspace') {
+    return {
+      id: overview.groups[0]?.id ?? '',
+      label: '工作区' as const,
+      name: overview.groups[0]?.name ?? '',
+    };
+  }
+
+  if (overview.scope === 'project') {
+    return { id: overview.project.id, label: '项目' as const, name: overview.project.name };
+  }
+
+  return { id: overview.document.id, label: '文件' as const, name: overview.document.title };
+}
+
+function getResourcePermission(options: {
+  operation: 'delete' | 'update';
+  scope: PermissionOverview['scope'];
+}): Permission {
+  return `${options.scope}.${options.operation}`;
+}
+
+function getDeleteConsequence(scope: PermissionOverview['scope']) {
+  if (scope === 'workspace') {
+    return '，其中的项目和文件也会一并删除。';
+  }
+
+  if (scope === 'project') {
+    return '，其中的文件也会一并删除。';
+  }
+
+  return '。';
+}
+
+function PermissionResourceEditor(props: {
+  overview: PermissionOverview;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
 }) {
+  const resource = getResourceDetails(props.overview);
+  const [name, setName] = useState(resource.name);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const canUpdate = props.overview.permissions.includes(
+    getResourcePermission({ operation: 'update', scope: props.overview.scope }),
+  );
+
+  if (!canUpdate) {
+    return null;
+  }
+
+  return (
+    <section className="mb-5 rounded-lg border border-black/8 p-3">
+      <h3 className="mb-2 text-sm font-semibold text-[#202124]">基本信息</h3>
+      <form
+        className="flex flex-col gap-2 sm:flex-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setError(null);
+          startTransition(async () => {
+            try {
+              if (props.overview.scope === 'workspace') {
+                await updateWorkspace({ name, workspaceId: resource.id });
+              } else if (props.overview.scope === 'project') {
+                await updateProject({ name, projectId: resource.id });
+              } else {
+                await updateDocument({ documentId: resource.id, title: name });
+              }
+              props.onMutated('update', props.overview.scope);
+            } catch {
+              setError(`${resource.label}名称保存失败，请稍后重试`);
+            }
+          });
+        }}
+      >
+        <label className="min-w-0 flex-1">
+          <span className="sr-only">{resource.label}名称</span>
+          <input
+            required
+            aria-label={`${resource.label}名称`}
+            maxLength={props.overview.scope === 'document' ? 200 : 80}
+            value={name}
+            className="h-9 w-full rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+            disabled={isPending}
+            onChange={(event) => {
+              setName(event.target.value);
+            }}
+          />
+        </label>
+        <ModalDialogButton
+          type="submit"
+          variant="primary"
+          disabled={isPending || name.trim() === resource.name}
+        >
+          {isPending ? '保存中…' : '保存名称'}
+        </ModalDialogButton>
+      </form>
+      {error && (
+        <p className="mt-2 text-xs text-[#b52e2e]" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function PermissionDeleteConfirmationDialog(props: {
+  overview: PermissionOverview;
+  onClose: () => void;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
+}) {
+  const resource = getResourceDetails(props.overview);
+  const [confirmationName, setConfirmationName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
   return (
     <ModalDialog
-      dismissal={{ ariaLabel: `关闭退出${props.resourceLabel}确认窗口`, onDismiss: props.onClose }}
+      dismissal={{ ariaLabel: `关闭删除${resource.label}确认窗口`, onDismiss: props.onClose }}
       surfaceClassName="w-full max-w-96"
-      titleId="permission-exit-confirmation-title"
+      titleId="permission-delete-confirmation-title"
     >
       <ModalDialogHeader
         closeButton={{
-          ariaLabel: `关闭退出${props.resourceLabel}确认窗口`,
+          ariaLabel: `关闭删除${resource.label}确认窗口`,
           onClick: props.onClose,
         }}
-        title={`确认退出${props.resourceLabel}？`}
-        titleId="permission-exit-confirmation-title"
+        title={`确认删除${resource.label}？`}
+        titleId="permission-delete-confirmation-title"
       />
       <ModalDialogBody>
         <p className="text-sm leading-6 text-[#666a70]">
-          退出后，你将无法继续访问“{props.resourceName}”。请确认是否继续。
+          “{resource.name}”删除后无法恢复{getDeleteConsequence(props.overview.scope)}
         </p>
+        {props.overview.scope === 'workspace' && (
+          <label className="mt-4 block text-sm text-[#666a70]">
+            <span className="mb-1.5 block">输入工作区名称以确认</span>
+            <input
+              aria-label="确认删除的工作区名称"
+              value={confirmationName}
+              className="h-9 w-full rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+              disabled={isPending}
+              onChange={(event) => {
+                setConfirmationName(event.target.value);
+              }}
+            />
+          </label>
+        )}
+        {error && (
+          <p className="mt-3 text-sm text-[#b52e2e]" role="alert">
+            {error}
+          </p>
+        )}
       </ModalDialogBody>
       <ModalDialogFooter>
-        <ModalDialogButton type="button" onClick={props.onClose}>
+        <ModalDialogButton type="button" disabled={isPending} onClick={props.onClose}>
           取消
         </ModalDialogButton>
-        <ModalDialogButton type="button" variant="danger" onClick={props.onClose}>
-          退出{props.resourceLabel}
+        <ModalDialogButton
+          type="button"
+          variant="danger"
+          disabled={
+            isPending ||
+            (props.overview.scope === 'workspace' && confirmationName !== resource.name)
+          }
+          onClick={() => {
+            setError(null);
+            startTransition(async () => {
+              try {
+                if (props.overview.scope === 'workspace') {
+                  await deleteWorkspace({ workspaceId: resource.id });
+                } else if (props.overview.scope === 'project') {
+                  await deleteProject({ projectId: resource.id });
+                } else {
+                  await deleteDocument({ documentId: resource.id });
+                }
+                props.onMutated('delete', props.overview.scope);
+              } catch {
+                setError(`${resource.label}删除失败，请稍后重试`);
+              }
+            });
+          }}
+        >
+          {isPending ? '删除中…' : `删除${resource.label}`}
         </ModalDialogButton>
       </ModalDialogFooter>
     </ModalDialog>
@@ -129,16 +492,15 @@ export function PermissionOverviewDialog(props: {
   isLoading: boolean;
   overview: PermissionOverview | null;
   onClose: () => void;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
   onNavigate: (input: PermissionOverviewInput) => void;
 }) {
-  const [isExitConfirmationOpen, setIsExitConfirmationOpen] = useState(false);
-  let permissionResource: { label: '文件' | '项目'; name: string } | null = null;
-
-  if (props.overview?.scope === 'document') {
-    permissionResource = { label: '文件', name: props.overview.document.title };
-  } else if (props.overview?.scope === 'project') {
-    permissionResource = { label: '项目', name: props.overview.project.name };
-  }
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
+  const canDelete =
+    props.overview?.permissions.includes(
+      getResourcePermission({ operation: 'delete', scope: props.overview.scope }),
+    ) ?? false;
+  const { overview } = props;
 
   return (
     <>
@@ -168,13 +530,19 @@ export function PermissionOverviewDialog(props: {
           {!props.isLoading && props.overview?.scope === 'workspace' && (
             <p className="mb-4 text-sm leading-6 text-[#666a70]">{props.overview.description}</p>
           )}
+          {!props.isLoading && props.overview && (
+            <PermissionResourceEditor overview={props.overview} onMutated={props.onMutated} />
+          )}
+          {!props.isLoading && props.overview && (
+            <PermissionMemberManager overview={props.overview} onMutated={props.onMutated} />
+          )}
           {!props.isLoading && props.overview?.groups.length === 0 && (
             <p className="py-10 text-center text-sm text-[#8a8d91]">暂无成员权限</p>
           )}
           {!props.isLoading &&
-            props.overview?.groups.map((group) => (
+            overview?.groups.map((group) => (
               <section key={group.id} className="mb-5 last:mb-0">
-                {props.overview?.scope === 'workspace' && (
+                {(props.overview?.scope === 'workspace' || overview.groups.length > 1) && (
                   <h3 className="mb-2 text-sm font-semibold text-[#202124]">{group.name}</h3>
                 )}
                 <div className="space-y-3 rounded-lg border border-black/8 p-3">
@@ -225,6 +593,11 @@ export function PermissionOverviewDialog(props: {
                                     </span>
                                   )}
                                 </span>
+                                <PermissionMemberActions
+                                  member={member}
+                                  overview={overview}
+                                  onMutated={props.onMutated}
+                                />
                               </li>
                             ))}
                           </ul>
@@ -237,30 +610,28 @@ export function PermissionOverviewDialog(props: {
             ))}
         </ModalDialogBody>
 
-        {permissionResource && (
+        {canDelete && (
           <ModalDialogFooter>
-            <ModalDialogButton type="button" variant="primary">
-              申请权限
-            </ModalDialogButton>
             <ModalDialogButton
               type="button"
               variant="danger"
               onClick={() => {
-                setIsExitConfirmationOpen(true);
+                setIsDeleteConfirmationOpen(true);
               }}
             >
-              退出{permissionResource.label}
+              <Trash2 aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+              删除{props.overview ? getResourceDetails(props.overview).label : '资源'}
             </ModalDialogButton>
           </ModalDialogFooter>
         )}
       </ModalDialog>
-      {isExitConfirmationOpen && permissionResource && (
-        <PermissionExitConfirmationDialog
-          resourceLabel={permissionResource.label}
-          resourceName={permissionResource.name}
+      {isDeleteConfirmationOpen && props.overview && (
+        <PermissionDeleteConfirmationDialog
+          overview={props.overview}
           onClose={() => {
-            setIsExitConfirmationOpen(false);
+            setIsDeleteConfirmationOpen(false);
           }}
+          onMutated={props.onMutated}
         />
       )}
     </>

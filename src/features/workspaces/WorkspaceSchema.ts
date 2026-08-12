@@ -6,4 +6,13 @@ export const createWorkspaceSchema = z.object({
 
 export const selectWorkspaceSchema = z.object({ workspaceId: z.uuid() });
 
+export const updateWorkspaceSchema = z.object({
+  name: createWorkspaceSchema.shape.name,
+  workspaceId: z.uuid(),
+});
+
+export const deleteWorkspaceSchema = z.object({ workspaceId: z.uuid() });
+
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
+export type DeleteWorkspaceInput = z.infer<typeof deleteWorkspaceSchema>;
+export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;

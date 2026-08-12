@@ -13,7 +13,6 @@ import type {
 } from '@/components/layout/AppSidebar/SidebarWorkspaceNavigationTypes';
 import { fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import { CreateDocumentDialog } from '@/features/documents/components/CreateDocumentDialog';
-import { canEditDocuments } from '@/features/documents/Document';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
 import type { Project, ProjectKind } from '@/features/projects/Project';
@@ -65,6 +64,7 @@ function WorkspaceSectionNavigation(props: {
           type="button"
           aria-label={`在${props.section.label}中创建项目`}
           className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+          disabled={!props.section.canCreateProject}
           onClick={props.onCreate}
         >
           <Plus aria-hidden="true" className="size-4" strokeWidth={1.8} />
@@ -121,7 +121,7 @@ function WorkspaceSectionNavigation(props: {
                     >
                       {project.label}
                     </Link>
-                    {isProjectActive && canEditDocuments(project.role) && (
+                    {isProjectActive && project.permissions.includes('document.create') && (
                       <button
                         type="button"
                         aria-label={`在${project.label}中创建文档`}
@@ -241,6 +241,7 @@ export function SidebarWorkspaceNavigation(props: {
     ? [
         {
           href: '/personal',
+          canCreateProject: props.activeWorkspace.permissions.includes('project.create'),
           id: 'personal',
           icon: FileText,
           label: '个人区域',
@@ -257,11 +258,13 @@ export function SidebarWorkspaceNavigation(props: {
               href: `/personal?project=${project.id}`,
               id: project.id,
               label: project.name,
+              permissions: project.permissions,
               role: project.role,
             })),
         },
         {
           href: '/collaboration',
+          canCreateProject: props.activeWorkspace.permissions.includes('project.create'),
           id: 'collaboration',
           icon: Users,
           label: '协作区域',
@@ -278,6 +281,7 @@ export function SidebarWorkspaceNavigation(props: {
               href: `/collaboration?project=${project.id}`,
               id: project.id,
               label: project.name,
+              permissions: project.permissions,
               role: project.role,
             })),
         },

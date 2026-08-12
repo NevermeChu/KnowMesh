@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { projectMembersSchema, projectsSchema } from '@/models/Schema';
+import { projectMembersSchema, projectsSchema, workspaceMembersSchema } from '@/models/Schema';
 import { getProjects } from './GetProjects';
 
 type ProjectRecord = {
@@ -7,9 +7,11 @@ type ProjectRecord = {
   id: string;
   kind: 'personal';
   name: string;
-  role: 'owner';
+  ownerId: string;
+  projectRole: 'owner';
   updatedAt: Date;
   workspaceId: string;
+  workspaceRole: 'owner';
 };
 
 const state = vi.hoisted(() => {
@@ -19,9 +21,11 @@ const state = vi.hoisted(() => {
       id: '01987654-3210-7000-8000-000000000001',
       kind: 'personal',
       name: '产品知识库',
-      role: 'owner',
+      ownerId: 'user_1',
+      projectRole: 'owner',
       updatedAt: new Date('2026-08-04T00:00:00.000Z'),
       workspaceId: '01987654-3210-7000-8000-000000000010',
+      workspaceRole: 'owner',
     },
   ];
   const protect = vi.fn<() => Promise<{ userId: string }>>();
@@ -40,9 +44,12 @@ const state = vi.hoisted(() => {
     return projects;
   });
   const where = vi.fn<(condition: unknown) => { orderBy: typeof orderBy }>(() => ({ orderBy }));
-  const innerJoin = vi.fn<(table: unknown, condition: unknown) => { where: typeof where }>(() => ({
+  const leftJoin = vi.fn<(table: unknown, condition: unknown) => { where: typeof where }>(() => ({
     where,
   }));
+  const innerJoin = vi.fn<(table: unknown, condition: unknown) => { leftJoin: typeof leftJoin }>(
+    () => ({ leftJoin }),
+  );
   const from = vi.fn<(table: unknown) => { innerJoin: typeof innerJoin }>(() => ({ innerJoin }));
   const select = vi.fn<(selection: unknown) => { from: typeof from }>(() => ({ from }));
 
@@ -51,6 +58,7 @@ const state = vi.hoisted(() => {
     desc,
     eq,
     innerJoin,
+    leftJoin,
     projects,
     protect,
     select,
@@ -88,15 +96,35 @@ describe('project queries', () => {
   it('filters projects by authenticated membership', async () => {
     await expect(
       getProjects({ workspaceId: state.projects[0]?.workspaceId ?? '' }),
-    ).resolves.toStrictEqual(state.projects);
+    ).resolves.toStrictEqual([
+      {
+        createdAt: state.projects[0]?.createdAt,
+        id: state.projects[0]?.id,
+        kind: 'personal',
+        name: '产品知识库',
+        permissions: [
+          'project.read',
+          'project.update',
+          'project.delete',
+          'project.members.manage',
+          'document.read',
+          'document.create',
+          'document.update',
+          'document.delete',
+        ],
+        role: 'owner',
+        updatedAt: state.projects[0]?.updatedAt,
+        workspaceId: state.projects[0]?.workspaceId,
+      },
+    ]);
 
-    expect(state.eq).toHaveBeenCalledWith(projectMembersSchema.userId, 'user_1');
+    expect(state.eq).toHaveBeenCalledWith(workspaceMembersSchema.userId, 'user_1');
     expect(state.eq).toHaveBeenCalledWith(
       projectsSchema.workspaceId,
       state.projects[0]?.workspaceId,
     );
-    expect(state.innerJoin).toHaveBeenCalledWith(projectMembersSchema, expect.anything());
-    expect(state.desc).toHaveBeenCalledWith(projectsSchema.createdAt);
+    expect(state.innerJoin).toHaveBeenCalledWith(workspaceMembersSchema, expect.anything());
+    expect(state.leftJoin).toHaveBeenCalledWith(projectMembersSchema, expect.anything());
   });
 
   it('adds project kind filter', async () => {
@@ -106,6 +134,6 @@ describe('project queries', () => {
     });
 
     expect(state.eq).toHaveBeenCalledWith(projectsSchema.kind, 'collaboration');
-    expect(state.and).toHaveBeenCalledTimes(2);
+    expect(state.and).toHaveBeenCalledTimes(3);
   });
 });
