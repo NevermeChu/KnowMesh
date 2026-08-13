@@ -34,7 +34,17 @@
 
 `getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。`getWorkspaceContext` 使用 React 请求级缓存，使 Layout 与具体页面在同一次 Server Component 渲染中复用结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
 
-`getWorkspaceContext` 在查询前调用 `ensureUserWorkspace`。Personal Workspace 及 owner 部分唯一索引共同表达初始化状态；个人空间永久存在且不可删除，不再需要独立的 onboarding 标记。
+`getWorkspaceContext` 是只读查询，不再创建 Personal Workspace。Clerk 注册完成后的初始化流程为：
+
+```text
+Clerk 完成用户注册
+→ 向 /api/webhooks/clerk 投递 user.created
+→ Route Handler 使用 CLERK_WEBHOOK_SIGNING_SECRET 验证签名
+→ ensureUserWorkspace 在事务中创建 Personal Workspace 与 owner 成员
+→ 部分唯一索引使重复投递幂等
+```
+
+Webhook 失败返回 `5xx` 以触发 Clerk 重试。Webhook 是异步投递，因此不能把注册后的页面重定向当作数据库写入已经完成的同步证明。
 
 项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。项目权限只计算一次，文档查询复用已经授权的项目 ID；当前导航查询没有分页，正文仍只由具体文档页面按需读取。
 
@@ -66,7 +76,7 @@
 页面取得 project 和 document 参数
 → getWorkspaceContext 确定当前 Workspace
 → getProjectDocuments 从 Clerk 会话取得 userId
-→ getProjectAuthorization 合并项目直接权限与允许的 Workspace 继承权限
+→ getProjectAuthorization 用 Workspace 成员关系授予结构发现，再用 Project 直接角色授予内容权限
 → 验证项目属于当前 Workspace
 → 查询项目文档元数据和所选文档内容
 → DocumentWorkspace 与 DocumentEditor 接收所选文档数据
@@ -80,7 +90,7 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 ## 权限总览
 
-侧边栏管理入口按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证读取能力；验证通过后查询直接与继承成员，并通过 Clerk 用户目录补充姓名和主邮箱。响应同时返回服务端计算的能力，客户端据此呈现重命名、删除和成员管理操作；对应 Server Action 仍会再次授权。Workspace 邀请由应用生成令牌并通过 Resend 发送邮件，接受页校验令牌、有效期和当前 Clerk 用户已验证邮箱；Project 只能从所属 Workspace 的现有成员中添加直接成员。文件继续继承项目权限。
+侧边栏管理入口按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证读取能力；验证通过后查询对应范围的直接成员、邀请候选人和待处理申请，并通过 Clerk 用户目录补充姓名和主邮箱。响应同时返回服务端计算的能力，客户端据此呈现重命名、删除和成员管理操作；对应 Server Action 仍会再次授权。Workspace 邀请由应用生成令牌并通过 Resend 发送邮件，接受页校验令牌、有效期和当前 Clerk 用户已验证邮箱；Project 只能邀请所属 Workspace 的现有成员，接受后成为 viewer。文件继续继承项目直接成员权限。
 
 Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Personal 区域始终读取当前用户的 Personal Workspace；Collaboration 区域只在活动 Workspace 为 Team 时显示并读取该 Team 的项目。文件没有独立 ACL，因此文件总览验证文件读取能力后返回所属项目的授权来源；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
 
@@ -95,14 +105,15 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 ## 当前传输边界
 
 - 当前项目创建、资源重命名和删除、文档创建与更新、交互式权限总览使用 Server Action。
-- 当前没有 Route Handler、公开 API、Webhook、文件传输或实时连接实现。
-- `src/proxy.ts` 的 matcher 排除了 `/api`；这只描述当前 matcher 范围，不代表仓库已经存在 API 鉴权方案。
+- 当前存在一个 `POST /api/webhooks/clerk` Route Handler，只接受签名有效的 Clerk 事件，并仅处理 `user.created`。
+- `src/proxy.ts` 的 matcher 排除了 `/api`；Webhook 依靠请求签名而不是 Clerk 浏览器会话。当前没有其他公开 API、文件传输或实时连接。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
 
 ## 相关代码
 
 - `src/app/(workspace)/layout.tsx`：服务端初始查询入口。
+- `src/app/api/webhooks/clerk/route.ts`：验证 Clerk Webhook 并初始化 Personal Workspace。
 - `src/features/workspaces/server/GetWorkspaceContext.ts`：解析并授权当前 Workspace。
 - `src/features/workspaces/server/CreateWorkspace.ts`：创建 Workspace 与 owner 成员。
 - `src/features/workspaces/server/SelectWorkspace.ts`：校验选择并写入当前 Workspace cookie。
@@ -127,3 +138,4 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
+- [ADR 0007：通过 Clerk 注册 Webhook 创建 Personal Workspace](../adr/0007-provision-personal-workspace-from-clerk-webhook.md)

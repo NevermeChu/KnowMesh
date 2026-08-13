@@ -21,6 +21,7 @@ KnowMesh 使用 Next.js App Router、React Server Components、Clerk、Drizzle O
 Next.js 服务器
 ├─ Server Components 和路由布局
 ├─ Clerk 服务端鉴权
+├─ Clerk Webhook Route Handler
 ├─ server-only 查询
 └─ Drizzle
        │
@@ -37,7 +38,7 @@ PostgreSQL / 本地 PGlite
 
 路由组只组织代码，不自动提供鉴权；新增工作区路由时必须同时确认 `src/proxy.ts` 的保护范围。
 
-当前仓库没有 Route Handler。middleware matcher 明确排除了 `/api`，因此当前也不存在由 middleware 保护的 API 路由。
+当前仓库提供 `/api/webhooks/clerk` Route Handler。middleware matcher 排除了 `/api`，该端点不使用浏览器会话鉴权，而是通过 Clerk Webhook 签名验证来源；其他新增 API 路由必须单独定义认证和授权边界。
 
 ## 代码职责
 
@@ -83,13 +84,13 @@ PostgreSQL / 本地 PGlite
 - 登录后共享应用外壳。
 - 个人与协作项目创建。
 - Workspace 创建、切换和项目归属。
-- 用户首次进入工作台时幂等创建永久 Personal Workspace；该空间不可删除，用户可以不拥有任何 Team Workspace。
+- Clerk 注册完成后通过签名 Webhook 幂等创建永久 Personal Workspace；该空间不可删除，用户可以不拥有任何 Team Workspace。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
 - 项目内文档创建、列表和读取。
 - 基于 Tiptap 的单人富文本编辑与 JSONB 自动保存。
-- Personal Workspace 项目仅 owner 授权、Team Workspace 项目继承成员能力，以及文件的项目权限继承。
+- Personal Workspace 项目仅 owner 授权；Team Workspace 成员可发现导航结构，Project 直接成员才能读取正文；文件继承 Project 内容权限。
 
 尚未实现：
 

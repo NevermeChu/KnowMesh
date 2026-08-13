@@ -12,7 +12,9 @@
 
 ## 访问控制
 
-所有文档访问都以项目成员关系为边界：
+导航结构与正文访问使用不同边界。Workspace 成员可以读取项目、文件夹和文件名称及其导航从属关系；当前系统尚无文件夹表，因此实际导航元数据是 Project 与 Document 名称。导航查询不得返回正文、正文层级、摘要、搜索片段或预览。
+
+正文访问以项目直接成员关系为边界：
 
 | 操作 | 允许角色 | 执行位置 |
 | --- | --- | --- |
@@ -21,11 +23,11 @@
 | 修改标题或内容 | `owner`、`editor` | `updateDocument` Server Action |
 | 删除文档 | `owner`、`editor` | `deleteDocument` Server Action |
 
-客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须从 Clerk 会话取得 `userId`，再由统一权限模块解析资源、项目及所属 Workspace。Personal Workspace 中的项目只允许 owner；Team Workspace 中的项目合并 Workspace 继承权限与项目直接权限。
+客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须从 Clerk 会话取得 `userId`，再由统一权限模块解析资源、项目及所属 Workspace。Personal Workspace 中的项目只允许 owner；Team Workspace 中只有 `project_members` 直接角色授予正文权限，Workspace 角色只授予结构发现能力。
 
 ## 读取和编辑流程
 
-`/personal` 与 `/collaboration` 是两个界面区域，通过查询参数选择项目和文档，并复用同一个文档页面组件。Workspace Layout 先解析永久 Personal Workspace 和活动 Workspace：个人区域读取前者，协作区域仅在活动 Workspace 为 Team 时读取后者。页面 Server Component 调用 `getProjectDocuments`，同时验证项目所属 Workspace 及其类型，只把当前项目的文档元数据及所选文档内容传给编辑区。
+`/personal` 与 `/collaboration` 是两个界面区域，通过查询参数选择项目和文档，并复用同一个文档页面组件。Workspace Layout 先解析永久 Personal Workspace 和活动 Workspace：个人区域读取前者，协作区域仅在活动 Workspace 为 Team 时读取后者。页面 Server Component 调用 `getProjectDocuments`，同时验证项目所属 Workspace 及其类型。它先读取导航元数据；只有授权决策包含 `document.read` 时才继续查询并传递所选文档的 `content`。非项目成员点击文件时只得到标题和访问申请状态。
 
 全局侧边栏是当前唯一的项目和文档导航层。当前项目节点提供创建文档入口；编辑区不再重复呈现项目名称和文档列表。格式工具栏通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例，并由共享 `ContentToolbar` 在内容全屏按钮左侧呈现。工具栏直接显示最多八个常用格式命令，左侧箭头使用共享 `PopupMenu` 展开其余 StarterKit 格式命令，每行最多八个；该浮层只由同一箭头切换开关。撤销和重做独立固定在工具栏右侧。ContentToolbar 和编辑器正文右键菜单复用 `useDocumentEditorCommands`，因此两处使用相同的格式命令、激活状态和撤销/重做可用状态；右键菜单通过共享 `ContextMenu` 和 `PopupMenu` 纵向呈现。
 
@@ -77,3 +79,4 @@
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
+- [ADR 0006：分离 Workspace 结构发现与 Project 内容访问](../adr/0006-separate-workspace-discovery-from-project-content-access.md)

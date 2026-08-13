@@ -136,18 +136,18 @@ Workspace 资源归属与权限继承分阶段上线后，第二阶段缺少统�
 
 ### 问题
 
-移除 Workspace 成员时会清理该用户在 Workspace 内的项目直接成员关系，但项目所有权仍由 `projects.owner_id` 独立保存。当前流程只拒绝移除仍拥有 Personal 项目的成员；如果该成员拥有 Collaboration 项目，移除操作会删除其 `project_members` owner 记录和 Workspace 成员关系，却保留项目的 `owner_id`，产生所有者不再属于上级 Workspace、也不再存在于项目成员表的孤立项目。
+移除 Workspace 成员时会清理该用户在 Workspace 内的项目直接成员关系，但项目所有权仍由 `projects.owner_id` 独立保存。即使先查询该成员是否拥有项目，如果检查发生在事务外，或项目创建没有与成员移除竞争同一条锁，并发请求仍可能在检查后创建项目，再由移除流程删除 Workspace 成员，产生所有者不再属于上级 Workspace 的孤立项目。
 
 ### 根因
 
-所有权和成员身份分别存储在资源表、项目成员表与 Workspace 成员表中，“项目 owner 必须同时是项目 owner 成员和所属 Workspace 成员”是由应用事务维护的跨表不变量，普通外键无法完整表达。成员移除流程只考虑了 Personal 项目的访问语义，没有统一处理两类项目的所有权生命周期；同时系统尚未提供项目所有权转让能力。
+所有权和成员身份分别存储在资源表、项目成员表与 Workspace 成员表中。原流程把项目所有权检查放在事务外，项目创建只在进入事务前授权，没有在写入前锁定并重新校验 Workspace 成员关系；默认隔离级别下，两条流程之间不存在串行化边界。同时系统尚未提供项目所有权转让能力。
 
 ### 解决方法
 
-- 在移除 Workspace 成员前查询其在该 Workspace 中拥有的所有项目，不按 `kind` 排除 Collaboration 项目；只要仍拥有项目，就拒绝直接移除。
-- 实现项目所有权转让，并在同一事务中更新 `projects.owner_id`、新旧 owner 的 `project_members` 角色和成员关系；新 owner 必须已经属于所属 Workspace。
-- 完成所有权处理后，再在同一事务中清理该用户的项目直接成员关系与 Workspace 成员关系，防止中途留下跨表不一致状态。
-- 为 Personal 和 Collaboration 项目所有者、普通成员、Workspace owner 以及失败回滚分别增加集成测试；在转让流程完成前，不把“移除成员”描述为已覆盖所有资源生命周期。
+- 成员移除事务先使用 `FOR UPDATE` 锁定目标 `workspace_members` 行，再检查其拥有的所有项目，最后清理项目直接成员关系与 Workspace 成员关系；目标成员不存在时明确失败。
+- 项目创建事务锁定同一条 Workspace 成员关系，并在写入项目之前重新校验当前角色仍具有 `project.create`，使并发创建与移除按锁顺序执行。
+- 为 `projects(workspace_id, owner_id)` 增加指向 `workspace_members(workspace_id, user_id)` 的复合外键，数据库最终拒绝任何项目 owner 不属于所属 Workspace 的写入或成员删除。
+- 补充成员移除锁顺序、拥有项目拒绝、成员不存在，以及并发移除后项目创建拒绝的回归测试；所有权转让仍作为独立后续能力实现。
 
 ## 10. 项目类型与工作区归属重复表达权限模式
 
@@ -183,3 +183,86 @@ Workspace 资源归属与权限继承分阶段上线后，第二阶段缺少统�
 - 收窄 Workspace、Project、Document 导航返回类型和 Server Action 返回值，只保留客户端消费字段；成员管理能力直接从权限数组推导。
 - 将两套 ORM 链式模拟测试合并为 Workspace 导航边界测试，覆盖可访问项目与文档返回，以及没有可访问项目时跳过文档查询。
 - 删除被部分唯一索引或联合主键覆盖且没有当前查询消费者的索引；所有权权威字段、owner 成员关系和邀请审计状态继续保留。
+
+## 12. 项目权限总览错误操作工作区继承成员
+
+### 问题
+
+Team 项目权限总览同时展示项目直接权限与 Workspace 继承权限，但两组成员都显示项目角色修改和移除按钮。修改继承成员会意外创建项目直接成员关系；移除仅有继承权限的成员不会撤销其 Workspace 访问，界面结果与实际权限不一致。
+
+### 根因
+
+权限分组只有展示名称和成员，没有稳定的授权来源字段；客户端成员操作只检查当前用户是否具有 `project.members.manage`，无法判断目标成员来自项目直接授权还是 Workspace 继承授权。添加项目成员时也依赖 `groups[0]` 是直接权限组的隐式顺序。
+
+### 解决方法
+
+- 为权限分组增加 `source = project | workspace`，由服务端查询明确标记每组授权来源。
+- 项目成员角色修改和移除只对 `source = project` 的直接权限组显示；Workspace 继承成员必须在 Workspace 权限页管理。
+- 添加项目成员时按 `source` 定位直接权限组，不再依赖数组顺序。
+- 使用纯权限边界测试覆盖项目直接组、Workspace 继承组、Workspace 页面和 Document 页面，并验证服务端权限总览返回正确来源。
+
+## 13. 工作区继承权限无法隔离项目正文
+
+### 问题
+
+Team Workspace 成员原本会自动继承其中所有项目和文档能力，导致 Workspace editor 可以编辑全部项目，Workspace owner 可以读取和管理未加入的项目；`project_members` 无法作为正文访问门槛。
+
+### 根因
+
+权限策略把 Workspace 角色与 Project 直接角色取并集，并使用同一个 `project.read` 同时表达导航发现和项目内容访问。导航查询又只读取具有 `document.read` 的项目文件，无法实现“结构可发现、正文受保护”。
+
+### 解决方法
+
+- 新增 `project.structure.read` 区分导航结构发现和内容读取；Team Workspace 成员只从 Workspace 关系获得结构发现能力。
+- Project 与 Document 内容能力只由 `project_members.role` 授予，Workspace owner 不再绕过项目成员门槛。
+- 导航查询返回项目和文件名称；正文查询在读取 `documents.content` 前检查 `document.read`，非项目成员只收到标题与申请状态。
+- Workspace 与 Project 邀请接受后固定为 viewer，并增加 Project 邀请、查看/编辑申请、Workspace 编辑申请和管理员批准状态。
+- 使用 ADR 0006 替代旧的 Team Project 权限继承决策；当前尚无文件夹模型，未来文件夹名称和从属关系遵循同一导航元数据边界。
+
+## 14. Project 成员关系无法在数据库中证明属于同一 Workspace
+
+### 问题
+
+`project_members` 原本只有 `project_id` 和 `user_id`。应用会在邀请、接受和审批时检查用户属于上级 Workspace，但直接数据库写入或遗漏检查的新入口仍能建立跨 Workspace 的 Project 成员关系。
+
+### 根因
+
+成员表没有保存可参与复合外键的 `workspace_id`，数据库只能证明 Project 存在，不能同时证明用户是该 Project 所属 Workspace 的成员。
+
+### 解决方法
+
+- 为 `project_members` 增加 `workspace_id`，迁移先从 `projects` 回填并预检既有数据。
+- 使用 `(project_id, workspace_id)` 外键保证成员关系指向 Project 的真实 Workspace，再使用 `(workspace_id, user_id)` 外键保证用户是该 Workspace 成员。
+- 增加数据库触发器从 Project 自动填充 `workspace_id`，兼容迁移期间旧应用仍按旧列集合写入；新应用同时显式写入该字段。
+
+## 15. Owner 权威字段与 owner 成员角色可能失配
+
+### 问题
+
+资源表保存 `owner_id`，成员表同时保存 `role = owner`。普通外键只能证明 owner 是成员，无法阻止 owner 成员被降级、删除、出现第二个 owner，或让 `owner_id` 与 owner 角色指向不同用户。
+
+### 根因
+
+“资源必须恰好有一个 owner 成员，且该成员必须等于资源的 `owner_id`”是跨表、双向且需要事务内暂时失配的不变量，普通外键和 `CHECK` 约束无法完整表达。
+
+### 解决方法
+
+- 为 Workspace 和 Project 成员分别增加只覆盖 `role = owner` 的部分唯一索引，限制每个资源最多一个 owner 成员。
+- 增加 `DEFERRABLE INITIALLY DEFERRED` 约束触发器，在事务提交时验证资源 `owner_id` 对应的 owner 成员存在且角色正确。
+- 迁移在启用约束前预检既有 owner 数据；创建和未来所有权转让必须在同一事务完成资源与成员的最终一致状态。
+
+## 16. Personal Workspace 的创建时机依赖首次工作台访问
+
+### 问题
+
+产品要求用户完成 Clerk 注册后立即拥有 Personal Workspace，但原实现只在 `getWorkspaceContext` 首次运行时创建。未进入工作台的用户不会初始化，读取查询也承担了持久化副作用。
+
+### 根因
+
+初始化流程绑定在工作台布局，而没有接入 Clerk 用户生命周期事件。
+
+### 解决方法
+
+- 新增签名验证的 Clerk Webhook Route Handler，订阅 `user.created` 后调用幂等的 `ensureUserWorkspace`。
+- Webhook 创建失败返回 `5xx` 让 Clerk 重试，签名错误返回 `400`；`getWorkspaceContext` 恢复为纯读取。
+- 在环境校验、部署文档和 Clerk Dashboard 中配置 `CLERK_WEBHOOK_SIGNING_SECRET` 与 `user.created` endpoint，并明确 Webhook 是异步投递而非注册重定向的同步前置步骤。

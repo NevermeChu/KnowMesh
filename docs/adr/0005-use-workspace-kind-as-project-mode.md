@@ -1,6 +1,6 @@
 # ADR 0005：使用 Workspace 类型作为项目权限模式
 
-- 状态：Accepted
+- 状态：Superseded by [ADR 0006](0006-separate-workspace-discovery-from-project-content-access.md)
 - 日期：2026-08-12
 
 ## 背景
