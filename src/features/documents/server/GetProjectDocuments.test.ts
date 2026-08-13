@@ -97,7 +97,7 @@ describe('project document queries', () => {
       decision: {
         grants: [],
         isResourceOwner: true,
-        permissions: ['project.read', 'document.read'],
+        permissions: ['project.structure.read', 'project.read', 'document.read'],
       },
       project: {
         id: state.projectId,
@@ -120,14 +120,45 @@ describe('project document queries', () => {
       access: {
         grants: [],
         isResourceOwner: true,
-        permissions: ['project.read', 'document.read'],
+        permissions: ['project.structure.read', 'project.read', 'document.read'],
       },
       documents: state.documentList,
       selectedDocument: {
         ...state.documents[0],
         ...state.selectedContent[0],
       },
+      selectedDocumentTitle: '产品方案',
     });
+  });
+
+  it('returns metadata without reading content for workspace-only member', async () => {
+    state.getProjectAuthorization.mockResolvedValueOnce({
+      decision: {
+        grants: [],
+        isResourceOwner: false,
+        permissions: ['project.structure.read'],
+      },
+      project: {
+        id: state.projectId,
+        name: '产品知识库',
+        workspaceId: state.workspaceId,
+        workspaceKind: 'team',
+      },
+    });
+
+    await expect(
+      getProjectDocuments({
+        documentId: state.documentId,
+        projectId: state.projectId,
+        workspaceId: state.workspaceId,
+        workspaceKind: 'team',
+      }),
+    ).resolves.toMatchObject({
+      documents: state.documentList,
+      selectedDocument: null,
+      selectedDocumentTitle: '产品方案',
+    });
+    expect(state.select).toHaveBeenCalledOnce();
   });
 
   it('rejects inaccessible project before document query', async () => {

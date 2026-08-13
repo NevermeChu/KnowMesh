@@ -8,7 +8,10 @@ import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorks
 import { db } from '@/libs/DB';
 import {
   projectMembersSchema,
+  projectAccessRequestsSchema,
+  projectInvitationsSchema,
   projectsSchema,
+  workspaceAccessRequestsSchema,
   workspaceInvitationsSchema,
   workspaceMembersSchema,
 } from '@/models/Schema';
@@ -17,11 +20,15 @@ import {
   acceptWorkspaceInvitationSchema,
   inviteWorkspaceMemberSchema,
   workspaceMemberMutationSchema,
+  workspaceAccessRequestSchema,
+  workspaceAccessReviewSchema,
 } from '../MemberSchema';
 import type {
   AcceptWorkspaceInvitationInput,
   InviteWorkspaceMemberInput,
   WorkspaceMemberMutationInput,
+  WorkspaceAccessRequestInput,
+  WorkspaceAccessReviewInput,
 } from '../MemberSchema';
 import { authorizeWorkspace } from './WorkspaceAuthorization';
 
@@ -74,7 +81,6 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
       email: invitationInput.email,
       expiresAt: new Date(Date.now() + INVITATION_LIFETIME_MS),
       invitedById: userId,
-      role: invitationInput.role,
       tokenHash,
       workspaceId: invitationInput.workspaceId,
     })
@@ -134,7 +140,7 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
   await db.transaction(async (transaction) => {
     await transaction
       .insert(workspaceMembersSchema)
-      .values({ role: invitation.role, userId, workspaceId: invitation.workspaceId })
+      .values({ role: 'viewer', userId, workspaceId: invitation.workspaceId })
       .onConflictDoNothing();
     await transaction
       .update(workspaceInvitationsSchema)
@@ -163,6 +169,10 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
     throw new Error('工作区所有者角色不可修改');
   }
 
+  if (memberInput.role !== 'viewer') {
+    throw new Error('提升工作区角色必须通过权限申请');
+  }
+
   const [membership] = await db
     .update(workspaceMembersSchema)
     .set({ role: memberInput.role })
@@ -182,6 +192,67 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
   return membership;
 }
 
+export async function requestWorkspaceEditAccess(input: WorkspaceAccessRequestInput) {
+  const { userId } = await auth.protect();
+  const requestInput = workspaceAccessRequestSchema.parse(input);
+  const authorization = await authorizeWorkspace({
+    permission: 'workspace.read',
+    userId,
+    workspaceId: requestInput.workspaceId,
+  });
+
+  if (authorization.workspace.kind === 'personal' || authorization.workspace.role !== 'viewer') {
+    throw new Error('只有团队工作区 Viewer 可以申请编辑权限');
+  }
+
+  await db
+    .insert(workspaceAccessRequestsSchema)
+    .values({ requestedRole: 'editor', userId, workspaceId: requestInput.workspaceId })
+    .onConflictDoNothing();
+}
+
+export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReviewInput) {
+  const { userId } = await auth.protect();
+  const reviewInput = workspaceAccessReviewSchema.parse(input);
+  const authorization = await authorizeWorkspace({
+    permission: 'workspace.members.manage',
+    userId,
+    workspaceId: reviewInput.workspaceId,
+  });
+
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不支持权限申请');
+  }
+
+  await db.transaction(async (transaction) => {
+    const [request] = await transaction
+      .delete(workspaceAccessRequestsSchema)
+      .where(
+        and(
+          eq(workspaceAccessRequestsSchema.workspaceId, reviewInput.workspaceId),
+          eq(workspaceAccessRequestsSchema.userId, reviewInput.memberUserId),
+        ),
+      )
+      .returning({ userId: workspaceAccessRequestsSchema.userId });
+
+    if (!request) {
+      throw new Error('权限申请不存在');
+    }
+
+    await transaction
+      .update(workspaceMembersSchema)
+      .set({ role: 'editor' })
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, reviewInput.workspaceId),
+          eq(workspaceMembersSchema.userId, reviewInput.memberUserId),
+        ),
+      );
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+}
+
 export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput) {
   const { userId } = await auth.protect();
   const memberInput = workspaceMemberMutationSchema.parse(input);
@@ -199,28 +270,59 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
     throw new Error('工作区所有者不可移除');
   }
 
-  const ownedProjects = await db
-    .select({ id: projectsSchema.id })
-    .from(projectsSchema)
-    .where(
-      and(
-        eq(projectsSchema.workspaceId, memberInput.workspaceId),
-        eq(projectsSchema.ownerId, memberInput.memberUserId),
-      ),
-    )
-    .limit(1);
-
-  if (ownedProjects.length > 0) {
-    throw new Error('该成员仍拥有项目，请先转让或删除这些项目');
-  }
-
   await db.transaction(async (transaction) => {
+    const [membership] = await transaction
+      .select({ userId: workspaceMembersSchema.userId })
+      .from(workspaceMembersSchema)
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, memberInput.workspaceId),
+          eq(workspaceMembersSchema.userId, memberInput.memberUserId),
+        ),
+      )
+      .for('update');
+
+    if (!membership) {
+      throw new Error('工作区成员不存在');
+    }
+
+    const ownedProjects = await transaction
+      .select({ id: projectsSchema.id })
+      .from(projectsSchema)
+      .where(
+        and(
+          eq(projectsSchema.workspaceId, memberInput.workspaceId),
+          eq(projectsSchema.ownerId, memberInput.memberUserId),
+        ),
+      )
+      .limit(1);
+
+    if (ownedProjects.length > 0) {
+      throw new Error('该成员仍拥有项目，请先转让或删除这些项目');
+    }
+
     const projects = await transaction
       .select({ id: projectsSchema.id })
       .from(projectsSchema)
       .where(eq(projectsSchema.workspaceId, memberInput.workspaceId));
 
     for (const project of projects) {
+      await transaction
+        .delete(projectAccessRequestsSchema)
+        .where(
+          and(
+            eq(projectAccessRequestsSchema.projectId, project.id),
+            eq(projectAccessRequestsSchema.userId, memberInput.memberUserId),
+          ),
+        );
+      await transaction
+        .delete(projectInvitationsSchema)
+        .where(
+          and(
+            eq(projectInvitationsSchema.projectId, project.id),
+            eq(projectInvitationsSchema.userId, memberInput.memberUserId),
+          ),
+        );
       await transaction
         .delete(projectMembersSchema)
         .where(
@@ -230,6 +332,15 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
           ),
         );
     }
+
+    await transaction
+      .delete(workspaceAccessRequestsSchema)
+      .where(
+        and(
+          eq(workspaceAccessRequestsSchema.workspaceId, memberInput.workspaceId),
+          eq(workspaceAccessRequestsSchema.userId, memberInput.memberUserId),
+        ),
+      );
 
     await transaction
       .delete(workspaceMembersSchema)

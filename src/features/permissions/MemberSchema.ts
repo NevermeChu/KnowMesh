@@ -5,7 +5,6 @@ const assignableRoleSchema = z.enum(memberRoles).exclude(['owner']);
 
 export const inviteWorkspaceMemberSchema = z.object({
   email: z.email('请输入有效邮箱').trim().toLowerCase(),
-  role: assignableRoleSchema,
   workspaceId: z.uuid(),
 });
 
@@ -23,7 +22,34 @@ export const projectMemberMutationSchema = z.object({
   role: assignableRoleSchema.optional(),
 });
 
+export const projectInvitationSchema = z.object({
+  memberUserId: z.string().min(1),
+  projectId: z.uuid(),
+});
+
+export const projectAccessRequestSchema = z.object({
+  projectId: z.uuid(),
+  requestedRole: assignableRoleSchema,
+});
+
+export const projectAccessReviewSchema = z.object({
+  memberUserId: z.string().min(1),
+  projectId: z.uuid(),
+});
+
+export const workspaceAccessRequestSchema = z.object({ workspaceId: z.uuid() });
+
+export const workspaceAccessReviewSchema = z.object({
+  memberUserId: z.string().min(1),
+  workspaceId: z.uuid(),
+});
+
 export type AcceptWorkspaceInvitationInput = z.infer<typeof acceptWorkspaceInvitationSchema>;
 export type InviteWorkspaceMemberInput = z.infer<typeof inviteWorkspaceMemberSchema>;
 export type ProjectMemberMutationInput = z.infer<typeof projectMemberMutationSchema>;
+export type ProjectInvitationInput = z.infer<typeof projectInvitationSchema>;
+export type ProjectAccessRequestInput = z.infer<typeof projectAccessRequestSchema>;
+export type ProjectAccessReviewInput = z.infer<typeof projectAccessReviewSchema>;
 export type WorkspaceMemberMutationInput = z.infer<typeof workspaceMemberMutationSchema>;
+export type WorkspaceAccessRequestInput = z.infer<typeof workspaceAccessRequestSchema>;
+export type WorkspaceAccessReviewInput = z.infer<typeof workspaceAccessReviewSchema>;

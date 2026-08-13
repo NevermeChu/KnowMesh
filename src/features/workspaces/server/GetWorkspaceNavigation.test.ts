@@ -106,6 +106,7 @@ describe(getWorkspaceNavigation, () => {
           id: state.project.id,
           name: state.project.name,
           permissions: [
+            'project.structure.read',
             'project.read',
             'project.update',
             'project.delete',

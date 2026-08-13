@@ -16,7 +16,7 @@ export async function getProjectDocuments(options: {
   const authorization = await getProjectAuthorization({ projectId: options.projectId, userId });
 
   if (
-    !authorization?.decision.permissions.includes('project.read') ||
+    !authorization?.decision.permissions.includes('project.structure.read') ||
     authorization.project.workspaceId !== options.workspaceId ||
     authorization.project.workspaceKind !== options.workspaceKind
   ) {
@@ -43,7 +43,21 @@ export async function getProjectDocuments(options: {
     : undefined;
 
   if (!selectedMetadata) {
-    return { access: authorization.decision, documents, selectedDocument: null };
+    return {
+      access: authorization.decision,
+      documents,
+      selectedDocument: null,
+      selectedDocumentTitle: null,
+    };
+  }
+
+  if (!authorization.decision.permissions.includes('document.read')) {
+    return {
+      access: authorization.decision,
+      documents,
+      selectedDocument: null,
+      selectedDocumentTitle: selectedMetadata.title,
+    };
   }
 
   const [selectedContent] = await db
@@ -65,5 +79,6 @@ export async function getProjectDocuments(options: {
     access: authorization.decision,
     documents,
     selectedDocument: selectedContent ? { ...selectedMetadata, ...selectedContent } : null,
+    selectedDocumentTitle: selectedMetadata.title,
   };
 }

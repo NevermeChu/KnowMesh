@@ -12,10 +12,16 @@ import type {
   PermissionGroup,
   PermissionMember,
   PermissionOverviewInput,
+  PermissionRequest,
 } from '@/features/projects/PermissionOverview';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
-import { projectMembersSchema, workspaceMembersSchema } from '@/models/Schema';
+import {
+  projectAccessRequestsSchema,
+  projectMembersSchema,
+  workspaceAccessRequestsSchema,
+  workspaceMembersSchema,
+} from '@/models/Schema';
 
 const permissionOverviewInputSchema = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('workspace'), workspaceId: z.uuid() }),
@@ -122,6 +128,7 @@ async function getPermissionGroups(options: {
         profiles,
       }),
       name: project.name,
+      source: 'project',
     }),
   );
 }
@@ -150,6 +157,7 @@ async function getWorkspacePermissionGroup(options: {
       profiles,
     }),
     name: options.groupName,
+    source: 'workspace' as const,
   };
 }
 
@@ -157,23 +165,54 @@ async function getProjectPermissionGroups(options: {
   currentUserId: string;
   project: { id: string; name: string; workspaceId: string; workspaceKind: WorkspaceKind };
 }) {
-  const directGroups = await getPermissionGroups({
+  return await getPermissionGroups({
     currentUserId: options.currentUserId,
     projects: [{ id: options.project.id, name: '项目直接权限' }],
   });
+}
 
-  if (options.project.workspaceKind === 'personal') {
-    return directGroups;
-  }
+async function getProjectRequests(options: { currentUserId: string; projectId: string }) {
+  const requests = await db
+    .select({
+      requestedRole: projectAccessRequestsSchema.requestedRole,
+      userId: projectAccessRequestsSchema.userId,
+    })
+    .from(projectAccessRequestsSchema)
+    .where(eq(projectAccessRequestsSchema.projectId, options.projectId))
+    .orderBy(asc(projectAccessRequestsSchema.createdAt));
+  const profiles = await getClerkProfiles(requests.map((request) => request.userId));
 
-  const workspaceGroup = await getWorkspacePermissionGroup({
-    currentUserId: options.currentUserId,
-    groupId: `workspace-${options.project.workspaceId}`,
-    groupName: '工作区继承权限',
-    workspaceId: options.project.workspaceId,
+  return requests.map((request): PermissionRequest => {
+    const profile = profiles.get(request.userId);
+    return {
+      displayName: profile?.displayName ?? request.userId,
+      email: profile?.email ?? null,
+      requestedRole: request.requestedRole,
+      userId: request.userId,
+    };
   });
+}
 
-  return [...directGroups, workspaceGroup];
+async function getWorkspaceRequests(workspaceId: string) {
+  const requests = await db
+    .select({
+      requestedRole: workspaceAccessRequestsSchema.requestedRole,
+      userId: workspaceAccessRequestsSchema.userId,
+    })
+    .from(workspaceAccessRequestsSchema)
+    .where(eq(workspaceAccessRequestsSchema.workspaceId, workspaceId))
+    .orderBy(asc(workspaceAccessRequestsSchema.createdAt));
+  const profiles = await getClerkProfiles(requests.map((request) => request.userId));
+
+  return requests.map((request): PermissionRequest => {
+    const profile = profiles.get(request.userId);
+    return {
+      displayName: profile?.displayName ?? request.userId,
+      email: profile?.email ?? null,
+      requestedRole: request.requestedRole,
+      userId: request.userId,
+    };
+  });
 }
 
 /**
@@ -204,9 +243,13 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
       description:
         authorization.workspace.kind === 'personal'
           ? '个人空间永久属于当前用户，只承载不参与协作的个人项目。'
-          : '团队工作区角色决定工作区操作，并向其中的项目和文件继承。',
+          : '团队工作区成员可以发现其中的项目和文件结构；项目正文访问由项目直接成员关系控制。',
       groups: [workspaceGroup],
+      currentUserRole: authorization.workspace.role,
       permissions: authorization.decision.permissions,
+      requests: authorization.decision.permissions.includes('workspace.members.manage')
+        ? await getWorkspaceRequests(authorization.workspace.id)
+        : [],
       scope: 'workspace' as const,
       title: authorization.workspace.kind === 'personal' ? '个人空间' : '工作区权限',
       workspaceId: authorization.workspace.id,
@@ -237,6 +280,12 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
       }),
       permissions: authorization.decision.permissions,
       project: { id: authorization.project.id, name: authorization.project.name },
+      requests: authorization.decision.permissions.includes('project.members.manage')
+        ? await getProjectRequests({
+            currentUserId: userId,
+            projectId: authorization.project.id,
+          })
+        : [],
       scope: 'project' as const,
       workspaceMembers: workspaceGroup?.members ?? [],
     };

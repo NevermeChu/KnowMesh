@@ -163,6 +163,7 @@ describe('permission overview', () => {
       'editor',
       'viewer',
     ]);
+    expect(overview.groups[0]?.source).toBe('workspace');
   });
 
   it('returns direct project members and capabilities', async () => {
@@ -174,23 +175,10 @@ describe('permission overview', () => {
       userId: 'user_1',
     });
     expect(overview).toMatchObject({
+      groups: [{ source: 'project' }],
       permissions: state.decision.permissions,
       project: { id: state.projectId, name: '产品知识库' },
       scope: 'project',
-    });
-  });
-
-  it('returns inherited document capabilities', async () => {
-    const overview = await getPermissionOverview({
-      documentId: state.documentId,
-      scope: 'document',
-    });
-
-    expect(overview).toMatchObject({
-      document: { id: state.documentId, title: '产品方案' },
-      permissions: state.decision.permissions,
-      project: { id: state.projectId, name: '产品知识库' },
-      scope: 'document',
     });
   });
 

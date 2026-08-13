@@ -15,6 +15,7 @@ const workspacePermissions: Record<MemberRole, Permission[]> = {
 
 const projectPermissions: Record<MemberRole, Permission[]> = {
   editor: [
+    'project.structure.read',
     'project.read',
     'project.update',
     'document.read',
@@ -23,6 +24,7 @@ const projectPermissions: Record<MemberRole, Permission[]> = {
     'document.delete',
   ],
   owner: [
+    'project.structure.read',
     'project.read',
     'project.update',
     'project.delete',
@@ -32,7 +34,7 @@ const projectPermissions: Record<MemberRole, Permission[]> = {
     'document.update',
     'document.delete',
   ],
-  viewer: ['project.read', 'document.read'],
+  viewer: ['project.structure.read', 'project.read', 'document.read'],
 };
 
 export function getWorkspacePermissions(role: MemberRole, workspaceKind: WorkspaceKind) {
@@ -58,7 +60,7 @@ export function getProjectPermissionDecision(options: {
   );
 
   if (options.workspaceKind === 'personal') {
-    if (options.isProjectOwner) {
+    if (options.isProjectOwner && options.projectRole === 'owner') {
       grants.push({ role: 'owner', source: 'project' as const });
       for (const permission of personalOwnerPermissions) {
         resolvedPermissions.add(permission);
@@ -72,6 +74,9 @@ export function getProjectPermissionDecision(options: {
     };
   }
 
+  grants.push({ role: options.workspaceRole, source: 'workspace' as const });
+  resolvedPermissions.add('project.structure.read');
+
   if (options.projectRole) {
     grants.push({ role: options.projectRole, source: 'project' as const });
     for (const permission of projectPermissions[options.projectRole]) {
@@ -79,12 +84,7 @@ export function getProjectPermissionDecision(options: {
     }
   }
 
-  grants.push({ role: options.workspaceRole, source: 'workspace' as const });
-  for (const permission of projectPermissions[options.workspaceRole]) {
-    resolvedPermissions.add(permission);
-  }
-
-  if (options.isProjectOwner) {
+  if (options.isProjectOwner && options.projectRole === 'owner') {
     for (const permission of projectPermissions.owner) {
       resolvedPermissions.add(permission);
     }

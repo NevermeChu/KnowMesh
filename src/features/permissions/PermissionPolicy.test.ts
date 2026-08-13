@@ -2,71 +2,51 @@ import { describe, expect, it } from 'vitest';
 import { getProjectPermissionDecision, getWorkspacePermissions } from './PermissionPolicy';
 
 describe('permission policy', () => {
-  it('limits workspace viewer to reading', () => {
+  it('maps team workspace roles to capabilities', () => {
     expect(getWorkspacePermissions('viewer', 'team')).toStrictEqual(['workspace.read']);
-  });
-
-  it('grants workspace editor project creation', () => {
     expect(getWorkspacePermissions('editor', 'team')).toContain('project.create');
   });
 
-  it('prevents personal workspace membership capabilities', () => {
+  it('restricts personal resources to their owner', () => {
     expect(getWorkspacePermissions('owner', 'personal')).toStrictEqual([
       'workspace.read',
       'workspace.update',
       'project.create',
     ]);
     expect(getWorkspacePermissions('editor', 'personal')).toStrictEqual([]);
-  });
-
-  it('keeps personal project private from workspace owner', () => {
-    const decision = getProjectPermissionDecision({
+    const nonOwnerDecision = getProjectPermissionDecision({
       isProjectOwner: false,
       projectRole: null,
       workspaceRole: 'owner',
       workspaceKind: 'personal',
     });
-
-    expect(decision.permissions).toStrictEqual([]);
-  });
-
-  it('excludes member management from personal project owner', () => {
-    const decision = getProjectPermissionDecision({
+    const ownerDecision = getProjectPermissionDecision({
       isProjectOwner: true,
       projectRole: 'owner',
       workspaceRole: 'owner',
       workspaceKind: 'personal',
     });
 
-    expect(decision.permissions).toContain('project.delete');
-    expect(decision.permissions).not.toContain('project.members.manage');
+    expect(nonOwnerDecision.permissions).toStrictEqual([]);
+    expect(ownerDecision.permissions).toContain('project.delete');
+    expect(ownerDecision.permissions).not.toContain('project.members.manage');
   });
 
-  it('inherits collaboration editing from workspace editor', () => {
-    const decision = getProjectPermissionDecision({
-      isProjectOwner: false,
-      projectRole: null,
-      workspaceRole: 'editor',
-      workspaceKind: 'team',
-    });
+  it('limits non-project team members to structure', () => {
+    for (const workspaceRole of ['editor', 'owner'] as const) {
+      const decision = getProjectPermissionDecision({
+        isProjectOwner: false,
+        projectRole: null,
+        workspaceRole,
+        workspaceKind: 'team',
+      });
 
-    expect(decision.permissions).toContain('document.update');
-    expect(decision.permissions).not.toContain('project.delete');
+      expect(decision.permissions).toStrictEqual(['project.structure.read']);
+      expect(decision.isResourceOwner).toBeFalsy();
+    }
   });
 
-  it('grants collaboration deletion to workspace owner without project ownership', () => {
-    const decision = getProjectPermissionDecision({
-      isProjectOwner: false,
-      projectRole: null,
-      workspaceRole: 'owner',
-      workspaceKind: 'team',
-    });
-
-    expect(decision.permissions).toContain('project.delete');
-    expect(decision.isResourceOwner).toBeFalsy();
-  });
-
-  it('combines direct and inherited grants', () => {
+  it('uses direct project role for content permissions', () => {
     const decision = getProjectPermissionDecision({
       isProjectOwner: false,
       projectRole: 'viewer',
@@ -75,9 +55,10 @@ describe('permission policy', () => {
     });
 
     expect(decision.grants).toStrictEqual([
-      { role: 'viewer', source: 'project' },
       { role: 'editor', source: 'workspace' },
+      { role: 'viewer', source: 'project' },
     ]);
-    expect(decision.permissions).toContain('document.update');
+    expect(decision.permissions).toContain('document.read');
+    expect(decision.permissions).not.toContain('document.update');
   });
 });

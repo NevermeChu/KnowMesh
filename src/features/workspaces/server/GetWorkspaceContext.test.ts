@@ -29,9 +29,7 @@ const state = vi.hoisted(() => {
     await Promise.resolve();
     return { get: cookieGet };
   });
-  const ensureUserWorkspace = vi.fn<(userId: string) => Promise<{ id: string }>>();
-
-  return { cookieGet, cookies, ensureUserWorkspace, orderBy, protect, select, workspaces };
+  return { cookieGet, cookies, orderBy, protect, select, workspaces };
 });
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- The marker module has no runtime behavior in unit tests.
@@ -50,15 +48,10 @@ vi.mock('@/libs/DB', () => ({
   db: { select: state.select },
 }));
 
-vi.mock(import('./EnsureUserWorkspace'), () => ({
-  ensureUserWorkspace: state.ensureUserWorkspace,
-}));
-
 describe(getWorkspaceContext, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.protect.mockResolvedValue({ userId: 'user_1' });
-    state.ensureUserWorkspace.mockResolvedValue({ id: state.workspaces[0]?.id ?? '' });
     state.orderBy.mockResolvedValue(state.workspaces);
   });
 

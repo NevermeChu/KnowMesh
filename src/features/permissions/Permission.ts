@@ -6,6 +6,7 @@ const permissions = [
   'workspace.delete',
   'workspace.members.manage',
   'project.create',
+  'project.structure.read',
   'project.read',
   'project.update',
   'project.delete',

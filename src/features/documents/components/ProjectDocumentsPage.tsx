@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { AppSectionPlaceholder } from '@/components/layout/AppSectionPlaceholder';
 import type { ProjectArea } from '@/features/projects/Project';
+import { getProjectAccessState } from '@/features/projects/server/GetProjectAccessState';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
 import { createDocumentSchema } from '../DocumentSchema';
 import { getProjectDocuments } from '../server/GetProjectDocuments';
@@ -57,11 +58,16 @@ export async function ProjectDocumentsPage(props: {
     notFound();
   }
 
+  const accessState = await getProjectAccessState(projectId);
+
   return (
     <DocumentWorkspace
       canEdit={result.access.permissions.includes('document.update')}
+      canRead={result.access.permissions.includes('document.read')}
+      accessState={{ ...accessState, projectId }}
       documentCount={result.documents.length}
       selectedDocument={result.selectedDocument}
+      selectedDocumentTitle={result.selectedDocumentTitle}
     />
   );
 }

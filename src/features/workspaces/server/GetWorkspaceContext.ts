@@ -7,11 +7,9 @@ import { getWorkspacePermissions } from '@/features/permissions/PermissionPolicy
 import { db } from '@/libs/DB';
 import { workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
 import { ACTIVE_WORKSPACE_COOKIE } from '../Workspace';
-import { ensureUserWorkspace } from './EnsureUserWorkspace';
 
 export const getWorkspaceContext = cache(async () => {
   const { userId } = await auth.protect();
-  await ensureUserWorkspace(userId);
   const workspaces = await db
     .select({
       id: workspacesSchema.id,

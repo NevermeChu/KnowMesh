@@ -54,7 +54,7 @@ export async function getWorkspaceNavigation(options: { workspaceId: string }) {
       workspaceKind: project.workspaceKind,
     });
 
-    return decision.permissions.includes('project.read')
+    return decision.permissions.includes('project.structure.read')
       ? [
           {
             id: project.id,
@@ -65,9 +65,7 @@ export async function getWorkspaceNavigation(options: { workspaceId: string }) {
         ]
       : [];
   });
-  const documentProjectIds = projects
-    .filter((project) => project.permissions.includes('document.read'))
-    .map((project) => project.id);
+  const documentProjectIds = projects.map((project) => project.id);
 
   if (documentProjectIds.length === 0) {
     return { documents: [], projects };

@@ -35,17 +35,38 @@ export type PermissionMember = {
   userId: string;
 };
 
+export type PermissionRequest = {
+  displayName: string;
+  email: string | null;
+  requestedRole: MemberRole;
+  userId: string;
+};
+
 export type PermissionGroup = {
   id: string;
   members: PermissionMember[];
   name: string;
+  source: 'project' | 'workspace';
 };
+
+export function canMutatePermissionGroupMembers(options: {
+  scope: PermissionOverview['scope'];
+  source: PermissionGroup['source'];
+}) {
+  if (options.scope === 'workspace') {
+    return options.source === 'workspace';
+  }
+
+  return options.scope === 'project' && options.source === 'project';
+}
 
 export type PermissionOverview =
   | {
       description: string;
       groups: PermissionGroup[];
       permissions: Permission[];
+      currentUserRole: MemberRole;
+      requests: PermissionRequest[];
       scope: 'workspace';
       title: string;
       workspaceId: string;
@@ -54,6 +75,7 @@ export type PermissionOverview =
       groups: PermissionGroup[];
       permissions: Permission[];
       project: { id: string; name: string };
+      requests: PermissionRequest[];
       scope: 'project';
       workspaceMembers: PermissionMember[];
     }

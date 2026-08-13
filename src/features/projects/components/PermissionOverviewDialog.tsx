@@ -1,6 +1,6 @@
 'use client';
 
-/* oxlint-disable eslint/complexity, eslint/prefer-destructuring, unicorn/prefer-ternary -- Member management keeps scope-specific actions together for reviewability. */
+/* oxlint-disable eslint/complexity, unicorn/prefer-ternary -- Member management keeps scope-specific actions together for reviewability. */
 
 import { ShieldCheck, Trash2, UserPlus } from 'lucide-react';
 import { useState, useTransition } from 'react';
@@ -15,19 +15,23 @@ import { deleteDocument } from '@/features/documents/server/DeleteDocument';
 import { updateDocument } from '@/features/documents/server/UpdateDocument';
 import type { MemberRole, Permission } from '@/features/permissions/Permission';
 import {
-  addProjectMember,
+  approveProjectAccessRequest,
+  inviteProjectMember,
   removeProjectMember,
   updateProjectMemberRole,
 } from '@/features/permissions/server/ProjectMembers';
 import {
   inviteWorkspaceMember,
+  approveWorkspaceAccessRequest,
   removeWorkspaceMember,
   updateWorkspaceMemberRole,
+  requestWorkspaceEditAccess,
 } from '@/features/permissions/server/WorkspaceMembers';
 import type {
   PermissionOverview,
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
+import { canMutatePermissionGroupMembers } from '@/features/projects/PermissionOverview';
 import { deleteProject } from '@/features/projects/server/DeleteProject';
 import { updateProject } from '@/features/projects/server/UpdateProject';
 import { deleteWorkspace } from '@/features/workspaces/server/DeleteWorkspace';
@@ -39,15 +43,12 @@ const roles: { id: MemberRole; label: string }[] = [
   { id: 'viewer', label: 'Viewer' },
 ];
 
-const assignableRoles = roles.filter((role) => role.id !== 'owner');
-
 function PermissionMemberManager(props: {
   overview: PermissionOverview;
   onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
 }) {
   const [email, setEmail] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [role, setRole] = useState<'editor' | 'viewer'>('viewer');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -60,7 +61,7 @@ function PermissionMemberManager(props: {
     return null;
   }
 
-  const directGroup = props.overview.groups[0];
+  const directGroup = props.overview.groups.find((group) => group.source === 'project');
   const directMemberIds = new Set(directGroup?.members.map((member) => member.userId));
   const candidates =
     props.overview.scope === 'project'
@@ -80,14 +81,12 @@ function PermissionMemberManager(props: {
               if (props.overview.scope === 'workspace') {
                 await inviteWorkspaceMember({
                   email,
-                  role,
                   workspaceId: props.overview.workspaceId,
                 });
               } else {
-                await addProjectMember({
+                await inviteProjectMember({
                   memberUserId: selectedUserId,
                   projectId: props.overview.project.id,
-                  role,
                 });
               }
               props.onMutated('update', props.overview.scope);
@@ -133,24 +132,9 @@ function PermissionMemberManager(props: {
             ))}
           </select>
         )}
-        <select
-          aria-label="成员角色"
-          value={role}
-          className="h-9 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
-          disabled={isPending}
-          onChange={(event) => {
-            setRole(event.target.value === 'editor' ? 'editor' : 'viewer');
-          }}
-        >
-          {assignableRoles.map((assignableRole) => (
-            <option key={assignableRole.id} value={assignableRole.id}>
-              {assignableRole.label}
-            </option>
-          ))}
-        </select>
         <ModalDialogButton type="submit" variant="primary" disabled={isPending}>
           <UserPlus aria-hidden="true" className="size-3.5" />
-          {props.overview.scope === 'workspace' ? '发送邀请' : '添加成员'}
+          {props.overview.scope === 'workspace' ? '发送邀请' : '邀请成员'}
         </ModalDialogButton>
       </form>
       {error && <p className="mt-2 text-xs text-[#b52e2e]">{error}</p>}
@@ -158,7 +142,123 @@ function PermissionMemberManager(props: {
   );
 }
 
+function WorkspaceAccessRequest(props: {
+  overview: Extract<PermissionOverview, { scope: 'workspace' }>;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [didRequest, setDidRequest] = useState(false);
+
+  if (props.overview.currentUserRole !== 'viewer' || didRequest) {
+    return null;
+  }
+
+  return (
+    <section className="mb-5 rounded-lg border border-black/8 p-3">
+      <h3 className="text-sm font-semibold text-[#202124]">工作区编辑权限</h3>
+      <p className="mt-1 text-xs leading-5 text-[#777b80]">
+        Viewer 可以浏览工作区结构；创建项目需要申请 Editor 权限。
+      </p>
+      <ModalDialogButton
+        type="button"
+        variant="primary"
+        disabled={isPending}
+        onClick={() => {
+          startTransition(async () => {
+            await requestWorkspaceEditAccess({ workspaceId: props.overview.workspaceId });
+            setDidRequest(true);
+          });
+        }}
+      >
+        {isPending ? '提交中…' : '申请编辑权限'}
+      </ModalDialogButton>
+    </section>
+  );
+}
+
+function ProjectAccessRequests(props: {
+  overview: Extract<PermissionOverview, { scope: 'project' }>;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  if (props.overview.requests.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mb-5 rounded-lg border border-black/8 p-3">
+      <h3 className="mb-2 text-sm font-semibold text-[#202124]">权限申请</h3>
+      <ul className="space-y-2">
+        {props.overview.requests.map((request) => (
+          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-black/2 p-2.5">
+            <span className="min-w-0 flex-1 text-sm">
+              {request.displayName} 申请成为 {request.requestedRole}
+            </span>
+            <ModalDialogButton
+              type="button"
+              variant="primary"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  await approveProjectAccessRequest({
+                    memberUserId: request.userId,
+                    projectId: props.overview.project.id,
+                  });
+                  props.onMutated('update', 'project');
+                });
+              }}
+            >
+              批准
+            </ModalDialogButton>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function WorkspaceAccessReviews(props: {
+  overview: Extract<PermissionOverview, { scope: 'workspace' }>;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  if (props.overview.requests.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mb-5 rounded-lg border border-black/8 p-3">
+      <h3 className="mb-2 text-sm font-semibold text-[#202124]">权限申请</h3>
+      <ul className="space-y-2">
+        {props.overview.requests.map((request) => (
+          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-black/2 p-2.5">
+            <span className="min-w-0 flex-1 text-sm">{request.displayName} 申请成为 editor</span>
+            <ModalDialogButton
+              type="button"
+              variant="primary"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  await approveWorkspaceAccessRequest({
+                    memberUserId: request.userId,
+                    workspaceId: props.overview.workspaceId,
+                  });
+                  props.onMutated('update', 'workspace');
+                });
+              }}
+            >
+              批准
+            </ModalDialogButton>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function PermissionMemberActions(props: {
+  groupSource: PermissionOverview['groups'][number]['source'];
   member: PermissionOverview['groups'][number]['members'][number];
   overview: PermissionOverview;
   onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
@@ -170,6 +270,10 @@ function PermissionMemberActions(props: {
     !props.overview.permissions.includes(
       props.overview.scope === 'workspace' ? 'workspace.members.manage' : 'project.members.manage',
     ) ||
+    !canMutatePermissionGroupMembers({
+      scope: props.overview.scope,
+      source: props.groupSource,
+    }) ||
     props.member.role === 'owner'
   ) {
     return null;
@@ -177,37 +281,33 @@ function PermissionMemberActions(props: {
 
   return (
     <span className="flex shrink-0 items-center gap-1">
-      <select
-        aria-label={`${props.member.displayName}的角色`}
-        value={props.member.role}
-        className="h-8 rounded-md border border-black/10 bg-white px-2 text-xs"
-        disabled={isPending}
-        onChange={(event) => {
-          const role = event.target.value === 'editor' ? 'editor' : 'viewer';
-          startTransition(async () => {
-            if (props.overview.scope === 'workspace') {
-              await updateWorkspaceMemberRole({
-                memberUserId: props.member.userId,
-                role,
-                workspaceId: props.overview.workspaceId,
-              });
-            } else {
-              await updateProjectMemberRole({
-                memberUserId: props.member.userId,
-                projectId: props.overview.project.id,
-                role,
-              });
-            }
-            props.onMutated('update', props.overview.scope);
-          });
-        }}
-      >
-        {assignableRoles.map((assignableRole) => (
-          <option key={assignableRole.id} value={assignableRole.id}>
-            {assignableRole.label}
-          </option>
-        ))}
-      </select>
+      {props.member.role === 'editor' && (
+        <button
+          type="button"
+          className="h-8 rounded-md border border-black/10 bg-white px-2 text-xs"
+          disabled={isPending}
+          onClick={() => {
+            startTransition(async () => {
+              if (props.overview.scope === 'workspace') {
+                await updateWorkspaceMemberRole({
+                  memberUserId: props.member.userId,
+                  role: 'viewer',
+                  workspaceId: props.overview.workspaceId,
+                });
+              } else {
+                await updateProjectMemberRole({
+                  memberUserId: props.member.userId,
+                  projectId: props.overview.project.id,
+                  role: 'viewer',
+                });
+              }
+              props.onMutated('update', props.overview.scope);
+            });
+          }}
+        >
+          降为 Viewer
+        </button>
+      )}
       <button
         type="button"
         aria-label={`移除${props.member.displayName}`}
@@ -542,6 +642,15 @@ export function PermissionOverviewDialog(props: {
           {!props.isLoading && props.overview && (
             <PermissionMemberManager overview={props.overview} onMutated={props.onMutated} />
           )}
+          {!props.isLoading && props.overview?.scope === 'workspace' && (
+            <WorkspaceAccessRequest overview={props.overview} />
+          )}
+          {!props.isLoading && props.overview?.scope === 'workspace' && (
+            <WorkspaceAccessReviews overview={props.overview} onMutated={props.onMutated} />
+          )}
+          {!props.isLoading && props.overview?.scope === 'project' && (
+            <ProjectAccessRequests overview={props.overview} onMutated={props.onMutated} />
+          )}
           {!props.isLoading && props.overview?.groups.length === 0 && (
             <p className="py-10 text-center text-sm text-[#8a8d91]">暂无成员权限</p>
           )}
@@ -600,6 +709,7 @@ export function PermissionOverviewDialog(props: {
                                   )}
                                 </span>
                                 <PermissionMemberActions
+                                  groupSource={group.source}
                                   member={member}
                                   overview={overview}
                                   onMutated={props.onMutated}
