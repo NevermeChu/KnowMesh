@@ -15,6 +15,8 @@
 
 `main` 分支 push 会先执行 build、static、unit 和 e2e。只有四个 job 全部成功，deploy job 才会继续。项目正式开放前，临时允许 `feature/permissions` push 通过相同检查后部署到当前 `thisme.icu` 服务；该规则不会合并或修改 `main`，功能开发完成后应删除：
 
+CI workflow 中的 `DATABASE_URL` 只连接 runner 内由本地运行器启动的临时 PGlite，用于迁移、构建和测试，不是生产数据库地址。部署后的应用仍从服务器 `/etc/knowmesh.env` 读取真实生产连接。
+
 1. 从确定的 `GITHUB_SHA` 检出源码并构建 Next.js standalone。
 2. 将 `public`、`.next/static`、`migrations` 和自包含的 `migrate-production.cjs` 放入 release 根目录。
 3. 上传压缩包前通过预置的 ED25519 指纹验证生产主机；SSH 禁止绕过 host key 检查。
