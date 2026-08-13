@@ -18,7 +18,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: ['src/**/*.test.{js,ts}', 'scripts/**/*.test.ts'],
+          include: ['src/**/*.test.{js,ts}', 'scripts/**/*.test.ts', 'tests/**/*.integ.ts'],
           exclude: ['src/hooks/**/*.test.ts'],
           environment: 'node',
         },

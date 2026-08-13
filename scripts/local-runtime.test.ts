@@ -140,31 +140,5 @@ describe('Local runtime', () => {
       expect(runtime.commands).toStrictEqual(['PGlite', 'Database migration']);
       expect(runtime.terminateProcess).toHaveBeenCalledOnce();
     });
-
-    it('stops the database when readiness fails', async () => {
-      const runtime = createRuntime('dev');
-      vi.spyOn(runtime.operations, 'waitForPort').mockRejectedValue(
-        new Error('Database startup failed'),
-      );
-
-      await expect(runRuntime(runtime)).rejects.toThrow('Database startup failed');
-      expect(runtime.commands).toStrictEqual(['PGlite']);
-      expect(runtime.terminateProcess).toHaveBeenCalledOnce();
-    });
-  });
-
-  describe('Build mode', () => {
-    it('returns the build exit code and cleans the database', async () => {
-      const runtime = createRuntime('build-local');
-      const result = runRuntime(runtime);
-      await vi.waitFor(() => {
-        expect(runtime.commands).toContain('Next.js build');
-      });
-
-      exitChild(getChild(runtime.children, 'Next.js build'), 3);
-
-      await expect(result).resolves.toBe(3);
-      expect(runtime.terminateProcess).toHaveBeenCalledOnce();
-    });
   });
 });

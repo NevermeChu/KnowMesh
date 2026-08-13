@@ -26,23 +26,18 @@ describe(parseCodeGraphWatchConfig, () => {
 });
 
 describe(isIgnoredPath, () => {
-  it('ignores changes inside configured folders', () => {
-    expect(
-      isIgnoredPath({
-        changedPath: '.codegraph/codegraph.db',
-        ignoredPaths: ['.codegraph'],
-        root: 'C:\\project',
-      }),
-    ).toBeTruthy();
-  });
-
-  it('keeps changes outside configured folders', () => {
-    expect(
-      isIgnoredPath({
-        changedPath: 'src/page.tsx',
-        ignoredPaths: ['.codegraph'],
-        root: 'C:\\project',
-      }),
-    ).toBeFalsy();
+  it('distinguishes ignored and watched paths', () => {
+    for (const testCase of [
+      { changedPath: '.codegraph/codegraph.db', expected: true },
+      { changedPath: 'src/page.tsx', expected: false },
+    ]) {
+      expect(
+        isIgnoredPath({
+          changedPath: testCase.changedPath,
+          ignoredPaths: ['.codegraph'],
+          root: 'C:\\project',
+        }),
+      ).toBe(testCase.expected);
+    }
   });
 });

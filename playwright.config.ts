@@ -12,8 +12,8 @@ const baseURL = `http://localhost:${PORT}`;
  */
 export default defineConfig({
   testDir: './tests',
-  // Look for files with the .integ.js or .e2e.js extension
-  testMatch: '*.@(integ|e2e).?(c|m)[jt]s?(x)',
+  // Database integration tests run under Vitest; Playwright only collects E2E tests.
+  testMatch: '*.e2e.?(c|m)[jt]s?(x)',
   // Timeout per test, test running locally are slower due to database connections with PGLite
   timeout: 30 * 1000,
   // Fail the build on CI if you accidentally left test.only in the source code.
