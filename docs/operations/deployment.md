@@ -13,7 +13,7 @@
 
 ## 自动部署流程
 
-`main` 分支 push 会先执行 build、static、unit 和 e2e。只有四个 job 全部成功，deploy job 才会继续：
+`main` 分支 push 会先执行 build、static、unit 和 e2e。只有四个 job 全部成功，deploy job 才会继续。项目正式开放前，临时允许 `feature/permissions` push 通过相同检查后部署到当前 `thisme.icu` 服务；该规则不会合并或修改 `main`，功能开发完成后应删除：
 
 1. 从确定的 `GITHUB_SHA` 检出源码并构建 Next.js standalone。
 2. 将 `public`、`.next/static`、`migrations` 和自包含的 `migrate-production.cjs` 放入 release 根目录。
@@ -24,6 +24,8 @@
 7. 依次验证服务器本地根路径和公网 HTTPS 根路径。失败时恢复旧应用软链接并重启服务。
 
 手动 `Release` workflow 只生成保留 14 天的 production artifact，不会部署服务器。它用于审计、下载或人工恢复。
+
+部署功能分支会覆盖 `thisme.icu` 当前运行的应用，并对同一个生产数据库执行该分支包含的迁移。之后再次 push `main`，原有自动部署仍会照常运行并切回 `main` 的最新版本。由于应用回滚不会逆转数据库 schema，功能分支迁移必须保持与当前 `main` 版本兼容。
 
 ## 数据库迁移与回滚
 
