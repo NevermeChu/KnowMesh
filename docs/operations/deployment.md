@@ -8,6 +8,7 @@
 - Nginx 将公网 HTTPS 请求反向代理到 `127.0.0.1:3000`。
 - standalone release 位于 `/srv/knowmesh-app/releases/<GITHUB_SHA>`，`/srv/knowmesh-app/current` 原子指向当前版本。
 - `/etc/knowmesh.env` 只保留在服务器，workflow 和 release 均不得复制或输出其中内容。
+- `/etc/knowmesh.env` 必须包含 Clerk endpoint 对应的 `CLERK_WEBHOOK_SIGNING_SECRET`；Clerk Dashboard 必须将生产 `/api/webhooks/clerk` 订阅到 `user.created`。
 - `HOSTNAME` 必须保持为 `localhost`，`PORT` 必须保持为 `3000`。
 
 ## 自动部署流程

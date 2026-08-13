@@ -6,9 +6,9 @@ import { workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
 const DEFAULT_WORKSPACE_NAME = '我的工作区';
 
 /**
- * Ensures that a user owns one permanent personal workspace.
+ * Idempotently provisions the permanent personal workspace for a Clerk user.
  *
- * @param userId - Authenticated Clerk user identifier.
+ * @param userId - Verified Clerk user identifier from a trusted server boundary.
  * @returns The existing or newly created personal workspace.
  */
 export async function ensureUserWorkspace(userId: string) {
