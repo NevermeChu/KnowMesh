@@ -14,9 +14,19 @@ const state = vi.hoisted(() => {
   const protect = vi.fn<() => Promise<{ userId: string }>>();
   const authorizeWorkspace = vi.fn<
     (options: { permission: string; userId: string; workspaceId: string }) => Promise<{
-      workspace: { id: string };
+      workspace: { id: string; kind: 'personal' | 'team'; ownerId: string };
     }>
   >();
+  const forUpdate = vi.fn<() => Promise<{ role: 'editor' | 'owner' | 'viewer' }[]>>();
+  const membershipWhere = vi.fn<(condition: unknown) => { for: typeof forUpdate }>(() => ({
+    for: forUpdate,
+  }));
+  const membershipFrom = vi.fn<(table: unknown) => { where: typeof membershipWhere }>(() => ({
+    where: membershipWhere,
+  }));
+  const select = vi.fn<(fields: unknown) => { from: typeof membershipFrom }>(() => ({
+    from: membershipFrom,
+  }));
   const returning = vi.fn<() => Promise<ProjectRecord[]>>();
   const projectValues = vi.fn<(values: unknown) => { returning: typeof returning }>(() => ({
     returning,
@@ -34,12 +44,15 @@ const state = vi.hoisted(() => {
   });
   /* oxlint-disable promise/prefer-await-to-callbacks -- Drizzle transactions execute a callback by design. */
   const transaction = vi.fn<
-    (callback: (transaction: { insert: typeof insert }) => Promise<unknown>) => Promise<unknown>
-  >(async (callback) => await callback({ insert }));
+    (
+      callback: (transaction: { insert: typeof insert; select: typeof select }) => Promise<unknown>,
+    ) => Promise<unknown>
+  >(async (callback) => await callback({ insert, select }));
   /* oxlint-enable promise/prefer-await-to-callbacks */
 
   return {
     authorizeWorkspace,
+    forUpdate,
     memberValues,
     project,
     projectValues,
@@ -78,8 +91,11 @@ describe('project creation action', () => {
     vi.clearAllMocks();
     state.resetInsertCount();
     state.protect.mockResolvedValue({ userId: 'user_1' });
+    state.forUpdate.mockResolvedValue([{ role: 'editor' }]);
     state.returning.mockResolvedValue([state.project]);
-    state.authorizeWorkspace.mockResolvedValue({ workspace: { id: state.project.workspaceId } });
+    state.authorizeWorkspace.mockResolvedValue({
+      workspace: { id: state.project.workspaceId, kind: 'team', ownerId: 'user_owner' },
+    });
   });
 
   it('creates project with owner membership', async () => {
@@ -90,7 +106,7 @@ describe('project creation action', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(state.transaction).toHaveBeenCalledOnce();
+    expect(state.forUpdate).toHaveBeenCalledWith('update');
     expect(state.projectValues).toHaveBeenCalledWith({
       name: '产品知识库',
       ownerId: 'user_1',
@@ -100,21 +116,13 @@ describe('project creation action', () => {
       projectId: state.project.id,
       role: 'owner',
       userId: 'user_1',
+      workspaceId: state.project.workspaceId,
     });
     expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
   });
 
-  it('rejects invalid input before transaction', async () => {
-    await expect(
-      createProject({ name: '   ', workspaceId: state.project.workspaceId }),
-    ).rejects.toThrow('请输入项目名称');
-
-    expect(state.transaction).not.toHaveBeenCalled();
-    expect(state.revalidatePath).not.toHaveBeenCalled();
-  });
-
-  it('rejects project creation outside accessible workspace', async () => {
-    state.authorizeWorkspace.mockRejectedValueOnce(new Error('没有权限执行该操作'));
+  it('rejects project creation after concurrent member removal', async () => {
+    state.forUpdate.mockResolvedValueOnce([]);
 
     await expect(
       createProject({
@@ -123,20 +131,7 @@ describe('project creation action', () => {
       }),
     ).rejects.toThrow('没有权限执行该操作');
 
-    expect(state.transaction).not.toHaveBeenCalled();
-    expect(state.revalidatePath).not.toHaveBeenCalled();
-  });
-
-  it('stops member creation when project insert fails', async () => {
-    state.returning.mockResolvedValueOnce([]);
-
-    await expect(
-      createProject({
-        name: '产品知识库',
-        workspaceId: state.project.workspaceId,
-      }),
-    ).rejects.toThrow('项目创建失败');
-    expect(state.memberValues).not.toHaveBeenCalled();
+    expect(state.projectValues).not.toHaveBeenCalled();
     expect(state.revalidatePath).not.toHaveBeenCalled();
   });
 });

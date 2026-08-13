@@ -3,6 +3,7 @@ import {
   index,
   integer,
   jsonb,
+  foreignKey,
   pgEnum,
   pgTable,
   primaryKey,
@@ -64,6 +65,9 @@ export const workspaceMembersSchema = pgTable(
   (table) => [
     primaryKey({ columns: [table.workspaceId, table.userId] }),
     index('workspace_members_user_workspace_idx').on(table.userId, table.workspaceId),
+    uniqueIndex('workspace_members_single_owner_idx')
+      .on(table.workspaceId)
+      .where(sql`${table.role} = 'owner'`),
   ],
 );
 
@@ -75,7 +79,6 @@ export const workspaceInvitationsSchema = pgTable(
       .notNull()
       .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
     email: varchar('email', { length: 320 }).notNull(),
-    role: projectMemberRoleEnum('role').notNull(),
     tokenHash: varchar('token_hash', { length: 64 }).notNull(),
     invitedById: varchar('invited_by_id', { length: 255 }).notNull(),
     acceptedById: varchar('accepted_by_id', { length: 255 }),
@@ -85,6 +88,19 @@ export const workspaceInvitationsSchema = pgTable(
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex('workspace_invitations_token_hash_idx').on(table.tokenHash)],
+);
+
+export const workspaceAccessRequestsSchema = pgTable(
+  'workspace_access_requests',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
+    userId: varchar('user_id', { length: 255 }).notNull(),
+    requestedRole: projectMemberRoleEnum('requested_role').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })],
 );
 
 export const projectsSchema = pgTable(
@@ -102,17 +118,65 @@ export const projectsSchema = pgTable(
       .notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
-  (table) => [index('projects_workspace_created_idx').on(table.workspaceId, table.createdAt)],
+  (table) => [
+    foreignKey({
+      columns: [table.workspaceId, table.ownerId],
+      foreignColumns: [workspaceMembersSchema.workspaceId, workspaceMembersSchema.userId],
+      name: 'projects_workspace_owner_member_fk',
+    }),
+    index('projects_workspace_created_idx').on(table.workspaceId, table.createdAt),
+    uniqueIndex('projects_id_workspace_idx').on(table.id, table.workspaceId),
+  ],
 );
 
 export const projectMembersSchema = pgTable(
   'project_members',
   {
+    projectId: uuid('project_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
+    userId: varchar('user_id', { length: 255 }).notNull(),
+    role: projectMemberRoleEnum('role').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.userId] }),
+    foreignKey({
+      columns: [table.projectId, table.workspaceId],
+      foreignColumns: [projectsSchema.id, projectsSchema.workspaceId],
+      name: 'project_members_project_workspace_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.workspaceId, table.userId],
+      foreignColumns: [workspaceMembersSchema.workspaceId, workspaceMembersSchema.userId],
+      name: 'project_members_workspace_member_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('project_members_single_owner_idx')
+      .on(table.projectId)
+      .where(sql`${table.role} = 'owner'`),
+  ],
+);
+
+export const projectInvitationsSchema = pgTable(
+  'project_invitations',
+  {
     projectId: uuid('project_id')
       .notNull()
       .references(() => projectsSchema.id, { onDelete: 'cascade' }),
     userId: varchar('user_id', { length: 255 }).notNull(),
-    role: projectMemberRoleEnum('role').notNull(),
+    invitedById: varchar('invited_by_id', { length: 255 }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.userId] })],
+);
+
+export const projectAccessRequestsSchema = pgTable(
+  'project_access_requests',
+  {
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projectsSchema.id, { onDelete: 'cascade' }),
+    userId: varchar('user_id', { length: 255 }).notNull(),
+    requestedRole: projectMemberRoleEnum('requested_role').notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.projectId, table.userId] })],

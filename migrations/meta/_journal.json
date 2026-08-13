@@ -57,6 +57,27 @@
       "when": 1786523513882,
       "tag": "0007_remove-redundant-indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786531278050,
+      "tag": "0008_dashing_vivisector",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786588106293,
+      "tag": "0009_cheerful_mockingbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786591967384,
+      "tag": "0010_silly_nomad",
+      "breakpoints": true
     }
   ]
 }

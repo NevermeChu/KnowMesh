@@ -1,10 +1,13 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
+import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { AuthorizationError } from '@/features/permissions/AuthorizationError';
+import { getWorkspacePermissions } from '@/features/permissions/PermissionPolicy';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import { db } from '@/libs/DB';
-import { projectMembersSchema, projectsSchema } from '@/models/Schema';
+import { projectMembersSchema, projectsSchema, workspaceMembersSchema } from '@/models/Schema';
 import { createProjectSchema } from '../CreateProjectSchema';
 import type { CreateProjectInput } from '../CreateProjectSchema';
 
@@ -22,6 +25,29 @@ export async function createProject(input: CreateProjectInput) {
   }
 
   await db.transaction(async (transaction) => {
+    const [membership] = await transaction
+      .select({ role: workspaceMembersSchema.role })
+      .from(workspaceMembersSchema)
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, authorization.workspace.id),
+          eq(workspaceMembersSchema.userId, userId),
+        ),
+      )
+      .for('update');
+    let role = membership?.role;
+
+    if (membership && authorization.workspace.ownerId === userId) {
+      role = 'owner';
+    }
+
+    if (
+      !role ||
+      !getWorkspacePermissions(role, authorization.workspace.kind).includes('project.create')
+    ) {
+      throw new AuthorizationError();
+    }
+
     const [createdProject] = await transaction
       .insert(projectsSchema)
       .values({
@@ -41,6 +67,7 @@ export async function createProject(input: CreateProjectInput) {
       projectId: createdProject.id,
       role: 'owner',
       userId,
+      workspaceId: authorization.workspace.id,
     });
   });
 
