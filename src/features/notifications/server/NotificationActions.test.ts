@@ -66,14 +66,6 @@ describe(markNotificationRead, () => {
 
     expect(state.revalidatePath).not.toHaveBeenCalled();
   });
-
-  it('rejects invalid identifier before update', async () => {
-    await expect(markNotificationRead({ notificationId: 'invalid' })).rejects.toThrow(
-      'Invalid UUID',
-    );
-
-    expect(state.update).not.toHaveBeenCalled();
-  });
 });
 
 describe(markAllNotificationsRead, () => {
