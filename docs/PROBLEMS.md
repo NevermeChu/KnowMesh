@@ -267,15 +267,15 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 - Webhook 创建失败返回 `5xx` 让 Clerk 重试，签名错误返回 `400`；`getWorkspaceContext` 恢复为纯读取。
 - 在环境校验、部署文档和 Clerk Dashboard 中配置 `CLERK_WEBHOOK_SIGNING_SECRET` 与 `user.created` endpoint，并明确 Webhook 是异步投递而非注册重定向的同步前置步骤。
 
-## 17. Clerk 账户删除后业务数据保留悬空用户标识
+## 17. 资源移除语义分散且账户删除后保留悬空用户标识
 
 ### 问题
 
-Clerk `UserProfile` 可以直接终止账户，但原 Webhook 只处理 `user.created`。用户身份删除后，Workspace、Project、成员、申请、邀请和 Document 创建者仍保存已经不存在的 Clerk user ID。
+普通 Workspace 和 Project 操作只表达 owner 删除，非 owner 成员没有统一的主动退出流程；不同入口若各自清理成员、申请和邀请，还容易遗留下级资源或破坏 owner 不变量。Clerk `UserProfile` 又可以直接终止账户，但原 Webhook 只处理 `user.created`；用户身份删除后，Workspace、Project、成员、申请、邀请和 Document 创建者仍保存已经不存在的 Clerk user ID。
 
 ### 根因
 
-KnowMesh 没有本地用户外键或 `user.deleted` 生命周期处理，同时尚未实现 Workspace 和 Project 所有权转让，不能仅删除成员行而继续满足 owner 不变量。
+原 Workspace/Project 动作绑定 owner 的删除能力，没有抽取可供用户主动操作和 Webhook 复用的资源移除规则。KnowMesh 还没有本地用户外键或 `user.deleted` 生命周期处理，同时尚未实现 Workspace 和 Project 所有权转让，因此不能仅删除成员行而继续满足 owner 不变量。
 
 ### 解决方法
 
@@ -283,3 +283,20 @@ KnowMesh 没有本地用户外键或 `user.deleted` 生命周期处理，同时�
 - 普通 Workspace/Project 操作使用相同规则：owner 删除完整资源，member 只退出；退出 Workspace 前先删除自己拥有的下级 Project 并退出其他直接参与的 Project。
 - 对其他人拥有的资源只清理该用户的成员、申请和邀请关系；保留共享 Document 并匿名化创建者标识。
 - 将该行为记录为所有权转让实现前的过渡策略；未来改变资源继承规则时以新 ADR 替代。
+
+## 18. 邀请登录丢失原始接受地址
+
+### 问题
+
+未登录用户从 Workspace 邀请邮件打开接受链接后会进入 Clerk 登录页，但登录完成后没有返回包含 token 的邀请页，因此无法继续校验和接受邀请。
+
+### 根因
+
+路由代理为 `auth.protect` 配置了固定的 `/sign-in` `unauthenticatedUrl`，但没有把当前受保护 URL 写入 Clerk 识别的 `redirect_url`。Clerk 因而只知道登录入口，不知道认证完成后应返回的业务目标。
+
+### 解决方法
+
+- 代理将完整的同源受保护 URL 作为 `redirect_url` 附加到登录地址，保留邀请 token 和其他查询参数。
+- `SignIn` 和 `SignUp` 只在缺少动态回跳目标时使用 `/dashboard` fallback，不使用会覆盖 `redirect_url` 的 force redirect。
+- 登录后返回邀请页并由用户明确点击接受；不在认证回跳时自动写入成员关系。
+- 使用轻量 URL 单元测试验证原始路径和邀请 token 保留在 `redirect_url` 中。

@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function SignInPage() {
-  return <SignIn path="/sign-in" />;
+  return <SignIn path="/sign-in" fallbackRedirectUrl="/dashboard" />;
 }

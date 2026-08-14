@@ -17,6 +17,12 @@
 
 `async` 不决定函数是否为 Server Action。决定因素是调用发生在哪个运行边界，以及导出函数是否使用 `'use server'` 暴露为 Action。
 
+## 受保护页面的认证回跳
+
+`src/proxy.ts` 保护工作区与邀请页面。未登录用户访问受保护 URL 时，代理将完整的同源目标 URL 写入 Clerk `redirect_url` 后转到 `/sign-in`；登录或注册完成后回到原路径。这会保留 Workspace 邀请链接的 token，但不自动接受邀请；用户仍必须在接受页明确确认，服务端 Action 再次校验 token 和已验证邮箱。
+
+`SignIn` 和 `SignUp` 的 `/dashboard` 只是没有 `redirect_url` 时的 fallback，不得使用 force redirect 覆盖受保护页面的动态回跳目标。
+
 ## 初始工作区导航数据
 
 `WorkspaceLayout` 默认在服务器运行：

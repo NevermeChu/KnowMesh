@@ -1,5 +1,6 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { createSignInUrl } from '@/utils/AuthenticationRedirect';
 
 const protectedRoutePrefixes = [
   '/collaboration',
@@ -17,7 +18,7 @@ function isProtectedRoute(pathname: string) {
 
 export default clerkMiddleware(async (auth, request) => {
   if (isProtectedRoute(request.nextUrl.pathname)) {
-    const signInUrl = new URL('/sign-in', request.url);
+    const signInUrl = createSignInUrl(request.nextUrl);
 
     await auth.protect({
       unauthenticatedUrl: signInUrl.toString(),
