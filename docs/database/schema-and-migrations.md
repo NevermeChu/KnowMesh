@@ -71,7 +71,15 @@
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
 - 与项目相同，`updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
 
-当前没有本地用户表、用户镜像同步逻辑或用户外键；`owner_id` 和 `user_id` 直接保存 Clerk user ID 字符串。Clerk `user.deleted` 由应用事务清理：先删除该用户拥有的 Workspace 和 Project，再移除其他资源中的成员、申请和邀请关系；其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`。
+### `notifications`
+
+- UUID 主键，通知按 Clerk `recipient_user_id` 归属用户，不随当前 Workspace 切换。
+- `actor_user_id` 可空；触发者账户删除后置空，收件人账户删除后删除其通知。
+- `type` 使用通知事件枚举；`title` 和 `body` 保存事件发生时的展示快照。
+- 可选的 `target_kind` 与 `target_id` 必须同时为空或同时存在。目标是 Workspace 或 Project 的多态历史上下文，不建立外键，因此资源删除不会删除通知。
+- `read_at` 为空表示未读；`(recipient_user_id, created_at DESC)` 支持最近通知列表，收件人未读部分索引支持角标统计。
+
+当前没有本地用户表、用户镜像同步逻辑或用户外键；`owner_id` 和 `user_id` 直接保存 Clerk user ID 字符串。Clerk `user.deleted` 由应用事务清理：先删除该用户拥有的 Workspace 和 Project，再移除其他资源中的成员、申请、邀请和收件人通知；其他通知中的触发者引用置空，其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`。
 
 ## 数据库约束与应用层不变量
 
@@ -110,6 +118,8 @@ Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFE
 `0003_add-workspaces.sql` 为已有项目所有者创建 Workspace，将项目按原 `owner_id` 归入对应 Workspace，并把既有 `project_members` 汇总回填为 `workspace_members`。同一用户在同一 Workspace 参与多个项目时保留最高角色（`owner` 高于 `editor`，`editor` 高于 `viewer`）；完成回填后才把 `projects.workspace_id` 设为非空。
 
 `0005_add-workspace-kind.sql` 识别个人空间、为缺少个人空间的已知用户补建 Workspace，并将旧 Personal 项目迁移到 owner 的个人空间。`0006_remove-project-kind.sql` 随后删除 `projects.kind`、旧枚举、分类索引和冗余的 `user_onboarding` 表。`0007_remove-redundant-indexes.sql` 删除已经被部分唯一索引或联合主键覆盖、且没有当前查询消费者的三个索引。`0008_dashing_vivisector.sql` 为 Project owner 增加 Workspace 成员复合外键。`0009_cheerful_mockingbird.sql` 增加 Project 邀请和 Workspace/Project 权限申请状态，并移除 Workspace 邀请的可选角色，使接受邀请固定为 viewer。`0010_silly_nomad.sql` 回填 `project_members.workspace_id`，预检既有成员和 owner 数据，增加两级成员复合外键、唯一 owner 索引及事务结束时执行的 owner 不变量触发器。
+
+`0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。
 
 ## 迁移不变量
 
@@ -153,3 +163,4 @@ npm run db:studio
 
 - [项目业务](../features/projects.md)
 - [文档业务](../features/documents.md)
+- [通知](../features/notifications.md)

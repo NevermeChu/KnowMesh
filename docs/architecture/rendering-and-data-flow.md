@@ -12,6 +12,7 @@
 内部写入：Client Component → Server Action → 数据库
 交互式权限读取：Client Component → Server Action → 资源授权 → 数据库与 Clerk 用户目录
 写入后同步：Server Action 使工作区布局数据失效 → 重新执行服务端读取
+权限通知：权限 Server Action → 同一数据库事务写业务状态与用户通知
 文档编辑：Client Component → 防抖/失焦保存 → Server Action → JSONB
 ```
 
@@ -69,6 +70,8 @@ Clerk 删除用户并投递 user.deleted
 
 项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。项目权限只计算一次，文档查询复用已经授权的项目 ID；当前导航查询没有分页，正文仍只由具体文档页面按需读取。
 
+共享布局还按当前 Clerk 用户统计未读通知，并把数量传给侧边栏角标。通知是用户级数据，不按活动 Workspace 过滤；`/notifications` 在右侧内容区读取最近 50 条，读取不自动标为已读，单条和全部已读均由明确的 Server Action 完成。当前没有实时连接，数量随服务端重新渲染更新。
+
 ## 创建项目
 
 `CreateProjectDialog` 是 Client Component。表单提交后调用 `createProject`：
@@ -111,6 +114,8 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 ## 权限总览
 
+邀请接受、权限申请提交和审批通过会在对应业务事务内写入持久化通知。通知保存当时的标题和正文快照，不依赖之后会被删除的待处理邀请或申请记录；读取和已读写入始终按当前用户限制收件人。
+
 侧边栏管理入口按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证读取能力；验证通过后查询对应范围的直接成员、邀请候选人和待处理申请，并通过 Clerk 用户目录补充姓名和主邮箱。响应同时返回服务端计算的能力，客户端据此呈现重命名、删除和成员管理操作；对应 Server Action 仍会再次授权。Workspace 邀请由应用生成令牌并通过 Resend 发送邮件。邮件和接受页共享邀请展示数据与文案，但分别针对邮件客户端和 Web 运行时渲染；邮件 CTA 只导航到接受页，不执行成员写入。接受页的 Server Component 查询重新校验令牌、状态和当前 Clerk 用户已验证邮箱，只有邮箱匹配且邀请仍有效时才把工作区摘要传给 Client Component；用户明确点击后，Server Action 再次验证并写入 viewer 成员关系。Project 只能邀请所属 Workspace 的现有成员，接受后成为 viewer。文件继续继承项目直接成员权限。
 
 Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Personal 区域始终读取当前用户的 Personal Workspace；Collaboration 区域只在活动 Workspace 为 Team 时显示并读取该 Team 的项目。文件没有独立 ACL，因此文件总览验证文件读取能力后返回所属项目的授权来源；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
@@ -149,6 +154,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/features/workspaces/server/GetWorkspaceInvitation.ts`：按令牌和当前已验证邮箱读取安全邀请摘要。
 - `src/features/workspaces/components/AcceptWorkspaceInvitation.tsx`：呈现邀请状态，并在用户确认后调用接受 Action。
 - `src/features/permissions/`：能力矩阵与服务端资源授权。
+- `src/features/notifications/`：通知事件、用户级读取和已读 Action。
 - `src/components/layout/AppShell.tsx`：客户端工作区外壳。
 - `src/features/documents/components/ProjectDocumentsPage.tsx`：项目文档服务端页面组合。
 - `src/features/documents/server/GetProjectDocuments.ts`：文档 server-only 查询。

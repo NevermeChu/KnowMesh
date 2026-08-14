@@ -75,6 +75,7 @@ Clerk `user.deleted` Webhook 触发 `deleteUserData`，并复用统一删除与�
 - Team Workspace 支持 Resend 邮箱邀请、成员角色修改和移除；邮件负责静态通知和导航，受保护的接受页负责实时状态校验和用户确认，两者共享展示数据但不共享运行时 UI。
 - Team 项目只显示项目直接成员；Workspace 成员作为邀请候选人而不是项目权限成员。
 - Workspace 和 Project 邀请接受后默认加入为 viewer。Workspace viewer 可申请 editor；非项目成员可申请 viewer；Project viewer 可申请 editor。
+- 邀请接受、权限申请提交和审批通过会在业务事务内为邀请人、owner 或申请人写入用户级站内通知；通知历史不随 Workspace 切换。
 - 文件权限总览继续展示所属项目的授权来源，不增加文档级 ACL。
 
 ## 数据不变量
@@ -109,6 +110,7 @@ Clerk `user.deleted` Webhook 触发 `deleteUserData`，并复用统一删除与�
 - `src/features/projects/server/GetPermissionOverview.ts`
 - `src/features/permissions/PermissionPolicy.ts`
 - `src/features/permissions/server/ProjectAuthorization.ts`
+- `src/features/notifications/server/CreateNotification.ts`
 - `src/components/layout/AppSidebar/SidebarWorkspaceNavigation.tsx`
 
 ## 相关决策

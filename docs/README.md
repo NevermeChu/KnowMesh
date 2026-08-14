@@ -11,6 +11,7 @@
 | 理解系统整体结构 | [`architecture/overview.md`](architecture/overview.md) |
 | 修改项目读取、Server Component 或 Server Action | [`architecture/rendering-and-data-flow.md`](architecture/rendering-and-data-flow.md) |
 | 修改项目、个人/协作区域或项目成员 | [`features/projects.md`](features/projects.md) |
+| 修改站内通知、未读状态或通知触发事件 | [`features/notifications.md`](features/notifications.md) |
 | 修改文档模型、编辑器或文档权限 | [`features/documents.md`](features/documents.md) 和 [`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
 | 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |
@@ -44,6 +45,12 @@
 ├─ 项目成员资源授权
 ├─ Tiptap 单人编辑器
 └─ Server Action 自动保存
+
+通知业务
+├─ 用户级 notifications 历史
+├─ 权限事务内写入事件
+├─ Workspace Layout 未读统计
+└─ /notifications 已读操作
 ```
 
 ## 文档类型
