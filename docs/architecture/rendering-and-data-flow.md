@@ -46,6 +46,21 @@ Clerk 完成用户注册
 
 Webhook 失败返回 `5xx` 以触发 Clerk 重试。Webhook 是异步投递，因此不能把注册后的页面重定向当作数据库写入已经完成的同步证明。
 
+Clerk 账户删除后的清理流程为：
+
+```text
+Clerk 删除用户并投递 user.deleted
+→ Route Handler 验证签名和被删除用户 ID
+→ deleteUserData 在事务中删除用户拥有的 Workspace 和 Project
+→ 外键级联删除自有资源的下级内容
+→ 清理其他 Workspace 和 Project 中的成员、申请和邀请关系
+→ 保留其他人 Project 中的 Document，并匿名化 created_by_id
+```
+
+账户删除采用“自有资源删除、他人资源退出”的过渡策略，不执行所有权转让。重复投递只会再次执行无匹配行的删除或匿名化，保持幂等；事务失败返回 `5xx`。
+
+普通 Workspace 和 Project 操作复用相同语义：Project 右键权限弹窗以及“设置 → 工作区管理”根据当前用户角色显示“删除”或“退出”，服务端只接收资源 ID，并在已认证边界重新解析 owner/member 身份。owner 删除完整资源；member 退出时只清理自己的关系。Workspace member 退出前会递归处理其直接参与的 Project，避免留下 owner Project 或违反成员外键。
+
 项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。项目权限只计算一次，文档查询复用已经授权的项目 ID；当前导航查询没有分页，正文仍只由具体文档页面按需读取。
 
 ## 创建项目
@@ -90,7 +105,7 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 ## 权限总览
 
-侧边栏管理入口按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证读取能力；验证通过后查询对应范围的直接成员、邀请候选人和待处理申请，并通过 Clerk 用户目录补充姓名和主邮箱。响应同时返回服务端计算的能力，客户端据此呈现重命名、删除和成员管理操作；对应 Server Action 仍会再次授权。Workspace 邀请由应用生成令牌并通过 Resend 发送邮件，接受页校验令牌、有效期和当前 Clerk 用户已验证邮箱；Project 只能邀请所属 Workspace 的现有成员，接受后成为 viewer。文件继续继承项目直接成员权限。
+侧边栏管理入口按需调用 `getPermissionOverview` Server Action。该 Action 从当前 Clerk 会话取得身份，再按请求范围验证读取能力；验证通过后查询对应范围的直接成员、邀请候选人和待处理申请，并通过 Clerk 用户目录补充姓名和主邮箱。响应同时返回服务端计算的能力，客户端据此呈现重命名、删除和成员管理操作；对应 Server Action 仍会再次授权。Workspace 邀请由应用生成令牌并通过 Resend 发送邮件。邮件和接受页共享邀请展示数据与文案，但分别针对邮件客户端和 Web 运行时渲染；邮件 CTA 只导航到接受页，不执行成员写入。接受页的 Server Component 查询重新校验令牌、状态和当前 Clerk 用户已验证邮箱，只有邮箱匹配且邀请仍有效时才把工作区摘要传给 Client Component；用户明确点击后，Server Action 再次验证并写入 viewer 成员关系。Project 只能邀请所属 Workspace 的现有成员，接受后成为 viewer。文件继续继承项目直接成员权限。
 
 Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Personal 区域始终读取当前用户的 Personal Workspace；Collaboration 区域只在活动 Workspace 为 Team 时显示并读取该 Team 的项目。文件没有独立 ACL，因此文件总览验证文件读取能力后返回所属项目的授权来源；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
 
@@ -105,7 +120,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 ## 当前传输边界
 
 - 当前项目创建、资源重命名和删除、文档创建与更新、交互式权限总览使用 Server Action。
-- 当前存在一个 `POST /api/webhooks/clerk` Route Handler，只接受签名有效的 Clerk 事件，并仅处理 `user.created`。
+- 当前存在一个 `POST /api/webhooks/clerk` Route Handler，只接受签名有效的 Clerk 事件，并处理 `user.created` 和 `user.deleted`。
 - `src/proxy.ts` 的 matcher 排除了 `/api`；Webhook 依靠请求签名而不是 Clerk 浏览器会话。当前没有其他公开 API、文件传输或实时连接。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
@@ -113,7 +128,9 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 ## 相关代码
 
 - `src/app/(workspace)/layout.tsx`：服务端初始查询入口。
-- `src/app/api/webhooks/clerk/route.ts`：验证 Clerk Webhook 并初始化 Personal Workspace。
+- `src/app/api/webhooks/clerk/route.ts`：验证 Clerk Webhook，并分派 Personal Workspace 初始化或账户数据清理。
+- `src/features/users/server/DeleteUserData.ts`：删除已移除 Clerk 用户拥有的资源并退出其他共享资源。
+- `src/features/permissions/server/ResourceRemoval.ts`：统一执行 Workspace/Project 的 owner 删除与 member 退出事务步骤。
 - `src/features/workspaces/server/GetWorkspaceContext.ts`：解析并授权当前 Workspace。
 - `src/features/workspaces/server/CreateWorkspace.ts`：创建 Workspace 与 owner 成员。
 - `src/features/workspaces/server/SelectWorkspace.ts`：校验选择并写入当前 Workspace cookie。
@@ -122,6 +139,9 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/features/projects/components/CreateProjectDialog.tsx`：客户端表单。
 - `src/features/projects/server/CreateProject.ts`：创建项目 Server Action。
 - `src/features/projects/server/GetPermissionOverview.ts`：按需授权并读取权限总览。
+- `src/features/emails/components/WorkspaceInvitationEmail.tsx`：渲染邮件客户端兼容的 Workspace 邀请邮件。
+- `src/features/workspaces/server/GetWorkspaceInvitation.ts`：按令牌和当前已验证邮箱读取安全邀请摘要。
+- `src/features/workspaces/components/AcceptWorkspaceInvitation.tsx`：呈现邀请状态，并在用户确认后调用接受 Action。
 - `src/features/permissions/`：能力矩阵与服务端资源授权。
 - `src/components/layout/AppShell.tsx`：客户端工作区外壳。
 - `src/features/documents/components/ProjectDocumentsPage.tsx`：项目文档服务端页面组合。
@@ -139,3 +159,4 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0007：通过 Clerk 注册 Webhook 创建 Personal Workspace](../adr/0007-provision-personal-workspace-from-clerk-webhook.md)
+- [ADR 0008：统一按 owner 删除资源、按 member 退出资源](../adr/0008-delete-owned-resources-on-account-removal.md)

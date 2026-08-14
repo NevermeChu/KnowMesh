@@ -63,7 +63,7 @@ PostgreSQL / 本地 PGlite
 - 当前文档编辑器与共享内容工具栏之间的命令上下文。
 - 渲染当前路由内容。
 
-左上角切换器选择真实 Workspace。个人区域始终读取当前用户永久的 Personal Workspace；协作区域只在活动 Workspace 为 Team 时显示。两个区域复用同一项目与文档实现，但不是 Project 数据字段。
+左上角切换器选择真实 Workspace。个人区域始终读取当前有效用户的 Personal Workspace；协作区域只在活动 Workspace 为 Team 时显示。两个区域复用同一项目与文档实现，但不是 Project 数据字段。
 
 个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。正文以 ProseMirror JSON 通过 Server Action 保存到 PostgreSQL `JSONB`。
 
@@ -84,7 +84,8 @@ PostgreSQL / 本地 PGlite
 - 登录后共享应用外壳。
 - 个人与协作项目创建。
 - Workspace 创建、切换和项目归属。
-- Clerk 注册完成后通过签名 Webhook 幂等创建永久 Personal Workspace；该空间不可删除，用户可以不拥有任何 Team Workspace。
+- Clerk 注册完成后通过签名 Webhook 幂等创建 Personal Workspace；owner 可以从工作区管理删除该空间，Clerk 账户删除时也会清理该空间。
+- Clerk 账户删除后通过签名 Webhook 删除用户拥有的 Workspace 和 Project，并退出其他共享资源。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
@@ -110,3 +111,4 @@ PostgreSQL / 本地 PGlite
 - [ADR 0002](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0003](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
+- [ADR 0008](../adr/0008-delete-owned-resources-on-account-removal.md)

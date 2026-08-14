@@ -27,7 +27,7 @@
 
 ## 读取和编辑流程
 
-`/personal` 与 `/collaboration` 是两个界面区域，通过查询参数选择项目和文档，并复用同一个文档页面组件。Workspace Layout 先解析永久 Personal Workspace 和活动 Workspace：个人区域读取前者，协作区域仅在活动 Workspace 为 Team 时读取后者。页面 Server Component 调用 `getProjectDocuments`，同时验证项目所属 Workspace 及其类型。它先读取导航元数据；只有授权决策包含 `document.read` 时才继续查询并传递所选文档的 `content`。非项目成员点击文件时只得到标题和访问申请状态。
+`/personal` 与 `/collaboration` 是两个界面区域，通过查询参数选择项目和文档，并复用同一个文档页面组件。Workspace Layout 先解析当前有效用户的 Personal Workspace 和活动 Workspace：个人区域读取前者，协作区域仅在活动 Workspace 为 Team 时读取后者。页面 Server Component 调用 `getProjectDocuments`，同时验证项目所属 Workspace 及其类型。它先读取导航元数据；只有授权决策包含 `document.read` 时才继续查询并传递所选文档的 `content`。非项目成员点击文件时只得到标题和访问申请状态。
 
 全局侧边栏是当前唯一的项目和文档导航层。当前项目节点提供创建文档入口；编辑区不再重复呈现项目名称和文档列表。格式工具栏通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例，并由共享 `ContentToolbar` 在内容全屏按钮左侧呈现。工具栏直接显示最多八个常用格式命令，左侧箭头使用共享 `PopupMenu` 展开其余 StarterKit 格式命令，每行最多八个；该浮层只由同一箭头切换开关。撤销和重做独立固定在工具栏右侧。ContentToolbar 和编辑器正文右键菜单复用 `useDocumentEditorCommands`，因此两处使用相同的格式命令、激活状态和撤销/重做可用状态；右键菜单通过共享 `ContextMenu` 和 `PopupMenu` 纵向呈现。
 

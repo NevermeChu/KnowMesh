@@ -67,11 +67,11 @@
 - 标题最长 200 字符。
 - `content` 使用 `JSONB` 保存 ProseMirror JSON，默认内容是包含一个空段落的 `doc` 根节点。
 - `content_schema_version` 记录应用文档结构版本，当前为 `1`。
-- `created_by_id` 保存创建者的 Clerk user ID，不建立本地用户外键。
+- `created_by_id` 通常保存创建者的 Clerk user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
 - 与项目相同，`updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
 
-当前没有本地用户表、用户镜像同步逻辑或用户外键；`owner_id` 和 `user_id` 直接保存 Clerk user ID 字符串。
+当前没有本地用户表、用户镜像同步逻辑或用户外键；`owner_id` 和 `user_id` 直接保存 Clerk user ID 字符串。Clerk `user.deleted` 由应用事务清理：先删除该用户拥有的 Workspace 和 Project，再移除其他资源中的成员、申请和邀请关系；其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`。
 
 ## 数据库约束与应用层不变量
 
@@ -122,7 +122,7 @@ Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFE
 
 ## 创建项目的一致性
 
-创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。Personal Workspace 由已验证的 Clerk `user.created` Webhook 初始化且不可删除，用户创建的普通 Workspace 一律为 Team。创建项目前必须验证当前用户具有目标 Workspace 的 `project.create` 能力；项目与包含同一 `workspace_id` 的 owner `project_members` 也必须在同一事务写入。删除 Team Workspace 或项目通过数据库外键级联清理下级资源，应用层必须在删除前验证对应能力。
+创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。Personal Workspace 由已验证的 Clerk `user.created` Webhook 初始化；与 Team Workspace 相同，owner 删除时通过数据库外键级联清理。用户创建的普通 Workspace 一律为 Team。创建项目前必须验证当前用户具有目标 Workspace 的 `project.create` 能力；项目与包含同一 `workspace_id` 的 owner `project_members` 也必须在同一事务写入。Workspace 或 Project member 退出时只删除自己的关系；Workspace member 若仍拥有下级 Project，必须先在同一事务删除这些 Project，再删除 Workspace 成员关系。
 
 ## 本地操作
 

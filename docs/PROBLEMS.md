@@ -266,3 +266,20 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 - 新增签名验证的 Clerk Webhook Route Handler，订阅 `user.created` 后调用幂等的 `ensureUserWorkspace`。
 - Webhook 创建失败返回 `5xx` 让 Clerk 重试，签名错误返回 `400`；`getWorkspaceContext` 恢复为纯读取。
 - 在环境校验、部署文档和 Clerk Dashboard 中配置 `CLERK_WEBHOOK_SIGNING_SECRET` 与 `user.created` endpoint，并明确 Webhook 是异步投递而非注册重定向的同步前置步骤。
+
+## 17. Clerk 账户删除后业务数据保留悬空用户标识
+
+### 问题
+
+Clerk `UserProfile` 可以直接终止账户，但原 Webhook 只处理 `user.created`。用户身份删除后，Workspace、Project、成员、申请、邀请和 Document 创建者仍保存已经不存在的 Clerk user ID。
+
+### 根因
+
+KnowMesh 没有本地用户外键或 `user.deleted` 生命周期处理，同时尚未实现 Workspace 和 Project 所有权转让，不能仅删除成员行而继续满足 owner 不变量。
+
+### 解决方法
+
+- Webhook 订阅并处理 `user.deleted`，通过幂等事务复用 owner 删除、member 退出的统一资源清理规则。
+- 普通 Workspace/Project 操作使用相同规则：owner 删除完整资源，member 只退出；退出 Workspace 前先删除自己拥有的下级 Project 并退出其他直接参与的 Project。
+- 对其他人拥有的资源只清理该用户的成员、申请和邀请关系；保留共享 Document 并匿名化创建者标识。
+- 将该行为记录为所有权转让实现前的过渡策略；未来改变资源继承规则时以新 ADR 替代。
