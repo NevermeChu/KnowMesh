@@ -1,4 +1,5 @@
 import { AcceptWorkspaceInvitation } from '@/features/workspaces/components/AcceptWorkspaceInvitation';
+import { getWorkspaceInvitation } from '@/features/workspaces/server/GetWorkspaceInvitation';
 
 export default async function AcceptInvitationPage(props: {
   searchParams: Promise<{ token?: string }>;
@@ -6,8 +7,10 @@ export default async function AcceptInvitationPage(props: {
   const { token } = await props.searchParams;
 
   if (!token) {
-    return <p className="py-20 text-sm text-[#b52e2e]">邀请链接缺少令牌。</p>;
+    return <AcceptWorkspaceInvitation data={{ status: 'invalid' }} token="" />;
   }
 
-  return <AcceptWorkspaceInvitation token={token} />;
+  const data = await getWorkspaceInvitation({ token });
+
+  return <AcceptWorkspaceInvitation data={data} token={token} />;
 }

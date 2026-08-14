@@ -1,10 +1,16 @@
 'use server';
 
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { auth, clerkClient, currentUser } from '@clerk/nextjs/server';
 import { and, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorkspaceInvitationEmail';
+import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
+import {
+  formatWorkspaceInvitationExpiration,
+  getWorkspaceInvitationInviterName,
+  WORKSPACE_INVITATION_ROLE_LABEL,
+} from '@/features/workspaces/WorkspaceInvitation';
 import { db } from '@/libs/DB';
 import {
   projectMembersSchema,
@@ -33,7 +39,6 @@ import type {
 import { authorizeWorkspace } from './WorkspaceAuthorization';
 
 const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
   const { userId } = await auth.protect();
@@ -46,6 +51,12 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
 
   if (authorization.workspace.kind === 'personal') {
     throw new Error('个人空间不支持邀请成员');
+  }
+
+  const inviter = await currentUser();
+
+  if (!inviter) {
+    throw new Error('无法读取当前用户');
   }
 
   const client = await clerkClient();
@@ -74,12 +85,13 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
   }
 
   const token = randomBytes(32).toString('base64url');
-  const tokenHash = hashToken(token);
+  const tokenHash = hashWorkspaceInvitationToken(token);
+  const expiresAt = new Date(Date.now() + INVITATION_LIFETIME_MS);
   const [invitation] = await db
     .insert(workspaceInvitationsSchema)
     .values({
       email: invitationInput.email,
-      expiresAt: new Date(Date.now() + INVITATION_LIFETIME_MS),
+      expiresAt,
       invitedById: userId,
       tokenHash,
       workspaceId: invitationInput.workspaceId,
@@ -93,8 +105,13 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
   try {
     await sendWorkspaceInvitationEmail({
       acceptUrl: `${getBaseUrl()}/invitations/accept?token=${encodeURIComponent(token)}`,
-      email: invitationInput.email,
-      workspaceName: authorization.workspace.name,
+      invitation: {
+        expiresAtLabel: formatWorkspaceInvitationExpiration(expiresAt),
+        inviteeEmail: invitationInput.email,
+        inviterName: getWorkspaceInvitationInviterName(inviter),
+        roleLabel: WORKSPACE_INVITATION_ROLE_LABEL,
+        workspaceName: authorization.workspace.name,
+      },
     });
   } catch (error) {
     await db
@@ -126,7 +143,10 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
     .from(workspaceInvitationsSchema)
     .where(
       and(
-        eq(workspaceInvitationsSchema.tokenHash, hashToken(invitationInput.token)),
+        eq(
+          workspaceInvitationsSchema.tokenHash,
+          hashWorkspaceInvitationToken(invitationInput.token),
+        ),
         isNull(workspaceInvitationsSchema.acceptedAt),
         isNull(workspaceInvitationsSchema.revokedAt),
       ),
