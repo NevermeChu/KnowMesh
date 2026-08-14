@@ -3,13 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST } from './route';
 
 const state = vi.hoisted(() => ({
+  deleteUserData: vi.fn<(userId: string) => Promise<void>>(),
   ensureUserWorkspace: vi.fn<(userId: string) => Promise<{ id: string }>>(),
   verifyWebhook: vi.fn<
     (
       request: NextRequest,
       options: { signingSecret: string },
     ) => Promise<{
-      data: { id: string };
+      data: { id?: string };
       type: string;
     }>
   >(),
@@ -17,6 +18,10 @@ const state = vi.hoisted(() => ({
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial webhook mock isolates signature verification.
 vi.mock('@clerk/nextjs/webhooks', () => ({ verifyWebhook: state.verifyWebhook }));
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial cleanup mock isolates database writes.
+vi.mock('@/features/users/server/DeleteUserData', () => ({
+  deleteUserData: state.deleteUserData,
+}));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial provisioning mock isolates database writes.
 vi.mock('@/features/workspaces/server/EnsureUserWorkspace', () => ({
   ensureUserWorkspace: state.ensureUserWorkspace,
@@ -29,6 +34,7 @@ vi.mock('@/libs/Env', () => ({
 describe(POST, () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    state.deleteUserData.mockResolvedValue();
     state.ensureUserWorkspace.mockResolvedValue({ id: 'workspace_1' });
   });
 
@@ -56,6 +62,37 @@ describe(POST, () => {
   it('requests retry when provisioning fails', async () => {
     state.verifyWebhook.mockResolvedValue({ data: { id: 'user_1' }, type: 'user.created' });
     state.ensureUserWorkspace.mockRejectedValue(new Error('Database unavailable'));
+    const request = new NextRequest('http://localhost/api/webhooks/clerk', { method: 'POST' });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(500);
+  });
+
+  it('deletes business data for user deletion event', async () => {
+    state.verifyWebhook.mockResolvedValue({ data: { id: 'user_1' }, type: 'user.deleted' });
+    const request = new NextRequest('http://localhost/api/webhooks/clerk', { method: 'POST' });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(state.deleteUserData).toHaveBeenCalledWith('user_1');
+    expect(state.ensureUserWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('rejects user deletion event without identifier', async () => {
+    state.verifyWebhook.mockResolvedValue({ data: {}, type: 'user.deleted' });
+    const request = new NextRequest('http://localhost/api/webhooks/clerk', { method: 'POST' });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(state.deleteUserData).not.toHaveBeenCalled();
+  });
+
+  it('requests retry when user data deletion fails', async () => {
+    state.verifyWebhook.mockResolvedValue({ data: { id: 'user_1' }, type: 'user.deleted' });
+    state.deleteUserData.mockRejectedValue(new Error('Database unavailable'));
     const request = new NextRequest('http://localhost/api/webhooks/clerk', { method: 'POST' });
 
     const response = await POST(request);

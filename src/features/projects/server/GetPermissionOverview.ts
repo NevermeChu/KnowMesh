@@ -242,7 +242,7 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
     return {
       description:
         authorization.workspace.kind === 'personal'
-          ? '个人空间永久属于当前用户，只承载不参与协作的个人项目。'
+          ? '个人空间只承载不参与协作的个人项目，由当前 owner 管理。'
           : '团队工作区成员可以发现其中的项目和文件结构；项目正文访问由项目直接成员关系控制。',
       groups: [workspaceGroup],
       currentUserRole: authorization.workspace.role,
@@ -274,6 +274,7 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
         : null;
 
     return {
+      currentUserRole: authorization.project.projectRole,
       groups: await getProjectPermissionGroups({
         currentUserId: userId,
         project: authorization.project,

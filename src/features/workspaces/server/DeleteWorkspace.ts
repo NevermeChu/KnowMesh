@@ -1,40 +1,37 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { removeWorkspaceForUser } from '@/features/permissions/server/ResourceRemoval';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import { db } from '@/libs/DB';
-import { workspacesSchema } from '@/models/Schema';
 import { ACTIVE_WORKSPACE_COOKIE } from '../Workspace';
 import { deleteWorkspaceSchema } from '../WorkspaceSchema';
 import type { DeleteWorkspaceInput } from '../WorkspaceSchema';
 
-export async function deleteWorkspace(input: DeleteWorkspaceInput) {
+export async function deleteOrLeaveWorkspace(input: DeleteWorkspaceInput) {
   const { userId } = await auth.protect();
   const workspaceInput = deleteWorkspaceSchema.parse(input);
   const authorization = await authorizeWorkspace({
-    permission: 'workspace.delete',
+    permission: 'workspace.read',
     userId,
     workspaceId: workspaceInput.workspaceId,
   });
-  if (authorization.workspace.kind === 'personal') {
-    throw new Error('个人空间不可删除');
-  }
-  const [workspace] = await db
-    .delete(workspacesSchema)
-    .where(eq(workspacesSchema.id, authorization.workspace.id))
-    .returning({ id: workspacesSchema.id });
-
-  if (!workspace) {
-    throw new Error('工作区删除失败');
-  }
+  const operation = await db.transaction(
+    async (transaction) =>
+      await removeWorkspaceForUser(transaction, {
+        isOwner: authorization.workspace.ownerId === userId,
+        userId,
+        workspaceId: authorization.workspace.id,
+      }),
+  );
 
   const cookieStore = await cookies();
-  if (cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value === workspace.id) {
+  if (cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value === authorization.workspace.id) {
     cookieStore.delete(ACTIVE_WORKSPACE_COOKIE);
   }
 
   revalidatePath('/(workspace)', 'layout');
+  return { operation };
 }

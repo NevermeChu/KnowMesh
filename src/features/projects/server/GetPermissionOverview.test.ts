@@ -28,13 +28,22 @@ const state = vi.hoisted(() => {
   const project = {
     id: projectId,
     name: '产品知识库',
+    ownerId: 'user_owner',
+    projectRole: 'editor' as const,
     workspaceId,
     workspaceKind: 'personal' as const,
+    workspaceRole: 'owner' as const,
   };
   const authorizeWorkspace = vi.fn<
     () => Promise<{
       decision: { permissions: string[] };
-      workspace: { id: string; kind: 'personal' | 'team'; name: string };
+      workspace: {
+        id: string;
+        kind: 'personal' | 'team';
+        name: string;
+        ownerId: string;
+        role: 'editor' | 'owner' | 'viewer';
+      };
     }>
   >();
   const authorizeProject =
@@ -137,7 +146,13 @@ describe('permission overview', () => {
     });
     state.authorizeWorkspace.mockResolvedValue({
       decision: { permissions: ['workspace.read', 'workspace.update'] },
-      workspace: { id: state.workspaceId, kind: 'team', name: '产品团队' },
+      workspace: {
+        id: state.workspaceId,
+        kind: 'team',
+        name: '产品团队',
+        ownerId: 'user_owner',
+        role: 'editor',
+      },
     });
     state.authorizeProject.mockResolvedValue({ decision: state.decision, project: state.project });
     state.authorizeDocument.mockResolvedValue({
@@ -175,6 +190,7 @@ describe('permission overview', () => {
       userId: 'user_1',
     });
     expect(overview).toMatchObject({
+      currentUserRole: 'editor',
       groups: [{ source: 'project' }],
       permissions: state.decision.permissions,
       project: { id: state.projectId, name: '产品知识库' },

@@ -2,7 +2,7 @@
 
 /* oxlint-disable eslint/complexity, unicorn/prefer-ternary -- Member management keeps scope-specific actions together for reviewability. */
 
-import { ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import {
   ModalDialog,
@@ -31,10 +31,13 @@ import type {
   PermissionOverview,
   PermissionOverviewInput,
 } from '@/features/projects/PermissionOverview';
-import { canMutatePermissionGroupMembers } from '@/features/projects/PermissionOverview';
-import { deleteProject } from '@/features/projects/server/DeleteProject';
+import {
+  canMutatePermissionGroupMembers,
+  getPermissionOverviewRemovalMode,
+} from '@/features/projects/PermissionOverview';
+import { deleteOrLeaveProject } from '@/features/projects/server/DeleteProject';
 import { updateProject } from '@/features/projects/server/UpdateProject';
-import { deleteWorkspace } from '@/features/workspaces/server/DeleteWorkspace';
+import { deleteOrLeaveWorkspace } from '@/features/workspaces/server/DeleteWorkspace';
 import { updateWorkspace } from '@/features/workspaces/server/UpdateWorkspace';
 
 const roles: { id: MemberRole; label: string }[] = [
@@ -133,7 +136,6 @@ function PermissionMemberManager(props: {
           </select>
         )}
         <ModalDialogButton type="submit" variant="primary" disabled={isPending}>
-          <UserPlus aria-hidden="true" className="size-3.5" />
           {props.overview.scope === 'workspace' ? '发送邀请' : '邀请成员'}
         </ModalDialogButton>
       </form>
@@ -311,7 +313,7 @@ function PermissionMemberActions(props: {
       <button
         type="button"
         aria-label={`移除${props.member.displayName}`}
-        className="grid size-8 place-items-center rounded-md text-[#b52e2e] hover:bg-[#d14343]/8"
+        className="h-8 rounded-md px-2 text-xs text-[#b52e2e] hover:bg-[#d14343]/8"
         disabled={isPending}
         onClick={() => {
           startTransition(async () => {
@@ -330,7 +332,7 @@ function PermissionMemberActions(props: {
           });
         }}
       >
-        <Trash2 aria-hidden="true" className="size-3.5" />
+        移除
       </button>
     </span>
   );
@@ -432,6 +434,22 @@ function getDeleteConsequence(scope: PermissionOverview['scope']) {
   return '。';
 }
 
+function getRemovalDescription(options: {
+  overview: PermissionOverview;
+  removalMode: 'delete' | 'leave' | null;
+  resourceName: string;
+}) {
+  if (options.removalMode === 'leave') {
+    if (options.overview.scope === 'workspace') {
+      return `退出“${options.resourceName}”后，你拥有的项目及文件会一并删除；其他人的资源保持不变。`;
+    }
+
+    return `退出“${options.resourceName}”后，你将失去访问权限，资源及其他成员不受影响。`;
+  }
+
+  return `“${options.resourceName}”删除后无法恢复${getDeleteConsequence(options.overview.scope)}`;
+}
+
 function PermissionResourceEditor(props: {
   overview: PermissionOverview;
   onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
@@ -503,7 +521,7 @@ function PermissionResourceEditor(props: {
   );
 }
 
-function PermissionDeleteConfirmationDialog(props: {
+function PermissionRemovalConfirmationDialog(props: {
   overview: PermissionOverview;
   onClose: () => void;
   onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
@@ -512,26 +530,35 @@ function PermissionDeleteConfirmationDialog(props: {
   const [confirmationName, setConfirmationName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const removalMode = getPermissionOverviewRemovalMode(props.overview);
+  const actionLabel = removalMode === 'leave' ? '退出' : '删除';
 
   return (
     <ModalDialog
-      dismissal={{ ariaLabel: `关闭删除${resource.label}确认窗口`, onDismiss: props.onClose }}
+      dismissal={{
+        ariaLabel: `关闭${actionLabel}${resource.label}确认窗口`,
+        onDismiss: props.onClose,
+      }}
       surfaceClassName="w-full max-w-96"
-      titleId="permission-delete-confirmation-title"
+      titleId="permission-removal-confirmation-title"
     >
       <ModalDialogHeader
         closeButton={{
-          ariaLabel: `关闭删除${resource.label}确认窗口`,
+          ariaLabel: `关闭${actionLabel}${resource.label}确认窗口`,
           onClick: props.onClose,
         }}
-        title={`确认删除${resource.label}？`}
-        titleId="permission-delete-confirmation-title"
+        title={`确认${actionLabel}${resource.label}？`}
+        titleId="permission-removal-confirmation-title"
       />
       <ModalDialogBody>
         <p className="text-sm leading-6 text-[#666a70]">
-          “{resource.name}”删除后无法恢复{getDeleteConsequence(props.overview.scope)}
+          {getRemovalDescription({
+            overview: props.overview,
+            removalMode,
+            resourceName: resource.name,
+          })}
         </p>
-        {props.overview.scope === 'workspace' && (
+        {removalMode === 'delete' && props.overview.scope === 'workspace' && (
           <label className="mt-4 block text-sm text-[#666a70]">
             <span className="mb-1.5 block">输入工作区名称以确认</span>
             <input
@@ -560,27 +587,29 @@ function PermissionDeleteConfirmationDialog(props: {
           variant="danger"
           disabled={
             isPending ||
-            (props.overview.scope === 'workspace' && confirmationName !== resource.name)
+            (removalMode === 'delete' &&
+              props.overview.scope === 'workspace' &&
+              confirmationName !== resource.name)
           }
           onClick={() => {
             setError(null);
             startTransition(async () => {
               try {
                 if (props.overview.scope === 'workspace') {
-                  await deleteWorkspace({ workspaceId: resource.id });
+                  await deleteOrLeaveWorkspace({ workspaceId: resource.id });
                 } else if (props.overview.scope === 'project') {
-                  await deleteProject({ projectId: resource.id });
+                  await deleteOrLeaveProject({ projectId: resource.id });
                 } else {
                   await deleteDocument({ documentId: resource.id });
                 }
                 props.onMutated('delete', props.overview.scope);
               } catch {
-                setError(`${resource.label}删除失败，请稍后重试`);
+                setError(`${resource.label}${actionLabel}失败，请稍后重试`);
               }
             });
           }}
         >
-          {isPending ? '删除中…' : `删除${resource.label}`}
+          {isPending ? `${actionLabel}中…` : `${actionLabel}${resource.label}`}
         </ModalDialogButton>
       </ModalDialogFooter>
     </ModalDialog>
@@ -601,11 +630,8 @@ export function PermissionOverviewDialog(props: {
   onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
   onNavigate: (input: PermissionOverviewInput) => void;
 }) {
-  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
-  const canDelete =
-    props.overview?.permissions.includes(
-      getResourcePermission({ operation: 'delete', scope: props.overview.scope }),
-    ) ?? false;
+  const [isRemovalConfirmationOpen, setIsRemovalConfirmationOpen] = useState(false);
+  const removalMode = props.overview ? getPermissionOverviewRemovalMode(props.overview) : null;
   const { overview } = props;
 
   return (
@@ -726,26 +752,26 @@ export function PermissionOverviewDialog(props: {
             ))}
         </ModalDialogBody>
 
-        {canDelete && (
+        {removalMode && (
           <ModalDialogFooter>
             <ModalDialogButton
               type="button"
               variant="danger"
               onClick={() => {
-                setIsDeleteConfirmationOpen(true);
+                setIsRemovalConfirmationOpen(true);
               }}
             >
-              <Trash2 aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-              删除{props.overview ? getResourceDetails(props.overview).label : '资源'}
+              {removalMode === 'delete' ? '删除' : '退出'}
+              {props.overview ? getResourceDetails(props.overview).label : '资源'}
             </ModalDialogButton>
           </ModalDialogFooter>
         )}
       </ModalDialog>
-      {isDeleteConfirmationOpen && props.overview && (
-        <PermissionDeleteConfirmationDialog
+      {isRemovalConfirmationOpen && props.overview && (
+        <PermissionRemovalConfirmationDialog
           overview={props.overview}
           onClose={() => {
-            setIsDeleteConfirmationOpen(false);
+            setIsRemovalConfirmationOpen(false);
           }}
           onMutated={props.onMutated}
         />

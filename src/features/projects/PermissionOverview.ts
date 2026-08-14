@@ -72,6 +72,7 @@ export type PermissionOverview =
       workspaceId: string;
     }
   | {
+      currentUserRole: MemberRole | null;
       groups: PermissionGroup[];
       permissions: Permission[];
       project: { id: string; name: string };
@@ -86,3 +87,21 @@ export type PermissionOverview =
       project: { id: string; name: string };
       scope: 'document';
     };
+
+export function getPermissionOverviewRemovalMode(overview: PermissionOverview) {
+  if (overview.scope === 'document') {
+    return overview.permissions.includes('document.delete') ? ('delete' as const) : null;
+  }
+
+  const directGroupSource = overview.scope === 'workspace' ? 'workspace' : 'project';
+  const directMemberRole = overview.groups
+    .find((group) => group.source === directGroupSource)
+    ?.members.find((member) => member.isCurrentUser)?.role;
+  const currentUserRole = overview.currentUserRole ?? directMemberRole;
+
+  if (!currentUserRole) {
+    return null;
+  }
+
+  return currentUserRole === 'owner' ? ('delete' as const) : ('leave' as const);
+}
