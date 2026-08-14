@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   documentsSchema,
+  notificationsSchema,
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
@@ -90,6 +91,7 @@ describe(deleteUserData, () => {
       workspaceId: 'workspace_shared',
     });
     expect(state.deleteFrom.mock.calls.map(([table]) => table)).toStrictEqual([
+      notificationsSchema,
       projectInvitationsSchema,
       projectAccessRequestsSchema,
       workspaceInvitationsSchema,
@@ -97,7 +99,10 @@ describe(deleteUserData, () => {
       projectMembersSchema,
       workspaceMembersSchema,
     ]);
-    expect(state.update).toHaveBeenCalledWith(documentsSchema);
-    expect(state.updateSet).toHaveBeenCalledWith({ createdById: DELETED_USER_ID });
+    expect(state.update.mock.calls).toStrictEqual([[notificationsSchema], [documentsSchema]]);
+    expect(state.updateSet.mock.calls).toStrictEqual([
+      [{ actorUserId: null }],
+      [{ createdById: DELETED_USER_ID }],
+    ]);
   });
 });

@@ -2,6 +2,7 @@
 
 import { SignOutButton } from '@clerk/nextjs';
 import {
+  Bell,
   Check,
   ChevronsUpDown,
   LogOut,
@@ -106,21 +107,45 @@ export function WorkspaceSwitcher(props: {
 }
 
 /**
- * Renders application and account settings in a compact dialog.
+ * Renders notification and settings shortcuts in the sidebar footer.
  *
  * @param props - Settings state and navigation actions.
  * @returns The settings menu.
  */
 export function SettingsMenu(props: {
   isOpen: boolean;
+  isNotificationsRoute: boolean;
   isSettingsRoute: boolean;
   isWorkspaceAvailable: boolean;
+  unreadNotificationCount: number;
   onManageWorkspace: () => void;
   onNavigate: () => void;
   onToggle: () => void;
 }) {
   return (
-    <div className="relative border-t border-black/6 px-1.5 py-2">
+    <div className="relative space-y-1 border-t border-black/6 px-1.5 py-2">
+      <Link
+        href="/notifications"
+        aria-current={props.isNotificationsRoute ? 'page' : undefined}
+        className={`flex min-h-8 w-full items-center gap-3 rounded-lg px-1.5 text-sm font-medium transition-colors ${
+          props.isNotificationsRoute
+            ? 'bg-black/7 text-[#202124]'
+            : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
+        }`}
+        onClick={props.onNavigate}
+      >
+        <Bell aria-hidden="true" className="size-4" strokeWidth={1.8} />
+        <span>通知</span>
+        {props.unreadNotificationCount > 0 && (
+          <span
+            className="ml-auto min-w-5 rounded-full bg-[#e5484d] px-1.5 py-0.5 text-center text-[10px] leading-4 font-semibold text-white"
+            aria-label={`${props.unreadNotificationCount} 条未读通知`}
+          >
+            {props.unreadNotificationCount > 99 ? '99+' : props.unreadNotificationCount}
+          </span>
+        )}
+      </Link>
+
       <button
         type="button"
         aria-controls="settings-dialog"

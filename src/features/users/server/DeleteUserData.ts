@@ -4,6 +4,7 @@ import { removeWorkspaceForUser } from '@/features/permissions/server/ResourceRe
 import { db } from '@/libs/DB';
 import {
   documentsSchema,
+  notificationsSchema,
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
@@ -35,6 +36,14 @@ export async function deleteUserData(userId: string) {
         workspaceId: workspace.id,
       });
     }
+
+    await transaction
+      .delete(notificationsSchema)
+      .where(eq(notificationsSchema.recipientUserId, userId));
+    await transaction
+      .update(notificationsSchema)
+      .set({ actorUserId: null })
+      .where(eq(notificationsSchema.actorUserId, userId));
 
     await transaction
       .delete(projectInvitationsSchema)

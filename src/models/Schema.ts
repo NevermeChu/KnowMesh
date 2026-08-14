@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -17,6 +18,7 @@ import {
   EMPTY_DOCUMENT_CONTENT,
 } from '@/features/documents/Document';
 import type { DocumentContent } from '@/features/documents/Document';
+import { notificationTargetKinds, notificationTypes } from '@/features/notifications/Notification';
 import { memberRoles } from '@/features/permissions/Permission';
 import { workspaceKinds } from '@/features/workspaces/Workspace';
 
@@ -30,7 +32,38 @@ import { workspaceKinds } from '@/features/workspaces/Workspace';
 // Alternatively, if the database is running, use `npm run db:migrate` without restarting the server.
 
 export const projectMemberRoleEnum = pgEnum('project_member_role', memberRoles);
+export const notificationTypeEnum = pgEnum('notification_type', notificationTypes);
+export const notificationTargetKindEnum = pgEnum(
+  'notification_target_kind',
+  notificationTargetKinds,
+);
 export const workspaceKindEnum = pgEnum('workspace_kind', workspaceKinds);
+
+export const notificationsSchema = pgTable(
+  'notifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    recipientUserId: varchar('recipient_user_id', { length: 255 }).notNull(),
+    actorUserId: varchar('actor_user_id', { length: 255 }),
+    type: notificationTypeEnum('type').notNull(),
+    title: varchar('title', { length: 120 }).notNull(),
+    body: varchar('body', { length: 320 }).notNull(),
+    targetKind: notificationTargetKindEnum('target_kind'),
+    targetId: uuid('target_id'),
+    readAt: timestamp('read_at', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'notifications_target_pair_check',
+      sql`(${table.targetKind} is null) = (${table.targetId} is null)`,
+    ),
+    index('notifications_recipient_created_idx').on(table.recipientUserId, table.createdAt.desc()),
+    index('notifications_recipient_unread_idx')
+      .on(table.recipientUserId)
+      .where(sql`${table.readAt} is null`),
+  ],
+);
 
 export const workspacesSchema = pgTable(
   'workspaces',

@@ -78,6 +78,13 @@
       "when": 1786591967384,
       "tag": "0010_silly_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786695102692,
+      "tag": "0011_add-notifications",
+      "breakpoints": true
     }
   ]
 }

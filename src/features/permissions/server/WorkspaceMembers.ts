@@ -5,6 +5,7 @@ import { auth, clerkClient, currentUser } from '@clerk/nextjs/server';
 import { and, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorkspaceInvitationEmail';
+import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
 import {
   formatWorkspaceInvitationExpiration,
@@ -20,6 +21,7 @@ import {
   workspaceAccessRequestsSchema,
   workspaceInvitationsSchema,
   workspaceMembersSchema,
+  workspacesSchema,
 } from '@/models/Schema';
 import { getBaseUrl } from '@/utils/Helpers';
 import {
@@ -158,6 +160,16 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
   }
 
   await db.transaction(async (transaction) => {
+    const [workspace] = await transaction
+      .select({ name: workspacesSchema.name })
+      .from(workspacesSchema)
+      .where(eq(workspacesSchema.id, invitation.workspaceId))
+      .limit(1);
+
+    if (!workspace) {
+      throw new Error('工作区不存在');
+    }
+
     await transaction
       .insert(workspaceMembersSchema)
       .values({ role: 'viewer', userId, workspaceId: invitation.workspaceId })
@@ -166,6 +178,14 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
       .update(workspaceInvitationsSchema)
       .set({ acceptedAt: now, acceptedById: userId })
       .where(eq(workspaceInvitationsSchema.id, invitation.id));
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `${getWorkspaceInvitationInviterName(user)} 已接受加入“${workspace.name}”的邀请。`,
+      recipientUserId: invitation.invitedById,
+      target: { id: invitation.workspaceId, kind: 'workspace' },
+      title: '工作区邀请已接受',
+      type: 'workspace_invitation_accepted',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -225,10 +245,28 @@ export async function requestWorkspaceEditAccess(input: WorkspaceAccessRequestIn
     throw new Error('只有团队工作区 Viewer 可以申请编辑权限');
   }
 
-  await db
-    .insert(workspaceAccessRequestsSchema)
-    .values({ requestedRole: 'editor', userId, workspaceId: requestInput.workspaceId })
-    .onConflictDoNothing();
+  await db.transaction(async (transaction) => {
+    const [request] = await transaction
+      .insert(workspaceAccessRequestsSchema)
+      .values({ requestedRole: 'editor', userId, workspaceId: requestInput.workspaceId })
+      .onConflictDoNothing()
+      .returning({ userId: workspaceAccessRequestsSchema.userId });
+
+    if (!request) {
+      return;
+    }
+
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `“${authorization.workspace.name}”收到新的 Editor 权限申请。`,
+      recipientUserId: authorization.workspace.ownerId,
+      target: { id: requestInput.workspaceId, kind: 'workspace' },
+      title: '新的工作区权限申请',
+      type: 'workspace_access_requested',
+    });
+  });
+
+  revalidatePath('/(workspace)', 'layout');
 }
 
 export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReviewInput) {
@@ -268,6 +306,14 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
           eq(workspaceMembersSchema.userId, reviewInput.memberUserId),
         ),
       );
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `你在“${authorization.workspace.name}”的 Editor 权限申请已通过。`,
+      recipientUserId: request.userId,
+      target: { id: reviewInput.workspaceId, kind: 'workspace' },
+      title: '工作区权限申请已通过',
+      type: 'workspace_access_approved',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');

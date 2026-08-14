@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AppShell } from '@/components/layout/AppShell';
+import { getUnreadNotificationCount } from '@/features/notifications/server/GetNotifications';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
 import { getWorkspaceNavigation } from '@/features/workspaces/server/GetWorkspaceNavigation';
 import { AppConfig } from '@/utils/AppConfig';
@@ -17,9 +18,12 @@ export default async function WorkspaceLayout(props: { children: React.ReactNode
       ? workspaceContext.activeWorkspace.id
       : undefined,
   ].filter((workspaceId): workspaceId is string => typeof workspaceId === 'string');
-  const workspaceResources = await Promise.all(
-    workspaceIds.map(async (workspaceId) => await getWorkspaceNavigation({ workspaceId })),
-  );
+  const [workspaceResources, unreadNotificationCount] = await Promise.all([
+    Promise.all(
+      workspaceIds.map(async (workspaceId) => await getWorkspaceNavigation({ workspaceId })),
+    ),
+    getUnreadNotificationCount(),
+  ]);
   const documents = workspaceResources.flatMap((resources) => resources.documents);
   const projects = workspaceResources.flatMap((resources) => resources.projects);
 
@@ -28,6 +32,7 @@ export default async function WorkspaceLayout(props: { children: React.ReactNode
       activeWorkspace={workspaceContext.activeWorkspace}
       documents={documents}
       projects={projects}
+      unreadNotificationCount={unreadNotificationCount}
       workspaces={workspaceContext.workspaces}
     >
       {props.children}

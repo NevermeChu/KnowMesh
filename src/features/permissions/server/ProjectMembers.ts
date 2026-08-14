@@ -3,6 +3,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { db } from '@/libs/DB';
 import {
   projectAccessRequestsSchema,
@@ -57,13 +58,13 @@ async function authorizeProjectMemberMutation(input: ProjectMemberMutationInput)
     throw new Error('项目成员必须先加入所属工作区');
   }
 
-  return memberInput;
+  return { authorization, memberInput, userId };
 }
 
 export async function inviteProjectMember(input: ProjectInvitationInput) {
   const { userId } = await auth.protect();
   const invitationInput = projectInvitationSchema.parse(input);
-  const memberInput = await authorizeProjectMemberMutation({
+  const { memberInput } = await authorizeProjectMemberMutation({
     ...invitationInput,
     role: 'viewer',
   });
@@ -100,7 +101,7 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
 
   await db.transaction(async (transaction) => {
     const [project] = await transaction
-      .select({ workspaceId: projectsSchema.workspaceId })
+      .select({ name: projectsSchema.name, workspaceId: projectsSchema.workspaceId })
       .from(projectsSchema)
       .where(eq(projectsSchema.id, invitationInput.projectId))
       .limit(1);
@@ -132,7 +133,10 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
           eq(projectInvitationsSchema.userId, userId),
         ),
       )
-      .returning({ projectId: projectInvitationsSchema.projectId });
+      .returning({
+        invitedById: projectInvitationsSchema.invitedById,
+        projectId: projectInvitationsSchema.projectId,
+      });
 
     if (!invitation) {
       throw new Error('项目邀请不存在');
@@ -155,6 +159,14 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
           eq(projectAccessRequestsSchema.userId, userId),
         ),
       );
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `你发出的“${project.name}”项目邀请已被接受。`,
+      recipientUserId: invitation.invitedById,
+      target: { id: invitation.projectId, kind: 'project' },
+      title: '项目邀请已接受',
+      type: 'project_invitation_accepted',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -180,22 +192,34 @@ export async function requestProjectAccess(input: ProjectAccessRequestInput) {
     throw new Error('只有项目 Viewer 可以申请编辑权限');
   }
 
-  await db
-    .insert(projectAccessRequestsSchema)
-    .values({
-      projectId: requestInput.projectId,
-      requestedRole: requestInput.requestedRole,
-      userId,
-    })
-    .onConflictDoUpdate({
-      set: { requestedRole: requestInput.requestedRole },
-      target: [projectAccessRequestsSchema.projectId, projectAccessRequestsSchema.userId],
+  await db.transaction(async (transaction) => {
+    await transaction
+      .insert(projectAccessRequestsSchema)
+      .values({
+        projectId: requestInput.projectId,
+        requestedRole: requestInput.requestedRole,
+        userId,
+      })
+      .onConflictDoUpdate({
+        set: { requestedRole: requestInput.requestedRole },
+        target: [projectAccessRequestsSchema.projectId, projectAccessRequestsSchema.userId],
+      });
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `“${authorization.project.name}”收到新的 ${requestInput.requestedRole} 权限申请。`,
+      recipientUserId: authorization.project.ownerId,
+      target: { id: requestInput.projectId, kind: 'project' },
+      title: '新的项目权限申请',
+      type: 'project_access_requested',
     });
+  });
+
+  revalidatePath('/(workspace)', 'layout');
 }
 
 export async function approveProjectAccessRequest(input: ProjectAccessReviewInput) {
   const reviewInput = projectAccessReviewSchema.parse(input);
-  await authorizeProjectMemberMutation({
+  const { userId } = await authorizeProjectMemberMutation({
     memberUserId: reviewInput.memberUserId,
     projectId: reviewInput.projectId,
     role: 'viewer',
@@ -203,7 +227,7 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
 
   await db.transaction(async (transaction) => {
     const [project] = await transaction
-      .select({ workspaceId: projectsSchema.workspaceId })
+      .select({ name: projectsSchema.name, workspaceId: projectsSchema.workspaceId })
       .from(projectsSchema)
       .where(eq(projectsSchema.id, reviewInput.projectId))
       .limit(1);
@@ -264,6 +288,14 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
           eq(projectInvitationsSchema.userId, reviewInput.memberUserId),
         ),
       );
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `你在“${project.name}”的 ${request.requestedRole} 权限申请已通过。`,
+      recipientUserId: reviewInput.memberUserId,
+      target: { id: reviewInput.projectId, kind: 'project' },
+      title: '项目权限申请已通过',
+      type: 'project_access_approved',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -296,7 +328,7 @@ export async function updateProjectMemberRole(input: ProjectMemberMutationInput)
 }
 
 export async function removeProjectMember(input: ProjectMemberMutationInput) {
-  const memberInput = await authorizeProjectMemberMutation(input);
+  const { memberInput } = await authorizeProjectMemberMutation(input);
   const [membership] = await db
     .delete(projectMembersSchema)
     .where(

@@ -27,6 +27,7 @@ export function AppShell(props: {
   children: React.ReactNode;
   documents: DocumentNavigationItem[];
   projects: Project[];
+  unreadNotificationCount: number;
   workspaces: Workspace[];
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
@@ -43,6 +44,7 @@ export function AppShell(props: {
           documents={props.documents}
           isHidden={isContentFullscreen}
           projects={props.projects}
+          unreadNotificationCount={props.unreadNotificationCount}
           workspaces={props.workspaces}
           width={sidebarWidth}
           onResize={(width) => {

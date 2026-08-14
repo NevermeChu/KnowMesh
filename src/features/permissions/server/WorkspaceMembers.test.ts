@@ -85,6 +85,10 @@ vi.mock('next/cache', () => ({ revalidatePath: state.revalidatePath }));
 vi.mock('@/features/emails/server/SendWorkspaceInvitationEmail', () => ({
   sendWorkspaceInvitationEmail: vi.fn<() => Promise<never>>(),
 }));
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Notification delivery is unrelated to member removal.
+vi.mock('@/features/notifications/server/CreateNotification', () => ({
+  createNotification: vi.fn<() => Promise<never>>(),
+}));
 
 describe(removeWorkspaceMember, () => {
   beforeEach(() => {
