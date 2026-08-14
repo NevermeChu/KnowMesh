@@ -40,13 +40,22 @@ test.describe('Sanity', () => {
     test('displays the localized sign-in page', async ({ page }) => {
       await page.goto('/sign-in');
 
-      await expect(page.getByRole('heading', { name: '登录 KnowMesh' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
+      const viewport = await page.evaluate(() => ({
+        height: window.innerHeight,
+        scrollHeight: document.documentElement.scrollHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        width: window.innerWidth,
+      }));
+
+      expect(viewport.scrollHeight).toBe(viewport.height);
+      expect(viewport.scrollWidth).toBe(viewport.width);
     });
 
     test('displays the localized sign-up page', async ({ page }) => {
       await page.goto('/sign-up');
 
-      await expect(page.getByRole('heading', { name: '创建您的账户' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '创建账号' })).toBeVisible();
     });
   });
 

@@ -2,11 +2,13 @@ import { SignIn } from '@clerk/nextjs';
 import { auth } from '@clerk/nextjs/server';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { AuthenticationPanel } from '@/components/auth/AuthenticationPanel';
+import { AppConfig } from '@/utils/AppConfig';
 import { getSafeAuthenticationRedirect } from '@/utils/AuthenticationRedirect';
 
 export const metadata: Metadata = {
-  title: 'Sign in',
-  description: 'Seamlessly sign in to your account with our user-friendly login process.',
+  title: `登录 · ${AppConfig.name}`,
+  description: '登录 KnowMesh 知序，面向团队的知识工作空间。',
 };
 
 export default async function SignInPage(props: {
@@ -21,11 +23,21 @@ export default async function SignInPage(props: {
   }
 
   return (
-    <SignIn
-      path="/sign-in"
-      fallbackRedirectUrl="/dashboard"
-      forceRedirectUrl={returnBackUrl}
-      signUpForceRedirectUrl={returnBackUrl}
-    />
+    <AuthenticationPanel title="欢迎回来" description="登录你的团队知识工作空间">
+      <SignIn
+        appearance={{
+          elements: {
+            rootBox: 'w-full',
+            cardBox: 'w-full',
+            card: 'w-full',
+            header: 'hidden',
+          },
+        }}
+        path="/sign-in"
+        fallbackRedirectUrl="/dashboard"
+        forceRedirectUrl={returnBackUrl}
+        signUpForceRedirectUrl={returnBackUrl}
+      />
+    </AuthenticationPanel>
   );
 }
