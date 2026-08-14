@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSignInUrl } from './AuthenticationRedirect';
+import { createSignInUrl, getSafeAuthenticationRedirect } from './AuthenticationRedirect';
 
 describe(createSignInUrl, () => {
   it('preserves protected destination and invitation token', () => {
@@ -9,6 +9,23 @@ describe(createSignInUrl, () => {
     const signInUrl = createSignInUrl(returnBackUrl);
 
     expect(signInUrl.pathname).toBe('/sign-in');
-    expect(signInUrl.searchParams.get('redirect_url')).toBe(returnBackUrl.href);
+    expect(signInUrl.searchParams.get('redirect_url')).toBe(
+      '/invitations/accept?token=invitation_token',
+    );
+  });
+});
+
+describe(getSafeAuthenticationRedirect, () => {
+  it('accepts local invitation path', () => {
+    expect(getSafeAuthenticationRedirect('/invitations/accept?token=invitation_token')).toBe(
+      '/invitations/accept?token=invitation_token',
+    );
+  });
+
+  it('rejects external redirect target', () => {
+    expect(
+      getSafeAuthenticationRedirect('https://malicious.example/invitations/accept'),
+    ).toBeNull();
+    expect(getSafeAuthenticationRedirect('//malicious.example/invitations/accept')).toBeNull();
   });
 });

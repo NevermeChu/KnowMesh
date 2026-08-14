@@ -292,11 +292,12 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 
 ### 根因
 
-路由代理为 `auth.protect` 配置了固定的 `/sign-in` `unauthenticatedUrl`，但没有把当前受保护 URL 写入 Clerk 识别的 `redirect_url`。Clerk 因而只知道登录入口，不知道认证完成后应返回的业务目标。
+路由代理为 `auth.protect` 配置了固定的 `/sign-in` `unauthenticatedUrl`，最初没有把当前受保护 URL 写入 Clerk 识别的 `redirect_url`。仅增加查询参数仍不足以稳定回跳，因为 Clerk 环境的默认或强制跳转配置可以让认证流程最终进入 Dashboard；已建立会话后再落到登录页时，原页面也没有服务端回跳逻辑。
 
 ### 解决方法
 
-- 代理将完整的同源受保护 URL 作为 `redirect_url` 附加到登录地址，保留邀请 token 和其他查询参数。
-- `SignIn` 和 `SignUp` 只在缺少动态回跳目标时使用 `/dashboard` fallback，不使用会覆盖 `redirect_url` 的 force redirect。
+- 代理将完整的站内受保护路径作为 `redirect_url` 附加到登录地址，保留邀请 token 和其他查询参数。
+- 认证页拒绝绝对 URL、协议相对 URL 和反斜杠路径，再把校验后的站内路径作为当次 `SignIn`/`SignUp` 的 force target；`/dashboard` 仅作为缺少安全目标时的 fallback。
+- 已认证用户落到登录或注册页时，Server Component 直接跳回校验后的目标，避免已有会话仍停留在认证 UI。
 - 登录后返回邀请页并由用户明确点击接受；不在认证回跳时自动写入成员关系。
 - 使用轻量 URL 单元测试验证原始路径和邀请 token 保留在 `redirect_url` 中。

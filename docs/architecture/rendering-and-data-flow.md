@@ -19,9 +19,9 @@
 
 ## 受保护页面的认证回跳
 
-`src/proxy.ts` 保护工作区与邀请页面。未登录用户访问受保护 URL 时，代理将完整的同源目标 URL 写入 Clerk `redirect_url` 后转到 `/sign-in`；登录或注册完成后回到原路径。这会保留 Workspace 邀请链接的 token，但不自动接受邀请；用户仍必须在接受页明确确认，服务端 Action 再次校验 token 和已验证邮箱。
+`src/proxy.ts` 保护工作区与邀请页面。未登录用户访问受保护 URL 时，代理将完整的站内相对路径写入 Clerk `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，再把它作为当次 `SignIn`/`SignUp` 的动态 force target，使其优先于 Clerk 环境中的默认跳转配置。已认证用户再访问认证页时，Server Component 直接跳回该目标。
 
-`SignIn` 和 `SignUp` 的 `/dashboard` 只是没有 `redirect_url` 时的 fallback，不得使用 force redirect 覆盖受保护页面的动态回跳目标。
+这会保留 Workspace 邀请链接的 token，但不自动接受邀请；用户仍必须在接受页明确确认，服务端 Action 再次校验 token 和已验证邮箱。`/dashboard` 只是没有安全动态目标时的 fallback。
 
 ## 初始工作区导航数据
 
