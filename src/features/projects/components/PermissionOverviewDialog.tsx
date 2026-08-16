@@ -2,7 +2,7 @@
 
 /* oxlint-disable eslint/complexity, unicorn/prefer-ternary -- Member management keeps scope-specific actions together for reviewability. */
 
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, UserMinus } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import {
   ModalDialog,
@@ -40,11 +40,18 @@ import { updateProject } from '@/features/projects/server/UpdateProject';
 import { deleteOrLeaveWorkspace } from '@/features/workspaces/server/DeleteWorkspace';
 import { updateWorkspace } from '@/features/workspaces/server/UpdateWorkspace';
 
-const roles: { id: MemberRole; label: string }[] = [
-  { id: 'owner', label: 'Owner' },
-  { id: 'editor', label: 'Editor' },
-  { id: 'viewer', label: 'Viewer' },
-];
+const memberRoleLabels: Record<MemberRole, string> = {
+  owner: '所有者',
+  editor: '可编辑',
+  viewer: '只读',
+};
+
+const memberRoleOrder: Record<MemberRole, number> = { owner: 0, editor: 1, viewer: 2 };
+
+const sectionTitleClassName = 'text-xs font-semibold tracking-[0.06em] text-ink-faint uppercase';
+
+const inputClassName =
+  'h-9 min-w-0 flex-1 rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none placeholder:text-ink-faint-strong focus:border-accent focus:ring-2 focus:ring-accent/15';
 
 function PermissionMemberManager(props: {
   overview: PermissionOverview;
@@ -72,8 +79,10 @@ function PermissionMemberManager(props: {
       : [];
 
   return (
-    <section className="mb-5 rounded-lg border border-line p-3">
-      <h3 className="mb-2 text-sm font-semibold text-ink">成员管理</h3>
+    <section className="mb-6 last:mb-0">
+      <h3 className={`mb-2 ${sectionTitleClassName}`}>
+        {props.overview.scope === 'workspace' ? '邀请新成员' : '添加项目成员'}
+      </h3>
       <form
         className="flex flex-col gap-2 sm:flex-row"
         onSubmit={(event) => {
@@ -108,9 +117,9 @@ function PermissionMemberManager(props: {
             required
             type="email"
             aria-label="受邀成员邮箱"
-            placeholder="成员邮箱"
+            placeholder="输入成员邮箱"
             value={email}
-            className="h-9 min-w-0 flex-1 rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
+            className={inputClassName}
             disabled={isPending}
             onChange={(event) => {
               setEmail(event.target.value);
@@ -121,7 +130,7 @@ function PermissionMemberManager(props: {
             required
             aria-label="工作区成员"
             value={selectedUserId}
-            className="h-9 min-w-0 flex-1 rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
+            className={inputClassName}
             disabled={isPending}
             onChange={(event) => {
               setSelectedUserId(event.target.value);
@@ -136,10 +145,14 @@ function PermissionMemberManager(props: {
           </select>
         )}
         <ModalDialogButton type="submit" variant="primary" disabled={isPending}>
-          {props.overview.scope === 'workspace' ? '发送邀请' : '邀请成员'}
+          {props.overview.scope === 'workspace' ? '发送邀请' : '添加成员'}
         </ModalDialogButton>
       </form>
-      {error && <p className="mt-2 text-xs text-danger-strong">{error}</p>}
+      {error && (
+        <p className="mt-2 text-xs text-danger-strong" role="alert">
+          {error}
+        </p>
+      )}
     </section>
   );
 }
@@ -155,24 +168,26 @@ function WorkspaceAccessRequest(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-line p-3">
-      <h3 className="text-sm font-semibold text-ink">工作区编辑权限</h3>
-      <p className="mt-1 text-xs leading-5 text-ink-muted">
-        Viewer 可以浏览工作区结构；创建项目需要申请 Editor 权限。
+    <section className="mb-6 last:mb-0">
+      <h3 className={`mb-2 ${sectionTitleClassName}`}>工作区编辑权限</h3>
+      <p className="text-sm leading-6 text-ink-muted">
+        你当前是只读成员，可以浏览工作区结构；创建项目需要可编辑权限。
       </p>
-      <ModalDialogButton
-        type="button"
-        variant="primary"
-        disabled={isPending}
-        onClick={() => {
-          startTransition(async () => {
-            await requestWorkspaceEditAccess({ workspaceId: props.overview.workspaceId });
-            setDidRequest(true);
-          });
-        }}
-      >
-        {isPending ? '提交中…' : '申请编辑权限'}
-      </ModalDialogButton>
+      <div className="mt-3">
+        <ModalDialogButton
+          type="button"
+          variant="primary"
+          disabled={isPending}
+          onClick={() => {
+            startTransition(async () => {
+              await requestWorkspaceEditAccess({ workspaceId: props.overview.workspaceId });
+              setDidRequest(true);
+            });
+          }}
+        >
+          {isPending ? '提交中…' : '申请编辑权限'}
+        </ModalDialogButton>
+      </div>
     </section>
   );
 }
@@ -188,13 +203,20 @@ function ProjectAccessRequests(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-line p-3">
-      <h3 className="mb-2 text-sm font-semibold text-ink">权限申请</h3>
+    <section className="mb-6 last:mb-0">
+      <h3 className={`mb-2 ${sectionTitleClassName}`}>待审批申请</h3>
       <ul className="space-y-2">
         {props.overview.requests.map((request) => (
-          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-overlay p-2.5">
-            <span className="min-w-0 flex-1 text-sm">
-              {request.displayName} 申请成为 {request.requestedRole}
+          <li
+            key={request.userId}
+            className="flex items-center gap-3 rounded-lg bg-overlay px-3 py-2.5"
+          >
+            <span className="min-w-0 flex-1 text-sm text-ink">
+              {request.displayName}
+              <span className="text-ink-muted">
+                {' '}
+                申请成为{memberRoleLabels[request.requestedRole]}
+              </span>
             </span>
             <ModalDialogButton
               type="button"
@@ -230,12 +252,18 @@ function WorkspaceAccessReviews(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-line p-3">
-      <h3 className="mb-2 text-sm font-semibold text-ink">权限申请</h3>
+    <section className="mb-6 last:mb-0">
+      <h3 className={`mb-2 ${sectionTitleClassName}`}>待审批申请</h3>
       <ul className="space-y-2">
         {props.overview.requests.map((request) => (
-          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-overlay p-2.5">
-            <span className="min-w-0 flex-1 text-sm">{request.displayName} 申请成为 editor</span>
+          <li
+            key={request.userId}
+            className="flex items-center gap-3 rounded-lg bg-overlay px-3 py-2.5"
+          >
+            <span className="min-w-0 flex-1 text-sm text-ink">
+              {request.displayName}
+              <span className="text-ink-muted"> 申请成为可编辑成员</span>
+            </span>
             <ModalDialogButton
               type="button"
               variant="primary"
@@ -259,61 +287,79 @@ function WorkspaceAccessReviews(props: {
   );
 }
 
-function PermissionMemberActions(props: {
+/**
+ * Renders one member's role presentation: a static badge for fixed roles and a
+ * role select with removal that supports both promotion and demotion for
+ * manageable members.
+ *
+ * @param props - Member row context and mutation callback.
+ * @returns The member role controls.
+ */
+function PermissionMemberRole(props: {
   groupSource: PermissionOverview['groups'][number]['source'];
   member: PermissionOverview['groups'][number]['members'][number];
   overview: PermissionOverview;
   onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
 }) {
   const [isPending, startTransition] = useTransition();
-
-  if (
-    props.overview.scope === 'document' ||
-    !props.overview.permissions.includes(
+  const canManage =
+    props.overview.scope !== 'document' &&
+    props.overview.permissions.includes(
       props.overview.scope === 'workspace' ? 'workspace.members.manage' : 'project.members.manage',
-    ) ||
-    !canMutatePermissionGroupMembers({
+    ) &&
+    canMutatePermissionGroupMembers({
       scope: props.overview.scope,
       source: props.groupSource,
-    }) ||
-    props.member.role === 'owner'
-  ) {
-    return null;
+    });
+
+  if (!canManage || props.member.role === 'owner') {
+    return (
+      <span className="shrink-0 rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-ink-muted">
+        {memberRoleLabels[props.member.role]}
+      </span>
+    );
   }
 
   return (
-    <span className="flex shrink-0 items-center gap-1">
-      {props.member.role === 'editor' && (
-        <button
-          type="button"
-          className="h-8 rounded-md border border-line bg-card px-2 text-xs"
-          disabled={isPending}
-          onClick={() => {
-            startTransition(async () => {
-              if (props.overview.scope === 'workspace') {
-                await updateWorkspaceMemberRole({
-                  memberUserId: props.member.userId,
-                  role: 'viewer',
-                  workspaceId: props.overview.workspaceId,
-                });
-              } else {
-                await updateProjectMemberRole({
-                  memberUserId: props.member.userId,
-                  projectId: props.overview.project.id,
-                  role: 'viewer',
-                });
-              }
-              props.onMutated('update', props.overview.scope);
-            });
-          }}
-        >
-          降为 Viewer
-        </button>
-      )}
+    <span className="flex shrink-0 items-center gap-1.5">
+      <select
+        aria-label={`${props.member.displayName}的角色`}
+        value={props.member.role}
+        disabled={isPending}
+        className="h-8 rounded-lg border border-line bg-card px-2 text-xs font-medium text-ink-secondary transition-colors outline-none focus:border-accent disabled:opacity-45"
+        onChange={(event) => {
+          const role = event.target.value;
+
+          if ((role !== 'editor' && role !== 'viewer') || role === props.member.role) {
+            return;
+          }
+
+          startTransition(async () => {
+            if (props.overview.scope === 'workspace') {
+              await updateWorkspaceMemberRole({
+                memberUserId: props.member.userId,
+                role,
+                workspaceId: props.overview.workspaceId,
+              });
+            } else {
+              await updateProjectMemberRole({
+                memberUserId: props.member.userId,
+                projectId: props.overview.project.id,
+                role,
+              });
+            }
+            props.onMutated('update', props.overview.scope);
+          });
+        }}
+      >
+        <option value="editor">{memberRoleLabels.editor}</option>
+        <option value="viewer">{memberRoleLabels.viewer}</option>
+      </select>
       <button
         type="button"
         aria-label={`移除${props.member.displayName}`}
-        className="h-8 rounded-md px-2 text-xs text-danger-strong hover:bg-danger/8"
+        title={`移除${props.member.displayName}`}
+        className="grid size-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-danger/8 hover:text-danger disabled:cursor-not-allowed disabled:opacity-45"
         disabled={isPending}
         onClick={() => {
           startTransition(async () => {
@@ -332,7 +378,7 @@ function PermissionMemberActions(props: {
           });
         }}
       >
-        移除
+        <UserMinus aria-hidden="true" className="size-4" strokeWidth={1.8} />
       </button>
     </span>
   );
@@ -467,8 +513,8 @@ function PermissionResourceEditor(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-line p-3">
-      <h3 className="mb-2 text-sm font-semibold text-ink">基本信息</h3>
+    <section className="mb-6 last:mb-0">
+      <h3 className={`mb-2 ${sectionTitleClassName}`}>基本信息</h3>
       <form
         className="flex flex-col gap-2 sm:flex-row"
         onSubmit={(event) => {
@@ -497,7 +543,7 @@ function PermissionResourceEditor(props: {
             aria-label={`${resource.label}名称`}
             maxLength={props.overview.scope === 'document' ? 200 : 80}
             value={name}
-            className="h-9 w-full rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
+            className={inputClassName}
             disabled={isPending}
             onChange={(event) => {
               setName(event.target.value);
@@ -564,7 +610,7 @@ function PermissionRemovalConfirmationDialog(props: {
             <input
               aria-label="确认删除的工作区名称"
               value={confirmationName}
-              className="h-9 w-full rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
+              className="h-9 w-full rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none focus:border-accent focus:ring-2 focus:ring-accent/15"
               disabled={isPending}
               onChange={(event) => {
                 setConfirmationName(event.target.value);
@@ -660,7 +706,7 @@ export function PermissionOverviewDialog(props: {
             </p>
           )}
           {!props.isLoading && props.overview?.scope === 'workspace' && (
-            <p className="mb-4 text-sm leading-6 text-ink-muted">{props.overview.description}</p>
+            <p className="mb-6 text-sm leading-6 text-ink-muted">{props.overview.description}</p>
           )}
           {!props.isLoading && props.overview && (
             <PermissionResourceEditor overview={props.overview} onMutated={props.onMutated} />
@@ -681,75 +727,67 @@ export function PermissionOverviewDialog(props: {
             <p className="py-10 text-center text-sm text-ink-faint">暂无成员权限</p>
           )}
           {!props.isLoading &&
-            overview?.groups.map((group) => (
-              <section key={group.id} className="mb-5 last:mb-0">
-                {(props.overview?.scope === 'workspace' || overview.groups.length > 1) && (
-                  <h3 className="mb-2 text-sm font-semibold text-ink">{group.name}</h3>
-                )}
-                <div className="space-y-3 rounded-lg border border-line p-3">
-                  {roles.map((role) => {
-                    const members = group.members.filter((member) => member.role === role.id);
+            overview?.groups.map((group) => {
+              const members = [...group.members].toSorted(
+                (left, right) => memberRoleOrder[left.role] - memberRoleOrder[right.role],
+              );
 
-                    return (
-                      <div key={role.id}>
-                        <div className="mb-1.5 flex items-center justify-between text-xs font-semibold tracking-[0.06em] text-ink-faint uppercase">
-                          <span>{role.label}</span>
-                          <span>{members.length}</span>
-                        </div>
-                        {members.length === 0 ? (
-                          <p className="rounded-md bg-overlay px-2.5 py-2 text-xs text-ink-faint">
-                            暂无成员
-                          </p>
-                        ) : (
-                          <ul className="space-y-1">
-                            {members.map((member) => (
-                              <li
-                                key={member.userId}
-                                className={`flex items-center gap-2.5 rounded-md border px-2.5 py-2 ${
-                                  member.isCurrentUser
-                                    ? 'border-accent/30 bg-accent-soft'
-                                    : 'border-transparent bg-overlay'
-                                }`}
-                              >
-                                <span
-                                  aria-hidden="true"
-                                  className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-strong text-xs font-semibold text-ink-secondary"
-                                >
-                                  {member.displayName.slice(0, 1).toUpperCase()}
+              return (
+                <section key={group.id} className="mb-6 last:mb-0">
+                  {(props.overview?.scope === 'workspace' || overview.groups.length > 1) && (
+                    <h3 className={`mb-2 ${sectionTitleClassName}`}>{group.name}</h3>
+                  )}
+                  {members.length === 0 ? (
+                    <p className="rounded-lg bg-overlay px-3 py-2.5 text-xs text-ink-faint">
+                      暂无成员
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {members.map((member) => (
+                        <li
+                          key={member.userId}
+                          className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 ${
+                            member.isCurrentUser
+                              ? 'border-accent/30 bg-accent-soft'
+                              : 'border-transparent bg-overlay'
+                          }`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-strong text-xs font-semibold text-ink-secondary"
+                          >
+                            {member.displayName.slice(0, 1).toUpperCase()}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium text-ink">
+                                {member.displayName}
+                              </span>
+                              {member.isCurrentUser && (
+                                <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[0.625rem] font-semibold text-white">
+                                  你
                                 </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="flex items-center gap-2">
-                                    <span className="truncate text-sm font-medium text-ink">
-                                      {member.displayName}
-                                    </span>
-                                    {member.isCurrentUser && (
-                                      <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[0.625rem] font-semibold text-white">
-                                        你
-                                      </span>
-                                    )}
-                                  </span>
-                                  {member.email && member.email !== member.displayName && (
-                                    <span className="block truncate text-xs text-ink-faint">
-                                      {member.email}
-                                    </span>
-                                  )}
-                                </span>
-                                <PermissionMemberActions
-                                  groupSource={group.source}
-                                  member={member}
-                                  overview={overview}
-                                  onMutated={props.onMutated}
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
+                              )}
+                            </span>
+                            {member.email && member.email !== member.displayName && (
+                              <span className="block truncate text-xs text-ink-faint">
+                                {member.email}
+                              </span>
+                            )}
+                          </span>
+                          <PermissionMemberRole
+                            groupSource={group.source}
+                            member={member}
+                            overview={overview}
+                            onMutated={props.onMutated}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
         </ModalDialogBody>
 
         {removalMode && (
