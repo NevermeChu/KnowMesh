@@ -2,13 +2,14 @@ import { UserProfile } from '@clerk/nextjs';
 import type { ComponentProps } from 'react';
 
 /**
- * Dissolves Clerk's standalone card chrome so the profile blends into the shared
- * settings page frame and uses the KnowMesh theme tokens.
+ * Fills the workspace content area like the document editor and dissolves Clerk's
+ * standalone card chrome, so account management reads as an app view instead of an
+ * embedded widget.
  */
 const userProfileAppearance: ComponentProps<typeof UserProfile>['appearance'] = {
   elements: {
-    rootBox: 'w-full',
-    card: 'rounded-none border-none bg-transparent shadow-none',
+    rootBox: 'h-full w-full',
+    card: 'h-full rounded-none border-none bg-transparent shadow-none',
     navbar: 'gap-1',
     navbarButton:
       'justify-start rounded-lg border-none bg-transparent px-3 py-2 text-sm font-medium text-ink-muted shadow-none transition-colors hover:bg-overlay hover:text-ink',
@@ -19,22 +20,14 @@ const userProfileAppearance: ComponentProps<typeof UserProfile>['appearance'] = 
     headerSubtitle: 'hidden',
     headerBackButton: 'text-accent hover:text-accent-strong',
     formButtonPrimary: 'rounded-lg font-semibold hover:bg-accent-strong',
+    scrollBox: 'overflow-y-auto',
   },
 };
 
 export default function UserProfilePage() {
   return (
-    <div className="mx-auto w-full max-w-4xl py-10 sm:py-14">
-      <header className="border-b border-line-soft pb-5">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-faint uppercase">设置</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">账号设置</h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          管理你的账号资料、安全与登录方式，由 Clerk 提供账户管理。
-        </p>
-      </header>
-      <div className="mt-8">
-        <UserProfile appearance={userProfileAppearance} path="/settings/user-profile" />
-      </div>
+    <div className="-mx-5 h-[calc(100dvh-7rem)] px-5 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
+      <UserProfile appearance={userProfileAppearance} path="/settings/user-profile" />
     </div>
   );
 }
