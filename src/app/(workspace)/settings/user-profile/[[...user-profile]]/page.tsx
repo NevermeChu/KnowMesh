@@ -9,6 +9,7 @@ import type { ComponentProps } from 'react';
 const userProfileAppearance: ComponentProps<typeof UserProfile>['appearance'] = {
   elements: {
     rootBox: 'h-full w-full',
+    cardBox: 'w-full',
     card: 'h-full rounded-none border-none bg-transparent shadow-none',
     navbar: 'gap-1',
     navbarButton:
