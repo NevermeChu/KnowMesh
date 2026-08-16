@@ -124,7 +124,7 @@ export function SettingsMenu(props: {
   onToggle: () => void;
 }) {
   return (
-    <div className="relative space-y-1 border-t border-line-soft px-1.5 py-2">
+    <div className="relative flex flex-col gap-1 border-t border-line-soft px-1.5 py-2">
       <Link
         href="/notifications"
         aria-current={props.isNotificationsRoute ? 'page' : undefined}
@@ -176,6 +176,7 @@ export function SettingsMenu(props: {
         isOpen={props.isOpen}
         label="设置"
         placement={{ kind: 'anchor', side: 'top' }}
+        surfaceClassName="right-1.5 w-[calc(var(--app-sidebar-width)-1.5rem)]"
       >
         <PopupMenuLabel>设置</PopupMenuLabel>
         <button

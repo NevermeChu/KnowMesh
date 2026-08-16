@@ -134,7 +134,7 @@ export function ContentToolbar(props: {
           isOpen={isWidthMenuOpen}
           label="内容宽度"
           placement={{ kind: 'anchor', side: 'bottom' }}
-          surfaceClassName="w-36 p-1"
+          surfaceClassName="right-0 left-auto w-36 p-1"
         >
           <PopupMenuLabel>内容宽度</PopupMenuLabel>
           {contentWidthPercentages.map((percentage) => (
