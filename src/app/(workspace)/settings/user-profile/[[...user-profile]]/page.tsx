@@ -27,7 +27,7 @@ const userProfileAppearance: ComponentProps<typeof UserProfile>['appearance'] = 
 
 export default function UserProfilePage() {
   return (
-    <div className="-mx-5 h-[calc(100dvh-7rem)] px-5 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
+    <div className="-mx-5 h-[calc(100dvh-7rem)] sm:-mx-8 lg:-mx-12">
       <UserProfile appearance={userProfileAppearance} path="/settings/user-profile" />
     </div>
   );
