@@ -78,6 +78,17 @@
   html {
     background-color: var(--canvas);
   }
+
+  /* Vertical space above the workspace content: mobile top bar + toolbar, toolbar only on lg. */
+  :root {
+    --content-top-offset: 7rem;
+  }
+
+  @media (min-width: 64rem) {
+    :root {
+      --content-top-offset: 3rem;
+    }
+  }
 }
 
 /* Embedded Clerk UserProfile: the settings page frame already provides the heading,

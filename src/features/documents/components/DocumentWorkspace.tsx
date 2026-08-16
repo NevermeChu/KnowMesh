@@ -75,7 +75,7 @@ export function DocumentWorkspace(props: {
   }
 
   return (
-    <div className="-mx-5 min-h-[calc(100dvh-7rem)] px-5 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
+    <div className="-mx-5 min-h-[calc(100dvh-var(--content-top-offset))] px-5 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
       <section className="min-w-0">{content}</section>
     </div>
   );
