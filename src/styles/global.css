@@ -2,6 +2,84 @@
 
 @import 'tailwindcss';
 
+/* Class-based dark mode: the root layout toggles `dark` on <html> from the theme preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic color tokens shared by utilities (bg-canvas, text-ink, ...) and Clerk variables. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-card: var(--card);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-faint-strong: var(--ink-faint-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-warning-soft: var(--warning-soft);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-overlay: var(--overlay);
+  --color-overlay-strong: var(--overlay-strong);
+}
+
+:root {
+  --canvas: #fbfbfa;
+  --card: #ffffff;
+  --surface: #f7f7f5;
+  --surface-strong: #eeedea;
+  --ink: #2f3437;
+  --ink-secondary: #55595e;
+  --ink-muted: #777b80;
+  --ink-faint: #8a8d91;
+  --ink-faint-strong: #b0b3b7;
+  --accent: #2383e2;
+  --accent-strong: #1f74c9;
+  --accent-soft: #e8f3fc;
+  --danger: #d14343;
+  --danger-strong: #b52e2e;
+  --warning-soft: #f1e9dc;
+  --line: rgb(0 0 0 / 0.1);
+  --line-soft: rgb(0 0 0 / 0.06);
+  --overlay: rgb(0 0 0 / 0.04);
+  --overlay-strong: rgb(0 0 0 / 0.07);
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #191919;
+  --card: #212121;
+  --surface: #2a2a2a;
+  --surface-strong: #303030;
+  --ink: #e8e8e6;
+  --ink-secondary: #b4b4b1;
+  --ink-muted: #969693;
+  --ink-faint: #6f6f6c;
+  --ink-faint-strong: #5a5a57;
+  --accent: #4c9cea;
+  --accent-strong: #6cb0f0;
+  --accent-soft: rgb(76 156 234 / 0.16);
+  --danger: #e05252;
+  --danger-strong: #c94444;
+  --warning-soft: rgb(255 212 59 / 0.14);
+  --line: rgb(255 255 255 / 0.1);
+  --line-soft: rgb(255 255 255 / 0.07);
+  --overlay: rgb(255 255 255 / 0.06);
+  --overlay-strong: rgb(255 255 255 / 0.09);
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    background-color: var(--canvas);
+  }
+}
+
 @layer components {
   .tiptap > * + * {
     margin-top: 0.75rem;
@@ -39,18 +117,19 @@
   }
 
   .tiptap blockquote {
-    border-left: 3px solid rgb(47 52 55 / 20%);
-    color: #666a70;
+    border-left: 3px solid var(--line);
+    color: var(--ink-muted);
     padding-left: 1rem;
   }
 
   .tiptap code {
     border-radius: 0.25rem;
-    background: rgb(47 52 55 / 8%);
+    background: var(--surface-strong);
     padding: 0.15rem 0.3rem;
     font-size: 0.875em;
   }
 
+  /* Code blocks stay dark in both themes, matching common editor conventions. */
   .tiptap pre {
     overflow-x: auto;
     border-radius: 0.5rem;
@@ -66,6 +145,6 @@
 
   .tiptap hr {
     margin-block: 1.5rem;
-    border-color: rgb(47 52 55 / 12%);
+    border-color: var(--line);
   }
 }

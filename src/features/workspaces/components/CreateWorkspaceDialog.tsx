@@ -54,7 +54,7 @@ export function CreateWorkspaceDialog(props: { onClose: () => void; onCreated: (
         }}
       >
         <ModalDialogBody>
-          <label htmlFor="workspace-name" className="block text-xs font-medium text-[#555a60]">
+          <label htmlFor="workspace-name" className="block text-xs font-medium text-ink-secondary">
             工作区名称
           </label>
           <input
@@ -63,7 +63,7 @@ export function CreateWorkspaceDialog(props: { onClose: () => void; onCreated: (
             type="text"
             aria-label="工作区名称"
             autoComplete="off"
-            className="mt-1.5 h-9 w-full rounded-lg border border-black/12 bg-white px-3 text-sm transition-colors outline-none placeholder:text-[#b0b3b7] focus:border-[#2383e2] focus:ring-2 focus:ring-[#2383e2]/15"
+            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none placeholder:text-ink-faint-strong focus:border-accent focus:ring-2 focus:ring-accent/15"
             disabled={isPending}
             maxLength={80}
             placeholder="例如：产品团队"
@@ -75,7 +75,7 @@ export function CreateWorkspaceDialog(props: { onClose: () => void; onCreated: (
               }
             }}
           />
-          <p className="mt-1.5 min-h-4 text-xs text-[#d14343]" role="alert">
+          <p className="mt-1.5 min-h-4 text-xs text-danger" role="alert">
             {error}
           </p>
         </ModalDialogBody>

@@ -40,8 +40,8 @@ export function SidebarPrimaryNavigation(props: { pathname: string; onNavigate: 
                 aria-current={isActive ? 'page' : undefined}
                 className={`flex min-h-9 items-center gap-3 rounded-lg px-1.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-black/7 text-[#202124]'
-                    : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
+                    ? 'bg-overlay-strong text-ink'
+                    : 'text-ink-muted hover:bg-overlay hover:text-ink'
                 }`}
                 onClick={props.onNavigate}
               >

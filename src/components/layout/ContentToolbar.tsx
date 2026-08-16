@@ -54,28 +54,25 @@ export function ContentToolbar(props: {
   const fullscreenLabel = props.isContentFullscreen ? '退出内容全屏' : '内容全屏';
 
   return (
-    <header className="sticky top-16 z-30 flex h-12 items-center gap-4 border-b border-black/8 bg-white/95 px-4 backdrop-blur-sm lg:top-0">
+    <header className="sticky top-16 z-30 flex h-12 items-center gap-4 border-b border-line bg-card/95 px-4 backdrop-blur-sm lg:top-0">
       <nav aria-label="面包屑" className="min-w-0 flex-1 overflow-hidden">
-        <ol className="flex min-w-0 items-center gap-1.5 text-sm text-[#777b80]">
+        <ol className="flex min-w-0 items-center gap-1.5 text-sm text-ink-muted">
           {breadcrumbs.map((breadcrumb, index) => (
             <li key={`${breadcrumb.label}-${index}`} className="flex min-w-0 items-center gap-1.5">
               {index > 0 && (
                 <ChevronRight
                   aria-hidden="true"
-                  className="size-3.5 shrink-0 text-[#a5a8ac]"
+                  className="size-3.5 shrink-0 text-ink-faint"
                   strokeWidth={1.8}
                 />
               )}
               {breadcrumb.href ? (
-                <Link
-                  href={breadcrumb.href}
-                  className="truncate transition-colors hover:text-[#202124]"
-                >
+                <Link href={breadcrumb.href} className="truncate transition-colors hover:text-ink">
                   {breadcrumb.label}
                 </Link>
               ) : (
                 <span
-                  className={`truncate ${index === breadcrumbs.length - 1 ? 'font-medium text-[#2f3437]' : ''}`}
+                  className={`truncate ${index === breadcrumbs.length - 1 ? 'font-medium text-ink' : ''}`}
                 >
                   {breadcrumb.label}
                 </span>
@@ -91,7 +88,7 @@ export function ContentToolbar(props: {
         type="button"
         aria-label={fullscreenLabel}
         title={fullscreenLabel}
-        className="hidden size-8 shrink-0 place-items-center rounded-lg text-[#666a70] transition-colors hover:bg-black/5 hover:text-[#202124] lg:grid"
+        className="hidden size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay hover:text-ink lg:grid"
         onClick={props.onToggleContentFullscreen}
       >
         <FullscreenIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />

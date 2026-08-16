@@ -59,7 +59,7 @@ export function CreateDocumentDialog(props: {
         }}
       >
         <ModalDialogBody>
-          <label htmlFor="document-title" className="block text-xs font-medium text-[#555a60]">
+          <label htmlFor="document-title" className="block text-xs font-medium text-ink-secondary">
             文件名
           </label>
           <input
@@ -68,7 +68,7 @@ export function CreateDocumentDialog(props: {
             type="text"
             aria-label="文件名"
             autoComplete="off"
-            className="mt-1.5 h-9 w-full rounded-lg border border-black/12 bg-white px-3 text-sm transition-colors outline-none placeholder:text-[#b0b3b7] focus:border-[#2383e2] focus:ring-2 focus:ring-[#2383e2]/15"
+            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none placeholder:text-ink-faint-strong focus:border-accent focus:ring-2 focus:ring-accent/15"
             disabled={isPending}
             maxLength={200}
             placeholder="输入文件名"
@@ -80,7 +80,7 @@ export function CreateDocumentDialog(props: {
               }
             }}
           />
-          <p className="mt-1.5 min-h-4 text-xs text-[#d14343]" role="alert">
+          <p className="mt-1.5 min-h-4 text-xs text-danger" role="alert">
             {error}
           </p>
         </ModalDialogBody>

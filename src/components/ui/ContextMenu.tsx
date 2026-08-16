@@ -67,12 +67,12 @@ export function ContextMenu(props: {
         {props.items.map((item) => (
           <div key={item.label} className="contents">
             {item.separatorBefore && (
-              <div aria-hidden="true" className="my-1 border-t border-black/8" />
+              <div aria-hidden="true" className="my-1 border-t border-line" />
             )}
             <button
               type="button"
               aria-pressed={item.active}
-              className={`${popupMenuItemClassName} ${item.active ? 'bg-black/8 text-[#202124]' : ''}`}
+              className={`${popupMenuItemClassName} ${item.active ? 'bg-overlay-strong text-ink' : ''}`}
               disabled={item.disabled}
               onClick={() => {
                 props.onClose();

@@ -12,10 +12,10 @@ type ModalDialogDismissal = {
 type ModalDialogButtonVariant = 'accent' | 'danger' | 'neutral' | 'primary';
 
 const modalDialogButtonVariantClassNames: Record<ModalDialogButtonVariant, string> = {
-  accent: 'bg-[#2383e2] text-white hover:bg-[#1b6fbd]',
-  danger: 'bg-[#d14343] text-white hover:bg-[#b52e2e]',
-  neutral: 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]',
-  primary: 'bg-[#2f3437] text-white hover:bg-[#202124]',
+  accent: 'bg-accent text-white hover:bg-accent-strong',
+  danger: 'bg-danger text-white hover:bg-danger-strong',
+  neutral: 'text-ink-muted hover:bg-overlay hover:text-ink',
+  primary: 'bg-ink text-canvas hover:bg-ink-secondary',
 };
 
 /**
@@ -53,7 +53,7 @@ export function ModalDialog(props: {
         open
         aria-labelledby={props.titleId}
         aria-modal="true"
-        className={`relative z-10 m-auto rounded-lg border border-black/10 bg-white p-0 text-[#2f3437] shadow-lg ${props.surfaceClassName ?? ''}`}
+        className={`relative z-10 m-auto rounded-lg border border-line bg-card p-0 text-ink shadow-lg ${props.surfaceClassName ?? ''}`}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && props.dismissal && !props.dismissal.isDisabled) {
             event.preventDefault();
@@ -86,25 +86,25 @@ export function ModalDialogHeader(props: {
   titleId: string;
 }) {
   return (
-    <header className="flex items-center gap-3 border-b border-black/8 px-5 py-4">
+    <header className="flex items-center gap-3 border-b border-line px-5 py-4">
       {props.icon && (
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#2383e2]/10 text-[#2383e2]">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
           {props.icon}
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <h2 id={props.titleId} className="truncate text-base font-semibold text-[#202124]">
+        <h2 id={props.titleId} className="truncate text-base font-semibold text-ink">
           {props.title}
         </h2>
         {props.description && (
-          <span className="mt-1 block text-sm leading-5 text-[#777b80]">{props.description}</span>
+          <span className="mt-1 block text-sm leading-5 text-ink-muted">{props.description}</span>
         )}
       </span>
       {props.closeButton && (
         <button
           type="button"
           aria-label={props.closeButton.ariaLabel}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-[#777b80] transition-colors hover:bg-black/5 hover:text-[#202124] disabled:cursor-not-allowed disabled:opacity-45"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay hover:text-ink disabled:cursor-not-allowed disabled:opacity-45"
           disabled={props.closeButton.isDisabled}
           onClick={props.closeButton.onClick}
         >
@@ -137,7 +137,7 @@ export function ModalDialogFooter(props: {
 }) {
   return (
     <footer
-      className={`flex shrink-0 items-center gap-2 border-t border-black/8 px-5 py-3 ${props.alignment === 'between' ? 'justify-between' : 'justify-end'}`}
+      className={`flex shrink-0 items-center gap-2 border-t border-line px-5 py-3 ${props.alignment === 'between' ? 'justify-between' : 'justify-end'}`}
     >
       {props.children}
     </footer>

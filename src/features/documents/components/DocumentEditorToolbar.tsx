@@ -129,8 +129,8 @@ function ToolbarButton(props: {
       title={props.label}
       className={`grid size-8 shrink-0 place-items-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         props.active
-          ? 'bg-black/8 text-[#202124]'
-          : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
+          ? 'bg-overlay-strong text-ink'
+          : 'text-ink-muted hover:bg-overlay hover:text-ink'
       }`}
       onClick={props.onSelect}
     >
@@ -399,7 +399,7 @@ export function DocumentEditorToolbar() {
           aria-expanded={isOverflowOpen}
           aria-label={isOverflowOpen ? '收起更多格式' : '展开更多格式'}
           title={isOverflowOpen ? '收起更多格式' : '展开更多格式'}
-          className="grid size-8 shrink-0 place-items-center rounded-md text-[#666a70] transition-colors hover:bg-black/5 hover:text-[#202124]"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-overlay hover:text-ink"
           onClick={() => {
             setIsOverflowOpen((isOpen) => !isOpen);
           }}
@@ -440,7 +440,7 @@ export function DocumentEditorToolbar() {
           />
         ))}
       </div>
-      <span aria-hidden="true" className="mx-1 h-5 w-px bg-black/8" />
+      <span aria-hidden="true" className="mx-1 h-5 w-px bg-overlay-strong" />
       <div className="flex items-center gap-0.5">
         {toolbarCommands.history.map((command) => (
           <ToolbarButton

@@ -49,7 +49,10 @@ export function DocumentLinkDialog(props: {
         }}
       >
         <ModalDialogBody>
-          <label htmlFor="document-link-href" className="block text-xs font-medium text-[#555a60]">
+          <label
+            htmlFor="document-link-href"
+            className="block text-xs font-medium text-ink-secondary"
+          >
             链接地址
           </label>
           <input
@@ -57,7 +60,7 @@ export function DocumentLinkDialog(props: {
             required
             id="document-link-href"
             aria-label="链接地址"
-            className="mt-1.5 h-9 w-full rounded-lg border border-black/12 bg-white px-3 text-sm transition-colors outline-none placeholder:text-[#b0b3b7] focus:border-[#2383e2] focus:ring-2 focus:ring-[#2383e2]/15"
+            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none placeholder:text-ink-faint-strong focus:border-accent focus:ring-2 focus:ring-accent/15"
             placeholder="https://example.com"
             value={href}
             onChange={(event) => {

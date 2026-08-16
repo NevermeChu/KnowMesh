@@ -63,7 +63,7 @@ export function CreateProjectDialog(props: {
         }}
       >
         <ModalDialogBody>
-          <label htmlFor="project-name" className="block text-xs font-medium text-[#555a60]">
+          <label htmlFor="project-name" className="block text-xs font-medium text-ink-secondary">
             项目名称
           </label>
           <input
@@ -72,7 +72,7 @@ export function CreateProjectDialog(props: {
             type="text"
             aria-label="项目名称"
             autoComplete="off"
-            className="mt-1.5 h-9 w-full rounded-lg border border-black/12 bg-white px-3 text-sm transition-colors outline-none placeholder:text-[#b0b3b7] focus:border-[#2383e2] focus:ring-2 focus:ring-[#2383e2]/15"
+            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none placeholder:text-ink-faint-strong focus:border-accent focus:ring-2 focus:ring-accent/15"
             disabled={isPending}
             maxLength={80}
             placeholder="输入项目名称"
@@ -84,7 +84,7 @@ export function CreateProjectDialog(props: {
               }
             }}
           />
-          <p className="mt-1.5 min-h-4 text-xs text-[#d14343]" role="alert">
+          <p className="mt-1.5 min-h-4 text-xs text-danger" role="alert">
             {error}
           </p>
         </ModalDialogBody>

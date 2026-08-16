@@ -70,7 +70,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
     editable: props.canEdit,
     editorProps: {
       attributes: {
-        class: 'min-h-[32rem] px-1 pb-32 pt-4 text-[15px] leading-7 text-[#37352f] outline-none',
+        class: 'min-h-[32rem] px-1 pb-32 pt-4 text-[15px] leading-7 text-ink outline-none',
       },
     },
     extensions: documentExtensions,
@@ -139,7 +139,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
 
   return (
     <article className="mx-auto w-full max-w-3xl py-8">
-      <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-[#929292]">
+      <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-ink-faint">
         <span>{props.canEdit ? '自动保存' : '只读'}</span>
         {props.canEdit && (
           <span aria-live="polite">
@@ -152,7 +152,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
 
       <input
         aria-label="文档标题"
-        className="mt-5 w-full bg-transparent text-4xl font-bold tracking-tight text-[#2f3437] outline-none placeholder:text-[#b7b7b7] disabled:opacity-100"
+        className="mt-5 w-full bg-transparent text-4xl font-bold tracking-tight text-ink outline-none placeholder:text-ink-faint-strong disabled:opacity-100"
         disabled={!props.canEdit}
         maxLength={200}
         placeholder="无标题"

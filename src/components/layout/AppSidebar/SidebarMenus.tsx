@@ -36,13 +36,13 @@ export function WorkspaceSwitcher(props: {
   onToggle: () => void;
 }) {
   return (
-    <div className="relative flex h-12 items-center border-b border-black/6 px-1.5">
+    <div className="relative flex h-12 items-center border-b border-line-soft px-1.5">
       <button
         type="button"
         aria-controls="workspace-switcher-dialog"
         aria-expanded={props.isOpen}
         aria-haspopup="dialog"
-        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-0.5 text-left transition-colors hover:bg-black/5"
+        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-0.5 text-left transition-colors hover:bg-overlay"
         onClick={props.onToggle}
       >
         <AppLogo className="size-7 shrink-0" />
@@ -51,7 +51,7 @@ export function WorkspaceSwitcher(props: {
         </span>
         <ChevronsUpDown
           aria-hidden="true"
-          className="ml-auto size-4 shrink-0 text-[#8a8d91]"
+          className="ml-auto size-4 shrink-0 text-ink-faint"
           strokeWidth={1.8}
         />
       </button>
@@ -67,7 +67,7 @@ export function WorkspaceSwitcher(props: {
           <button
             type="button"
             key={workspace.id}
-            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-overlay disabled:cursor-not-allowed disabled:opacity-45"
             disabled={props.isPending}
             onClick={() => {
               if (workspace.id === props.activeWorkspace?.id) {
@@ -79,24 +79,24 @@ export function WorkspaceSwitcher(props: {
           >
             <AppLogo className="size-7 shrink-0" />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-[#202124]">
+              <span className="block truncate text-sm font-semibold text-ink">
                 {workspace.name}
               </span>
-              <span className="block text-xs text-[#8a8d91]">
+              <span className="block text-xs text-ink-faint">
                 {workspace.role === 'owner' ? 'Owner' : workspace.role}
               </span>
             </span>
             {workspace.id === props.activeWorkspace?.id && (
-              <Check aria-hidden="true" className="size-3.5 text-[#2383e2]" strokeWidth={2} />
+              <Check aria-hidden="true" className="size-3.5 text-accent" strokeWidth={2} />
             )}
           </button>
         ))}
         {props.error && (
-          <p className="px-2 py-1 text-xs text-[#b52e2e]" role="alert">
+          <p className="px-2 py-1 text-xs text-danger-strong" role="alert">
             {props.error}
           </p>
         )}
-        <div className="my-0.5 border-t border-black/8" />
+        <div className="my-0.5 border-t border-line" />
         <button type="button" className={popupMenuItemClassName} onClick={props.onCreate}>
           <Plus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
           <span>新建工作区</span>
@@ -123,14 +123,14 @@ export function SettingsMenu(props: {
   onToggle: () => void;
 }) {
   return (
-    <div className="relative space-y-1 border-t border-black/6 px-1.5 py-2">
+    <div className="relative space-y-1 border-t border-line-soft px-1.5 py-2">
       <Link
         href="/notifications"
         aria-current={props.isNotificationsRoute ? 'page' : undefined}
         className={`flex min-h-8 w-full items-center gap-3 rounded-lg px-1.5 text-sm font-medium transition-colors ${
           props.isNotificationsRoute
-            ? 'bg-black/7 text-[#202124]'
-            : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
+            ? 'bg-overlay-strong text-ink'
+            : 'text-ink-muted hover:bg-overlay hover:text-ink'
         }`}
         onClick={props.onNavigate}
       >
@@ -138,7 +138,7 @@ export function SettingsMenu(props: {
         <span>通知</span>
         {props.unreadNotificationCount > 0 && (
           <span
-            className="ml-auto min-w-5 rounded-full bg-[#e5484d] px-1.5 py-0.5 text-center text-[10px] leading-4 font-semibold text-white"
+            className="ml-auto min-w-5 rounded-full bg-danger px-1.5 py-0.5 text-center text-[10px] leading-4 font-semibold text-white"
             aria-label={`${props.unreadNotificationCount} 条未读通知`}
           >
             {props.unreadNotificationCount > 99 ? '99+' : props.unreadNotificationCount}
@@ -153,8 +153,8 @@ export function SettingsMenu(props: {
         aria-haspopup="dialog"
         className={`flex min-h-8 w-full items-center gap-3 rounded-lg px-1.5 text-sm font-medium transition-colors ${
           props.isOpen || props.isSettingsRoute
-            ? 'bg-black/7 text-[#202124]'
-            : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
+            ? 'bg-overlay-strong text-ink'
+            : 'text-ink-muted hover:bg-overlay hover:text-ink'
         }`}
         onClick={props.onToggle}
       >
@@ -162,7 +162,7 @@ export function SettingsMenu(props: {
         <span>设置</span>
         <ChevronsUpDown
           aria-hidden="true"
-          className="ml-auto size-4 text-[#8a8d91]"
+          className="ml-auto size-4 text-ink-faint"
           strokeWidth={1.8}
         />
       </button>
@@ -199,7 +199,7 @@ export function SettingsMenu(props: {
           <UserRound aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
           <span>账号设置</span>
         </Link>
-        <div className="my-0.5 border-t border-black/8" />
+        <div className="my-0.5 border-t border-line" />
         <SignOutButton>
           <button className={popupMenuItemClassName} type="button">
             <LogOut aria-hidden="true" className="size-3.5" strokeWidth={1.8} />

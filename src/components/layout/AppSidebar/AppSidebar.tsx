@@ -171,13 +171,13 @@ export function AppSidebar(props: {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center border-b border-black/8 bg-[#f3f5f7] px-4 lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center border-b border-line bg-surface-strong px-4 lg:hidden">
         <button
           type="button"
           aria-controls="app-sidebar"
           aria-expanded={isOpen}
           aria-label="打开导航"
-          className="grid size-9 place-items-center rounded-lg text-[#666a70] transition-colors hover:bg-black/5 hover:text-[#202124]"
+          className="grid size-9 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay hover:text-ink"
           onClick={() => {
             setIsOpen(true);
           }}
@@ -198,7 +198,7 @@ export function AppSidebar(props: {
 
       <aside
         id="app-sidebar"
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-visible border-r border-black/6 bg-[#f3f5f7] transition-transform duration-200 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-visible border-r border-line-soft bg-surface-strong transition-transform duration-200 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } ${props.isHidden ? 'lg:-translate-x-full' : 'lg:translate-x-0'}`}
         style={{ width: props.width }}
@@ -207,7 +207,7 @@ export function AppSidebar(props: {
         <button
           type="button"
           aria-label="关闭导航"
-          className="absolute top-3 right-3 z-30 grid size-9 place-items-center rounded-lg text-[#666a70] transition-colors hover:bg-black/5 lg:hidden"
+          className="absolute top-3 right-3 z-30 grid size-9 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay lg:hidden"
           onClick={closeNavigation}
         >
           <X aria-hidden="true" className="size-5" />
@@ -276,7 +276,7 @@ export function AppSidebar(props: {
         <button
           type="button"
           aria-label="调整导航栏宽度"
-          className="absolute inset-y-0 right-0 hidden w-1 cursor-col-resize touch-none transition-colors hover:bg-[#2383e2]/35 focus:bg-[#2383e2]/35 focus:outline-none lg:block"
+          className="hover:bg-accent-soft5 focus:bg-accent-soft5 absolute inset-y-0 right-0 hidden w-1 cursor-col-resize touch-none transition-colors focus:outline-none lg:block"
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft') {
               props.onResize(props.width - 8);

@@ -44,9 +44,7 @@ function WorkspaceSectionNavigation(props: {
     <nav aria-label={props.section.label}>
       <div
         className={`flex min-h-9 items-center rounded-lg transition-colors ${
-          isActive
-            ? 'bg-black/7 text-[#202124]'
-            : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
+          isActive ? 'bg-overlay-strong text-ink' : 'text-ink-muted hover:bg-overlay hover:text-ink'
         }`}
       >
         <button
@@ -63,7 +61,7 @@ function WorkspaceSectionNavigation(props: {
         <button
           type="button"
           aria-label={`在${props.section.label}中创建项目`}
-          className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
           disabled={!props.section.canCreateProject}
           onClick={props.onCreate}
         >
@@ -74,7 +72,7 @@ function WorkspaceSectionNavigation(props: {
           aria-label={
             props.isExpanded ? `收起${props.section.label}` : `展开${props.section.label}`
           }
-          className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
           onClick={props.onToggle}
         >
           <ChevronRight
@@ -88,7 +86,7 @@ function WorkspaceSectionNavigation(props: {
       {props.isExpanded && (
         <ul id={`workspace-projects-${props.section.id}`} className="mt-1 space-y-1 pl-5">
           {props.section.projects.length === 0 ? (
-            <li className="px-3 py-1.5 text-xs text-[#9a9da1]">暂无项目</li>
+            <li className="px-3 py-1.5 text-xs text-ink-faint">暂无项目</li>
           ) : (
             props.section.projects.map((project) => {
               const isProjectActive =
@@ -101,8 +99,8 @@ function WorkspaceSectionNavigation(props: {
                   <div
                     className={`flex min-h-8 items-center rounded-lg transition-colors ${
                       isProjectActive
-                        ? 'bg-black/7 text-[#202124]'
-                        : 'text-[#666a70] hover:bg-black/5 hover:text-[#202124]'
+                        ? 'bg-overlay-strong text-ink'
+                        : 'text-ink-muted hover:bg-overlay hover:text-ink'
                     }`}
                     onContextMenu={(event) => {
                       props.onOpenContextMenu(event, { kind: 'project', project });
@@ -126,7 +124,7 @@ function WorkspaceSectionNavigation(props: {
                         type="button"
                         aria-label={`在${project.label}中创建文档`}
                         title="创建文档"
-                        className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+                        className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
                         onClick={() => {
                           props.onCreateDocument(project);
                         }}
@@ -141,7 +139,7 @@ function WorkspaceSectionNavigation(props: {
                       aria-label={
                         isProjectExpanded ? `收起${project.label}` : `展开${project.label}`
                       }
-                      className="grid size-8 shrink-0 place-items-center rounded-md text-[#8a8d91] transition-colors hover:bg-black/7 hover:text-[#202124]"
+                      className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
                       onClick={() => {
                         props.onToggleProject(project.id);
                       }}
@@ -157,7 +155,7 @@ function WorkspaceSectionNavigation(props: {
                   {isProjectExpanded && (
                     <ul id={`project-documents-${project.id}`} className="mt-1 space-y-1 pl-3">
                       {project.documents.length === 0 ? (
-                        <li className="px-3 py-1 text-xs text-[#9a9da1]">暂无文档</li>
+                        <li className="px-3 py-1 text-xs text-ink-faint">暂无文档</li>
                       ) : (
                         project.documents.map((document) => {
                           const isDocumentActive = props.selectedDocumentId === document.id;
@@ -169,8 +167,8 @@ function WorkspaceSectionNavigation(props: {
                                 aria-current={isDocumentActive ? 'page' : undefined}
                                 className={`flex min-h-8 items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                                   isDocumentActive
-                                    ? 'bg-black/7 font-medium text-[#202124]'
-                                    : 'text-[#777b80] hover:bg-black/5 hover:text-[#202124]'
+                                    ? 'bg-overlay-strong font-medium text-ink'
+                                    : 'text-ink-muted hover:bg-overlay hover:text-ink'
                                 }`}
                                 onClick={props.onNavigate}
                                 onContextMenu={(event) => {
@@ -299,7 +297,7 @@ export function SidebarWorkspaceNavigation(props: {
     <>
       <div className="mt-7 space-y-3">
         {!props.activeWorkspace && (
-          <p className="px-2 text-xs leading-5 text-[#8a8d91]">
+          <p className="px-2 text-xs leading-5 text-ink-faint">
             创建或选择工作区后，这里会显示个人与协作项目。
           </p>
         )}

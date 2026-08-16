@@ -30,7 +30,7 @@ export function ProjectAccessActions(props: {
   }
 
   if (props.requestedRole) {
-    return <p className="mt-4 text-sm text-[#777b80]">权限申请已提交，等待项目管理员处理。</p>;
+    return <p className="mt-4 text-sm text-ink-muted">权限申请已提交，等待项目管理员处理。</p>;
   }
 
   return (
@@ -55,7 +55,7 @@ export function ProjectAccessActions(props: {
       >
         {actionLabel}
       </ModalDialogButton>
-      {error && <p className="mt-2 text-xs text-[#b52e2e]">{error}</p>}
+      {error && <p className="mt-2 text-xs text-danger-strong">{error}</p>}
     </div>
   );
 }

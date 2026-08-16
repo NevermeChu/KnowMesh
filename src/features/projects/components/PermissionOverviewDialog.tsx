@@ -72,8 +72,8 @@ function PermissionMemberManager(props: {
       : [];
 
   return (
-    <section className="mb-5 rounded-lg border border-black/8 p-3">
-      <h3 className="mb-2 text-sm font-semibold text-[#202124]">成员管理</h3>
+    <section className="mb-5 rounded-lg border border-line p-3">
+      <h3 className="mb-2 text-sm font-semibold text-ink">成员管理</h3>
       <form
         className="flex flex-col gap-2 sm:flex-row"
         onSubmit={(event) => {
@@ -110,7 +110,7 @@ function PermissionMemberManager(props: {
             aria-label="受邀成员邮箱"
             placeholder="成员邮箱"
             value={email}
-            className="h-9 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+            className="h-9 min-w-0 flex-1 rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
             disabled={isPending}
             onChange={(event) => {
               setEmail(event.target.value);
@@ -121,7 +121,7 @@ function PermissionMemberManager(props: {
             required
             aria-label="工作区成员"
             value={selectedUserId}
-            className="h-9 min-w-0 flex-1 rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+            className="h-9 min-w-0 flex-1 rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
             disabled={isPending}
             onChange={(event) => {
               setSelectedUserId(event.target.value);
@@ -139,7 +139,7 @@ function PermissionMemberManager(props: {
           {props.overview.scope === 'workspace' ? '发送邀请' : '邀请成员'}
         </ModalDialogButton>
       </form>
-      {error && <p className="mt-2 text-xs text-[#b52e2e]">{error}</p>}
+      {error && <p className="mt-2 text-xs text-danger-strong">{error}</p>}
     </section>
   );
 }
@@ -155,9 +155,9 @@ function WorkspaceAccessRequest(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-black/8 p-3">
-      <h3 className="text-sm font-semibold text-[#202124]">工作区编辑权限</h3>
-      <p className="mt-1 text-xs leading-5 text-[#777b80]">
+    <section className="mb-5 rounded-lg border border-line p-3">
+      <h3 className="text-sm font-semibold text-ink">工作区编辑权限</h3>
+      <p className="mt-1 text-xs leading-5 text-ink-muted">
         Viewer 可以浏览工作区结构；创建项目需要申请 Editor 权限。
       </p>
       <ModalDialogButton
@@ -188,11 +188,11 @@ function ProjectAccessRequests(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-black/8 p-3">
-      <h3 className="mb-2 text-sm font-semibold text-[#202124]">权限申请</h3>
+    <section className="mb-5 rounded-lg border border-line p-3">
+      <h3 className="mb-2 text-sm font-semibold text-ink">权限申请</h3>
       <ul className="space-y-2">
         {props.overview.requests.map((request) => (
-          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-black/2 p-2.5">
+          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-overlay p-2.5">
             <span className="min-w-0 flex-1 text-sm">
               {request.displayName} 申请成为 {request.requestedRole}
             </span>
@@ -230,11 +230,11 @@ function WorkspaceAccessReviews(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-black/8 p-3">
-      <h3 className="mb-2 text-sm font-semibold text-[#202124]">权限申请</h3>
+    <section className="mb-5 rounded-lg border border-line p-3">
+      <h3 className="mb-2 text-sm font-semibold text-ink">权限申请</h3>
       <ul className="space-y-2">
         {props.overview.requests.map((request) => (
-          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-black/2 p-2.5">
+          <li key={request.userId} className="flex items-center gap-3 rounded-md bg-overlay p-2.5">
             <span className="min-w-0 flex-1 text-sm">{request.displayName} 申请成为 editor</span>
             <ModalDialogButton
               type="button"
@@ -286,7 +286,7 @@ function PermissionMemberActions(props: {
       {props.member.role === 'editor' && (
         <button
           type="button"
-          className="h-8 rounded-md border border-black/10 bg-white px-2 text-xs"
+          className="h-8 rounded-md border border-line bg-card px-2 text-xs"
           disabled={isPending}
           onClick={() => {
             startTransition(async () => {
@@ -313,7 +313,7 @@ function PermissionMemberActions(props: {
       <button
         type="button"
         aria-label={`移除${props.member.displayName}`}
-        className="h-8 rounded-md px-2 text-xs text-[#b52e2e] hover:bg-[#d14343]/8"
+        className="h-8 rounded-md px-2 text-xs text-danger-strong hover:bg-danger/8"
         disabled={isPending}
         onClick={() => {
           startTransition(async () => {
@@ -345,7 +345,7 @@ function PermissionDocumentTitle(props: {
   return (
     <button
       type="button"
-      className="truncate rounded-sm transition-colors hover:text-[#2383e2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2383e2]"
+      className="truncate rounded-sm transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       onClick={() => {
         props.onNavigate({ documentId: props.overview.document.id, scope: 'document' });
       }}
@@ -362,7 +362,7 @@ function PermissionProjectTitle(props: {
   return (
     <button
       type="button"
-      className="truncate rounded-sm transition-colors hover:text-[#2383e2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2383e2]"
+      className="truncate rounded-sm transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       onClick={() => {
         props.onNavigate({ projectId: props.overview.project.id, scope: 'project' });
       }}
@@ -391,7 +391,7 @@ function PermissionOverviewTitle(props: {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <PermissionProjectTitle overview={props.overview} onNavigate={props.onNavigate} />
-      <span aria-hidden="true" className="shrink-0 text-[#a0a3a7]">
+      <span aria-hidden="true" className="shrink-0 text-ink-faint">
         \
       </span>
       <PermissionDocumentTitle overview={props.overview} onNavigate={props.onNavigate} />
@@ -467,8 +467,8 @@ function PermissionResourceEditor(props: {
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-black/8 p-3">
-      <h3 className="mb-2 text-sm font-semibold text-[#202124]">基本信息</h3>
+    <section className="mb-5 rounded-lg border border-line p-3">
+      <h3 className="mb-2 text-sm font-semibold text-ink">基本信息</h3>
       <form
         className="flex flex-col gap-2 sm:flex-row"
         onSubmit={(event) => {
@@ -497,7 +497,7 @@ function PermissionResourceEditor(props: {
             aria-label={`${resource.label}名称`}
             maxLength={props.overview.scope === 'document' ? 200 : 80}
             value={name}
-            className="h-9 w-full rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+            className="h-9 w-full rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
             disabled={isPending}
             onChange={(event) => {
               setName(event.target.value);
@@ -513,7 +513,7 @@ function PermissionResourceEditor(props: {
         </ModalDialogButton>
       </form>
       {error && (
-        <p className="mt-2 text-xs text-[#b52e2e]" role="alert">
+        <p className="mt-2 text-xs text-danger-strong" role="alert">
           {error}
         </p>
       )}
@@ -551,7 +551,7 @@ function PermissionRemovalConfirmationDialog(props: {
         titleId="permission-removal-confirmation-title"
       />
       <ModalDialogBody>
-        <p className="text-sm leading-6 text-[#666a70]">
+        <p className="text-sm leading-6 text-ink-muted">
           {getRemovalDescription({
             overview: props.overview,
             removalMode,
@@ -559,12 +559,12 @@ function PermissionRemovalConfirmationDialog(props: {
           })}
         </p>
         {removalMode === 'delete' && props.overview.scope === 'workspace' && (
-          <label className="mt-4 block text-sm text-[#666a70]">
+          <label className="mt-4 block text-sm text-ink-muted">
             <span className="mb-1.5 block">输入工作区名称以确认</span>
             <input
               aria-label="确认删除的工作区名称"
               value={confirmationName}
-              className="h-9 w-full rounded-md border border-black/10 bg-white px-3 text-sm outline-none focus:border-[#2383e2]"
+              className="h-9 w-full rounded-md border border-line bg-card px-3 text-sm outline-none focus:border-accent"
               disabled={isPending}
               onChange={(event) => {
                 setConfirmationName(event.target.value);
@@ -573,7 +573,7 @@ function PermissionRemovalConfirmationDialog(props: {
           </label>
         )}
         {error && (
-          <p className="mt-3 text-sm text-[#b52e2e]" role="alert">
+          <p className="mt-3 text-sm text-danger-strong" role="alert">
             {error}
           </p>
         )}
@@ -652,15 +652,15 @@ export function PermissionOverviewDialog(props: {
 
         <ModalDialogBody surfaceClassName="min-h-0 overflow-y-auto">
           {props.isLoading && (
-            <p className="py-10 text-center text-sm text-[#8a8d91]">正在加载完整权限列表…</p>
+            <p className="py-10 text-center text-sm text-ink-faint">正在加载完整权限列表…</p>
           )}
           {!props.isLoading && props.error && (
-            <p className="rounded-lg bg-[#d14343]/8 px-3 py-2 text-sm text-[#b52e2e]" role="alert">
+            <p className="rounded-lg bg-danger/8 px-3 py-2 text-sm text-danger-strong" role="alert">
               {props.error}
             </p>
           )}
           {!props.isLoading && props.overview?.scope === 'workspace' && (
-            <p className="mb-4 text-sm leading-6 text-[#666a70]">{props.overview.description}</p>
+            <p className="mb-4 text-sm leading-6 text-ink-muted">{props.overview.description}</p>
           )}
           {!props.isLoading && props.overview && (
             <PermissionResourceEditor overview={props.overview} onMutated={props.onMutated} />
@@ -678,26 +678,26 @@ export function PermissionOverviewDialog(props: {
             <ProjectAccessRequests overview={props.overview} onMutated={props.onMutated} />
           )}
           {!props.isLoading && props.overview?.groups.length === 0 && (
-            <p className="py-10 text-center text-sm text-[#8a8d91]">暂无成员权限</p>
+            <p className="py-10 text-center text-sm text-ink-faint">暂无成员权限</p>
           )}
           {!props.isLoading &&
             overview?.groups.map((group) => (
               <section key={group.id} className="mb-5 last:mb-0">
                 {(props.overview?.scope === 'workspace' || overview.groups.length > 1) && (
-                  <h3 className="mb-2 text-sm font-semibold text-[#202124]">{group.name}</h3>
+                  <h3 className="mb-2 text-sm font-semibold text-ink">{group.name}</h3>
                 )}
-                <div className="space-y-3 rounded-lg border border-black/8 p-3">
+                <div className="space-y-3 rounded-lg border border-line p-3">
                   {roles.map((role) => {
                     const members = group.members.filter((member) => member.role === role.id);
 
                     return (
                       <div key={role.id}>
-                        <div className="mb-1.5 flex items-center justify-between text-xs font-semibold tracking-[0.06em] text-[#8a8d91] uppercase">
+                        <div className="mb-1.5 flex items-center justify-between text-xs font-semibold tracking-[0.06em] text-ink-faint uppercase">
                           <span>{role.label}</span>
                           <span>{members.length}</span>
                         </div>
                         {members.length === 0 ? (
-                          <p className="rounded-md bg-black/2 px-2.5 py-2 text-xs text-[#a0a3a7]">
+                          <p className="rounded-md bg-overlay px-2.5 py-2 text-xs text-ink-faint">
                             暂无成员
                           </p>
                         ) : (
@@ -707,29 +707,29 @@ export function PermissionOverviewDialog(props: {
                                 key={member.userId}
                                 className={`flex items-center gap-2.5 rounded-md border px-2.5 py-2 ${
                                   member.isCurrentUser
-                                    ? 'border-[#2383e2]/30 bg-[#2383e2]/8'
-                                    : 'border-transparent bg-black/2'
+                                    ? 'border-accent/30 bg-accent-soft'
+                                    : 'border-transparent bg-overlay'
                                 }`}
                               >
                                 <span
                                   aria-hidden="true"
-                                  className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e4e7ea] text-xs font-semibold text-[#555a60]"
+                                  className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-strong text-xs font-semibold text-ink-secondary"
                                 >
                                   {member.displayName.slice(0, 1).toUpperCase()}
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="flex items-center gap-2">
-                                    <span className="truncate text-sm font-medium text-[#202124]">
+                                    <span className="truncate text-sm font-medium text-ink">
                                       {member.displayName}
                                     </span>
                                     {member.isCurrentUser && (
-                                      <span className="shrink-0 rounded-full bg-[#2383e2] px-1.5 py-0.5 text-[0.625rem] font-semibold text-white">
+                                      <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[0.625rem] font-semibold text-white">
                                         你
                                       </span>
                                     )}
                                   </span>
                                   {member.email && member.email !== member.displayName && (
-                                    <span className="block truncate text-xs text-[#8a8d91]">
+                                    <span className="block truncate text-xs text-ink-faint">
                                       {member.email}
                                     </span>
                                   )}

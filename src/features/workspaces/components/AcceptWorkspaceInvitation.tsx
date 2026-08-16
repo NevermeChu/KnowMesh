@@ -43,15 +43,15 @@ export function AcceptWorkspaceInvitation(props: {
 
     return (
       <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl items-center py-12">
-        <section className="w-full rounded-2xl border border-black/8 bg-white px-6 py-10 text-center shadow-sm sm:px-10">
-          <div className="mx-auto grid size-11 place-items-center rounded-xl bg-[#2f3437] text-lg font-semibold text-white">
+        <section className="w-full rounded-2xl border border-line bg-card px-6 py-10 text-center shadow-sm sm:px-10">
+          <div className="mx-auto grid size-11 place-items-center rounded-xl bg-ink text-lg font-semibold text-canvas">
             K
           </div>
-          <p className="mt-6 text-xs font-semibold tracking-[0.12em] text-[#777b80] uppercase">
+          <p className="mt-6 text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
             {workspaceInvitationCopy.eyebrow}
           </p>
-          <h1 className="mt-2 text-2xl font-semibold text-[#202124]">{message.title}</h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#666a70]">
+          <h1 className="mt-2 text-2xl font-semibold text-ink">{message.title}</h1>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink-muted">
             {message.description}
           </p>
         </section>
@@ -61,55 +61,53 @@ export function AcceptWorkspaceInvitation(props: {
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl items-center py-12">
-      <section className="w-full overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm">
+      <section className="w-full overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
         <header className="px-6 pt-8 text-center sm:px-10">
-          <div className="mx-auto grid size-11 place-items-center rounded-xl bg-[#2f3437] text-lg font-semibold text-white">
+          <div className="mx-auto grid size-11 place-items-center rounded-xl bg-ink text-lg font-semibold text-canvas">
             K
           </div>
-          <p className="mt-6 text-xs font-semibold tracking-[0.12em] text-[#2383e2] uppercase">
+          <p className="mt-6 text-xs font-semibold tracking-[0.12em] text-accent uppercase">
             {workspaceInvitationCopy.eyebrow}
           </p>
-          <h1 className="mt-2 text-2xl font-semibold text-[#202124]">
-            {workspaceInvitationCopy.title}
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-[#666a70]">
-            <span className="font-medium text-[#2f3437]">{props.data.invitation.inviterName}</span>{' '}
+          <h1 className="mt-2 text-2xl font-semibold text-ink">{workspaceInvitationCopy.title}</h1>
+          <p className="mt-3 text-sm leading-6 text-ink-muted">
+            <span className="font-medium text-ink">{props.data.invitation.inviterName}</span>{' '}
             邀请你加入以下工作区。
           </p>
         </header>
 
-        <dl className="mx-6 mt-7 divide-y divide-black/6 rounded-xl bg-[#f7f7f5] px-5 sm:mx-10">
+        <dl className="mx-6 mt-7 divide-y divide-line-soft rounded-xl bg-surface px-5 sm:mx-10">
           <div className="py-4">
-            <dt className="text-xs text-[#777b80]">工作区</dt>
-            <dd className="mt-1 text-sm font-semibold text-[#202124]">
+            <dt className="text-xs text-ink-muted">工作区</dt>
+            <dd className="mt-1 text-sm font-semibold text-ink">
               {props.data.invitation.workspaceName}
             </dd>
           </div>
           <div className="grid gap-4 py-4 sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-[#777b80]">加入角色</dt>
-              <dd className="mt-1 text-sm font-medium text-[#202124]">
+              <dt className="text-xs text-ink-muted">加入角色</dt>
+              <dd className="mt-1 text-sm font-medium text-ink">
                 {props.data.invitation.roleLabel}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-[#777b80]">受邀邮箱</dt>
-              <dd className="mt-1 truncate text-sm font-medium text-[#202124]">
+              <dt className="text-xs text-ink-muted">受邀邮箱</dt>
+              <dd className="mt-1 truncate text-sm font-medium text-ink">
                 {props.data.invitation.inviteeEmail}
               </dd>
             </div>
           </div>
           <div className="py-4">
-            <dt className="text-xs text-[#777b80]">有效期</dt>
-            <dd className="mt-1 text-sm font-medium text-[#202124]">
+            <dt className="text-xs text-ink-muted">有效期</dt>
+            <dd className="mt-1 text-sm font-medium text-ink">
               {props.data.invitation.expiresAtLabel}
             </dd>
           </div>
         </dl>
 
-        <footer className="mt-7 border-t border-black/6 px-6 py-5 sm:px-10">
+        <footer className="mt-7 border-t border-line-soft px-6 py-5 sm:px-10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-5 text-[#777b80]">加入后将以 Viewer 角色访问工作区。</p>
+            <p className="text-xs leading-5 text-ink-muted">加入后将以 Viewer 角色访问工作区。</p>
             <ModalDialogButton
               type="button"
               variant="primary"
@@ -130,7 +128,7 @@ export function AcceptWorkspaceInvitation(props: {
               {isPending ? '正在加入…' : '接受邀请'}
             </ModalDialogButton>
           </div>
-          {error && <p className="mt-3 text-sm text-[#b52e2e]">{error}</p>}
+          {error && <p className="mt-3 text-sm text-danger-strong">{error}</p>}
         </footer>
       </section>
     </div>

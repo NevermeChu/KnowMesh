@@ -1,7 +1,7 @@
 'use client';
 
 export const popupMenuItemClassName =
-  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-[#555a60] transition-colors hover:bg-black/5 hover:text-[#202124] disabled:cursor-not-allowed disabled:opacity-45';
+  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-ink-secondary transition-colors hover:bg-overlay hover:text-ink disabled:cursor-not-allowed disabled:opacity-45';
 
 type PopupMenuPlacement =
   | { kind: 'anchor'; side: 'bottom' | 'top' }
@@ -40,7 +40,7 @@ export function PopupMenu(props: {
       open
       id={props.id}
       aria-label={props.label}
-      className={`${viewportPosition ? 'fixed z-70' : 'absolute left-1.5 z-20'} m-0 max-w-[calc(100vw-0.75rem)] rounded-lg border border-black/10 bg-white text-[#2f3437] shadow-lg ${props.surfaceClassName ?? 'w-56 p-1'} ${anchorPositionClassName}`}
+      className={`${viewportPosition ? 'fixed z-70' : 'absolute left-1.5 z-20'} m-0 max-w-[calc(100vw-0.75rem)] rounded-lg border border-line bg-card text-ink shadow-lg ${props.surfaceClassName ?? 'w-56 p-1'} ${anchorPositionClassName}`}
       style={viewportPosition}
     >
       {props.children}
@@ -56,7 +56,7 @@ export function PopupMenu(props: {
  */
 export function PopupMenuLabel(props: { children: React.ReactNode }) {
   return (
-    <p className="px-2 pt-1 pb-0.5 text-xs font-semibold tracking-[0.08em] text-[#8a8d91] uppercase">
+    <p className="px-2 pt-1 pb-0.5 text-xs font-semibold tracking-[0.08em] text-ink-faint uppercase">
       {props.children}
     </p>
   );
