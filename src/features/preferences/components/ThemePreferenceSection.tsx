@@ -3,6 +3,7 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useTransition } from 'react';
+import { applyThemePreference } from '@/features/preferences/components/ApplyThemePreference';
 import type { UserThemePreference } from '@/features/preferences/Preferences';
 import { updateThemePreference } from '@/features/preferences/server/UpdateThemePreference';
 
@@ -18,21 +19,6 @@ const themeOptions: ThemeOption[] = [
   { description: '适合昏暗环境的深色配色', icon: Moon, label: '深色', value: 'dark' },
   { description: '与操作系统外观设置保持一致', icon: Monitor, label: '跟随系统', value: 'system' },
 ];
-
-/**
- * Mirrors the root layout init script so switching applies instantly, without waiting for the action.
- *
- * @param theme - Theme preference to apply to the document root.
- */
-function applyThemeToDocument(theme: UserThemePreference) {
-  const root = document.documentElement;
-  root.dataset.theme = theme;
-  root.classList.toggle(
-    'dark',
-    theme === 'dark' ||
-      (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches),
-  );
-}
 
 /**
  * Renders the appearance section of system preferences: theme cards persisted per user.
@@ -54,13 +40,13 @@ export function ThemePreferenceSection(props: { theme: UserThemePreference }) {
 
     setSelectedTheme(theme);
     setError(undefined);
-    applyThemeToDocument(theme);
+    applyThemePreference(theme);
     startTransition(async () => {
       try {
         await updateThemePreference({ theme });
       } catch {
         setSelectedTheme(previousTheme);
-        applyThemeToDocument(previousTheme);
+        applyThemePreference(previousTheme);
         setError('保存偏好失败，请稍后重试');
       }
     });

@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
+import { ThemeToggle } from '@/features/preferences/components/ThemeToggle';
 import type { Workspace } from '@/features/workspaces/Workspace';
 import { AppConfig } from '@/utils/AppConfig';
 
@@ -146,26 +147,29 @@ export function SettingsMenu(props: {
         )}
       </Link>
 
-      <button
-        type="button"
-        aria-controls="settings-dialog"
-        aria-expanded={props.isOpen}
-        aria-haspopup="dialog"
-        className={`flex min-h-8 w-full items-center gap-3 rounded-lg px-1.5 text-sm font-medium transition-colors ${
-          props.isOpen || props.isSettingsRoute
-            ? 'bg-overlay-strong text-ink'
-            : 'text-ink-muted hover:bg-overlay hover:text-ink'
-        }`}
-        onClick={props.onToggle}
-      >
-        <Settings aria-hidden="true" className="size-4" strokeWidth={1.8} />
-        <span>设置</span>
-        <ChevronsUpDown
-          aria-hidden="true"
-          className="ml-auto size-4 text-ink-faint"
-          strokeWidth={1.8}
-        />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          aria-controls="settings-dialog"
+          aria-expanded={props.isOpen}
+          aria-haspopup="dialog"
+          className={`flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-lg px-1.5 text-sm font-medium transition-colors ${
+            props.isOpen || props.isSettingsRoute
+              ? 'bg-overlay-strong text-ink'
+              : 'text-ink-muted hover:bg-overlay hover:text-ink'
+          }`}
+          onClick={props.onToggle}
+        >
+          <Settings aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
+          <span>设置</span>
+          <ChevronsUpDown
+            aria-hidden="true"
+            className="ml-auto size-4 text-ink-faint"
+            strokeWidth={1.8}
+          />
+        </button>
+        <ThemeToggle />
+      </div>
 
       <PopupMenu
         id="settings-dialog"
