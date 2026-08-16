@@ -2,11 +2,14 @@
 
 状态：Current
 
-本文描述 KnowMesh 当前的用户偏好模型、外观主题机制和全站颜色约束。
+本文描述 KnowMesh 当前的用户偏好模型、外观主题机制、内容宽度与全站颜色约束。
 
 ## 产品边界
 
-偏好属于 Clerk 用户，不属于任何 Workspace。当前唯一已实现的偏好是外观主题：`浅色`、`深色`、`跟随系统`，默认 `跟随系统`。`/settings/preferences` 在「外观」小节呈现三张主题卡片；点击后立即在本地切换主题并调用 Server Action 持久化，失败时回滚到之前的主题并显示错误信息。侧边栏底部另有一个明暗快捷切换按钮，在浅色与深色之间翻转并写入同一偏好。
+偏好属于 Clerk 用户，不属于任何 Workspace。已实现的偏好：
+
+- **外观主题**：`浅色`、`深色`、`跟随系统`，默认 `跟随系统`。`/settings/preferences` 在「外观」小节呈现三张主题卡片；点击后立即在本地切换主题并调用 Server Action 持久化，失败时回滚到之前的主题并显示错误信息。侧边栏底部另有一个明暗快捷切换按钮，在浅色与深色之间翻转并写入同一偏好。
+- **内容宽度**：工作区阅读内容的容器宽度，可选 `60%`、`70%`、`80%`、`90%`，默认 `80%`，步长 10%。`ContentToolbar` 全屏按钮左侧的下拉显示当前百分比，选中即时应用、乐观更新并持久化，失败回滚。`WorkspaceContent` 组件消费根布局注入的 `--content-read-width` CSS 变量统一各页面内容宽度；移动端始终全宽。
 
 主题对全站生效，包括公开首页、Clerk 登录/注册页、账号设置页和工作区页面。Clerk 组件通过引用同一组 CSS 变量跟随主题。
 
@@ -36,6 +39,7 @@ updateThemePreference Server Action
 
 - `user_id` 保存 Clerk 用户 ID，带唯一索引，既是 upsert 冲突目标也是读取隔离条件。
 - `theme` 为 `light`、`dark`、`system` 枚举，默认 `system`。
+- `content_width` 为整数，取值 `60/70/80/90`，默认 `80`；读取侧用 `parseContentWidth`/`resolveContentWidth` 收窄为字面量类型，越界值回退默认。
 - Clerk `user.deleted` 清理流程会删除该用户的偏好行。
 
 ## 全站颜色约束
@@ -50,12 +54,15 @@ updateThemePreference Server Action
 
 ## 相关代码
 
-- `src/features/preferences/Preferences.ts`：主题枚举、cookie 名和值校验。
+- `src/features/preferences/Preferences.ts`：主题与内容宽度枚举、cookie 名、默认值与值校验/解析。
 - `src/features/preferences/server/GetUserPreferences.ts`：server-only 用户偏好查询。
 - `src/features/preferences/server/UpdateThemePreference.ts`：主题偏好 Server Action。
+- `src/features/preferences/server/UpdateContentWidth.ts`：内容宽度偏好 Server Action。
 - `src/features/preferences/components/ThemePreferenceSection.tsx`：主题卡片与乐观切换。
-- `src/app/layout.tsx`：cookie 读取、`<html>` 主题属性和内联初始化脚本。
-- `src/styles/global.css`：颜色 token 体系。
+- `src/components/layout/WorkspaceContent.tsx`：消费 `--content-read-width` 的共享内容容器。
+- `src/components/layout/ContentToolbar.tsx`：内容宽度下拉与乐观切换。
+- `src/app/layout.tsx`：cookie 读取、`<html>` 主题属性、`--content-read-width` 内联与主题初始化脚本。
+- `src/styles/global.css`：颜色 token 体系与 `--content-read-width` 默认值。
 
 ## 相关文档
 

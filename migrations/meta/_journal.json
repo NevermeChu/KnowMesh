@@ -92,6 +92,13 @@
       "when": 1786895969105,
       "tag": "0012_add-user-preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786904501505,
+      "tag": "0013_add-content-width-preference",
+      "breakpoints": true
     }
   ]
 }

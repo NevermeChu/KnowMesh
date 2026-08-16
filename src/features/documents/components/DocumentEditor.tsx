@@ -4,6 +4,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import type { Document, DocumentContent } from '../Document';
 import { documentExtensions } from '../DocumentExtensions';
@@ -138,7 +139,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
   };
 
   return (
-    <article className="mx-auto w-full max-w-3xl py-8">
+    <WorkspaceContent as="article" className="py-8">
       <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-ink-faint">
         <span>{props.canEdit ? '自动保存' : '只读'}</span>
         {props.canEdit && (
@@ -199,6 +200,6 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
           setContextMenuPosition(null);
         }}
       />
-    </article>
+    </WorkspaceContent>
   );
 }

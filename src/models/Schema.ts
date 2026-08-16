@@ -73,6 +73,7 @@ export const userPreferencesSchema = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     userId: varchar('user_id', { length: 255 }).notNull(),
     theme: userThemePreferenceEnum('theme').notNull().default('system'),
+    contentWidth: integer('content_width').notNull().default(80),
     updatedAt: timestamp('updated_at', { mode: 'date' })
       .defaultNow()
       .$onUpdate(() => new Date())

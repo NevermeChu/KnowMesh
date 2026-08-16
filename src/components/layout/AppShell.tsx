@@ -5,6 +5,7 @@ import { AppSidebar } from '@/components/layout/AppSidebar/AppSidebar';
 import { ContentToolbar } from '@/components/layout/ContentToolbar';
 import { DocumentEditorToolbarProvider } from '@/features/documents/components/DocumentEditorToolbar';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
+import type { ContentWidthPercentage } from '@/features/preferences/Preferences';
 import type { Project } from '@/features/projects/Project';
 import type { Workspace } from '@/features/workspaces/Workspace';
 
@@ -25,6 +26,7 @@ type AppShellStyle = React.CSSProperties & {
 export function AppShell(props: {
   activeWorkspace: Workspace | null;
   children: React.ReactNode;
+  contentWidth: ContentWidthPercentage;
   documents: DocumentNavigationItem[];
   projects: Project[];
   unreadNotificationCount: number;
@@ -57,6 +59,7 @@ export function AppShell(props: {
           }`}
         >
           <ContentToolbar
+            contentWidth={props.contentWidth}
             isContentFullscreen={isContentFullscreen}
             onToggleContentFullscreen={() => {
               setIsContentFullscreen((isFullscreen) => !isFullscreen);

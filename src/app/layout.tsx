@@ -4,8 +4,17 @@ import type { Metadata, Viewport } from 'next';
 import '@/styles/global.css';
 import { cookies } from 'next/headers';
 import { GlobalContextMenuBoundary } from '@/components/layout/GlobalContextMenuBoundary';
-import { isUserThemePreference, THEME_COOKIE } from '@/features/preferences/Preferences';
+import {
+  CONTENT_WIDTH_COOKIE,
+  isUserThemePreference,
+  parseContentWidth,
+  THEME_COOKIE,
+} from '@/features/preferences/Preferences';
 import type { UserThemePreference } from '@/features/preferences/Preferences';
+
+type RootLayoutStyle = React.CSSProperties & {
+  '--content-read-width': string;
+};
 
 export const metadata: Metadata = {
   icons: [
@@ -44,12 +53,15 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const themeCookie = cookieStore.get(THEME_COOKIE)?.value;
   const theme: UserThemePreference = isUserThemePreference(themeCookie) ? themeCookie : 'system';
+  const contentWidth = parseContentWidth(cookieStore.get(CONTENT_WIDTH_COOKIE)?.value);
+  const rootStyle: RootLayoutStyle = { '--content-read-width': `${contentWidth}%` };
 
   return (
     <html
       lang="zh-CN"
       className={theme === 'dark' ? 'dark' : undefined}
       data-theme={theme}
+      style={rootStyle}
       suppressHydrationWarning
     >
       <head>

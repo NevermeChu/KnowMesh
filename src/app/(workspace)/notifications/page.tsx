@@ -1,4 +1,5 @@
 import { Bell, Check, CheckCheck } from 'lucide-react';
+import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   getNotifications,
@@ -21,7 +22,7 @@ export default async function NotificationsPage() {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl py-10 sm:py-14">
+    <WorkspaceContent className="py-10 sm:py-14">
       <header className="flex items-start justify-between gap-4 border-b border-line pb-5">
         <div>
           <p className="text-xs font-semibold tracking-[0.12em] text-ink-faint uppercase">
@@ -95,6 +96,6 @@ export default async function NotificationsPage() {
           })}
         </ul>
       )}
-    </div>
+    </WorkspaceContent>
   );
 }

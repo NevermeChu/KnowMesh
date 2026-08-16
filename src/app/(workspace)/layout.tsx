@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { AppShell } from '@/components/layout/AppShell';
 import { getUnreadNotificationCount } from '@/features/notifications/server/GetNotifications';
+import { CONTENT_WIDTH_COOKIE, parseContentWidth } from '@/features/preferences/Preferences';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
 import { getWorkspaceNavigation } from '@/features/workspaces/server/GetWorkspaceNavigation';
 import { AppConfig } from '@/utils/AppConfig';
@@ -18,18 +20,21 @@ export default async function WorkspaceLayout(props: { children: React.ReactNode
       ? workspaceContext.activeWorkspace.id
       : undefined,
   ].filter((workspaceId): workspaceId is string => typeof workspaceId === 'string');
-  const [workspaceResources, unreadNotificationCount] = await Promise.all([
+  const [workspaceResources, unreadNotificationCount, cookieStore] = await Promise.all([
     Promise.all(
       workspaceIds.map(async (workspaceId) => await getWorkspaceNavigation({ workspaceId })),
     ),
     getUnreadNotificationCount(),
+    cookies(),
   ]);
   const documents = workspaceResources.flatMap((resources) => resources.documents);
   const projects = workspaceResources.flatMap((resources) => resources.projects);
+  const contentWidth = parseContentWidth(cookieStore.get(CONTENT_WIDTH_COOKIE)?.value);
 
   return (
     <AppShell
       activeWorkspace={workspaceContext.activeWorkspace}
+      contentWidth={contentWidth}
       documents={documents}
       projects={projects}
       unreadNotificationCount={unreadNotificationCount}

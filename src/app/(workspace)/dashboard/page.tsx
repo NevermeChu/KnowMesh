@@ -1,5 +1,6 @@
 import { ChevronRight, FileText, Inbox, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getRecentDocuments } from '@/features/documents/server/GetRecentDocuments';
 import {
@@ -30,7 +31,7 @@ export default async function DashboardPage() {
   const latestNotifications = notifications.slice(0, 3);
 
   return (
-    <div className="mx-auto w-full max-w-5xl py-10 sm:py-14">
+    <WorkspaceContent className="py-10 sm:py-14">
       <header className="border-b border-line-soft pb-5">
         <p className="text-xs font-semibold tracking-[0.12em] text-ink-faint uppercase">工作台</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">欢迎回来</h1>
@@ -185,6 +186,6 @@ export default async function DashboardPage() {
           </section>
         </div>
       </div>
-    </div>
+    </WorkspaceContent>
   );
 }

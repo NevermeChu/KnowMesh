@@ -2,9 +2,26 @@ import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 import { cache } from 'react';
+import { contentWidthPercentages, DEFAULT_CONTENT_WIDTH } from '@/features/preferences/Preferences';
 import type { UserPreferences } from '@/features/preferences/Preferences';
 import { db } from '@/libs/DB';
 import { userPreferencesSchema } from '@/models/Schema';
+
+/**
+ * Coerces an untrusted database value to a content width percentage step.
+ *
+ * @param value - Raw integer stored in the database.
+ * @returns The matching step, or the default when out of range.
+ */
+function resolveContentWidth(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return DEFAULT_CONTENT_WIDTH;
+  }
+
+  return (
+    contentWidthPercentages.find((percentage) => percentage === value) ?? DEFAULT_CONTENT_WIDTH
+  );
+}
 
 /**
  * Reads the authenticated user's preferences, defaulting to system defaults.
@@ -15,10 +32,16 @@ export const getUserPreferences = cache(async (): Promise<UserPreferences> => {
   const { userId } = await auth.protect();
 
   const [preferences] = await db
-    .select({ theme: userPreferencesSchema.theme })
+    .select({
+      contentWidth: userPreferencesSchema.contentWidth,
+      theme: userPreferencesSchema.theme,
+    })
     .from(userPreferencesSchema)
     .where(eq(userPreferencesSchema.userId, userId))
     .limit(1);
 
-  return { theme: preferences?.theme ?? 'system' };
+  return {
+    contentWidth: resolveContentWidth(preferences?.contentWidth),
+    theme: preferences?.theme ?? 'system',
+  };
 });

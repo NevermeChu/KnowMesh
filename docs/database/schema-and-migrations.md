@@ -126,7 +126,7 @@ Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFE
 
 `0005_add-workspace-kind.sql` 识别个人空间、为缺少个人空间的已知用户补建 Workspace，并将旧 Personal 项目迁移到 owner 的个人空间。`0006_remove-project-kind.sql` 随后删除 `projects.kind`、旧枚举、分类索引和冗余的 `user_onboarding` 表。`0007_remove-redundant-indexes.sql` 删除已经被部分唯一索引或联合主键覆盖、且没有当前查询消费者的三个索引。`0008_dashing_vivisector.sql` 为 Project owner 增加 Workspace 成员复合外键。`0009_cheerful_mockingbird.sql` 增加 Project 邀请和 Workspace/Project 权限申请状态，并移除 Workspace 邀请的可选角色，使接受邀请固定为 viewer。`0010_silly_nomad.sql` 回填 `project_members.workspace_id`，预检既有成员和 owner 数据，增加两级成员复合外键、唯一 owner 索引及事务结束时执行的 owner 不变量触发器。
 
-`0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。`0012_add-user-preferences.sql` 增加用户偏好表、主题枚举和 `user_id` 唯一索引。
+`0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。`0012_add-user-preferences.sql` 增加用户偏好表、主题枚举和 `user_id` 唯一索引。`0013_add-content-width-preference.sql` 给用户偏好表增加 `content_width` 整数列(默认 80)。
 
 ## 迁移不变量
 

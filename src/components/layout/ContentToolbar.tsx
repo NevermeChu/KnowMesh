@@ -1,9 +1,14 @@
 'use client';
 
-import { ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { Check, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState, useTransition } from 'react';
+import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
 import { DocumentEditorToolbar } from '@/features/documents/components/DocumentEditorToolbar';
+import { contentWidthPercentages } from '@/features/preferences/Preferences';
+import type { ContentWidthPercentage } from '@/features/preferences/Preferences';
+import { updateContentWidth } from '@/features/preferences/server/UpdateContentWidth';
 
 type BreadcrumbItem = {
   href?: string;
@@ -41,17 +46,42 @@ const createBreadcrumbs = (pathname: string): BreadcrumbItem[] => {
 /**
  * Renders shared content navigation and view actions.
  *
- * @param props - Content fullscreen state and toggle behavior.
+ * @param props - Persisted content width and content fullscreen state and toggle behavior.
  * @returns The shared content toolbar.
  */
 export function ContentToolbar(props: {
+  contentWidth: ContentWidthPercentage;
   isContentFullscreen: boolean;
   onToggleContentFullscreen: () => void;
 }) {
   const pathname = usePathname();
+  const [width, setWidth] = useState(props.contentWidth);
+  const [isWidthMenuOpen, setIsWidthMenuOpen] = useState(false);
+  const [, startTransition] = useTransition();
   const breadcrumbs = createBreadcrumbs(pathname);
   const FullscreenIcon = props.isContentFullscreen ? Minimize2 : Maximize2;
   const fullscreenLabel = props.isContentFullscreen ? '退出内容全屏' : '内容全屏';
+
+  function selectContentWidth(nextWidth: ContentWidthPercentage) {
+    const previousWidth = width;
+
+    setIsWidthMenuOpen(false);
+
+    if (nextWidth === previousWidth) {
+      return;
+    }
+
+    setWidth(nextWidth);
+    document.documentElement.style.setProperty('--content-read-width', `${nextWidth}%`);
+    startTransition(async () => {
+      try {
+        await updateContentWidth({ width: nextWidth });
+      } catch {
+        setWidth(previousWidth);
+        document.documentElement.style.setProperty('--content-read-width', `${previousWidth}%`);
+      }
+    });
+  }
 
   return (
     <header className="sticky top-16 z-30 flex h-12 items-center gap-4 border-b border-line bg-card/95 px-4 backdrop-blur-sm lg:top-0">
@@ -84,15 +114,55 @@ export function ContentToolbar(props: {
 
       <DocumentEditorToolbar />
 
-      <button
-        type="button"
-        aria-label={fullscreenLabel}
-        title={fullscreenLabel}
-        className="hidden size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay hover:text-ink lg:grid"
-        onClick={props.onToggleContentFullscreen}
-      >
-        <FullscreenIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
-      </button>
+      <div className="relative flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          aria-controls="content-width-menu"
+          aria-expanded={isWidthMenuOpen}
+          aria-haspopup="dialog"
+          aria-label={`内容宽度 ${width}%`}
+          title="内容宽度"
+          className="hidden h-8 min-w-11 place-items-center rounded-lg px-2 text-xs font-medium text-ink-muted transition-colors hover:bg-overlay hover:text-ink lg:grid"
+          onClick={() => {
+            setIsWidthMenuOpen((isOpen) => !isOpen);
+          }}
+        >
+          {width}%
+        </button>
+        <PopupMenu
+          id="content-width-menu"
+          isOpen={isWidthMenuOpen}
+          label="内容宽度"
+          placement={{ kind: 'anchor', side: 'bottom' }}
+          surfaceClassName="w-36 p-1"
+        >
+          <PopupMenuLabel>内容宽度</PopupMenuLabel>
+          {contentWidthPercentages.map((percentage) => (
+            <button
+              key={percentage}
+              type="button"
+              className={popupMenuItemClassName}
+              onClick={() => {
+                selectContentWidth(percentage);
+              }}
+            >
+              <span className="flex-1">{percentage}%</span>
+              {percentage === width && (
+                <Check aria-hidden="true" className="size-3.5 text-accent" strokeWidth={1.8} />
+              )}
+            </button>
+          ))}
+        </PopupMenu>
+        <button
+          type="button"
+          aria-label={fullscreenLabel}
+          title={fullscreenLabel}
+          className="hidden size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay hover:text-ink lg:grid"
+          onClick={props.onToggleContentFullscreen}
+        >
+          <FullscreenIcon aria-hidden="true" className="size-4" strokeWidth={1.8} />
+        </button>
+      </div>
     </header>
   );
 }
