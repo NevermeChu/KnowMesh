@@ -72,7 +72,8 @@ PostgreSQL / 本地 PGlite
 - `/`：公开根页面，根据 Clerk 登录状态显示登录、退出或进入工作台入口；页面中的产品示意内容不连接文档数据。
 - `/dashboard`：显示静态工作台介绍和账户设置入口。
 - `/personal`、`/collaboration`：读取 `project` 和可选的 `document` 查询参数，呈现项目文档列表、创建入口及单人编辑器；未选择项目时显示引导状态。
-- `/search`、`/starred`、`/settings/preferences`：当前渲染 `AppSectionPlaceholder`，没有对应的数据读取或业务操作。
+- `/search`、`/starred`：当前渲染 `AppSectionPlaceholder`，没有对应的数据读取或业务操作。
+- `/settings/preferences`：系统偏好设置页，当前提供外观主题（浅色/深色/跟随系统）选择，更改立即保存并对全站生效。
 - `/settings/user-profile`：渲染 Clerk `UserProfile`。
 - 侧边栏可以创建和列出个人、协作项目；点击项目通过 `project` 查询参数打开对应文档工作区。
 
@@ -91,6 +92,7 @@ PostgreSQL / 本地 PGlite
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
 - 项目内文档创建、列表和读取。
 - 基于 Tiptap 的单人富文本编辑与 JSONB 自动保存。
+- 用户级外观主题偏好与全站亮/暗双主题（语义颜色 token 体系）。
 - Personal Workspace 项目仅 owner 授权；Team Workspace 成员可发现导航结构，Project 直接成员才能读取正文；文件继承 Project 内容权限。
 
 尚未实现：
@@ -112,3 +114,4 @@ PostgreSQL / 本地 PGlite
 - [ADR 0003](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0008](../adr/0008-delete-owned-resources-on-account-removal.md)
+- [系统偏好设置](../features/preferences.md)

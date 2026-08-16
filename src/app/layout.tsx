@@ -1,8 +1,11 @@
 import { zhCN } from '@clerk/localizations';
 import { ClerkProvider } from '@clerk/nextjs';
-import '@/styles/global.css';
 import type { Metadata, Viewport } from 'next';
+import '@/styles/global.css';
+import { cookies } from 'next/headers';
 import { GlobalContextMenuBoundary } from '@/components/layout/GlobalContextMenuBoundary';
+import { isUserThemePreference, THEME_COOKIE } from '@/features/preferences/Preferences';
+import type { UserThemePreference } from '@/features/preferences/Preferences';
 
 export const metadata: Metadata = {
   icons: [
@@ -34,9 +37,24 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout(props: { children: React.ReactNode }) {
+/** Resolves `system` against the OS preference before first paint and follows live changes. */
+const themeInitScript = `(function(){var d=document.documentElement,m=window.matchMedia('(prefers-color-scheme: dark)'),r=function(){var t=d.dataset.theme;d.classList.toggle('dark',t==='dark'||(t!=='light'&&m.matches))};r();m.addEventListener('change',r);})();`;
+
+export default async function RootLayout(props: { children: React.ReactNode }) {
+  const cookieStore = await cookies();
+  const themeCookie = cookieStore.get(THEME_COOKIE)?.value;
+  const theme: UserThemePreference = isUserThemePreference(themeCookie) ? themeCookie : 'system';
+
   return (
-    <html lang="zh-CN">
+    <html
+      lang="zh-CN"
+      className={theme === 'dark' ? 'dark' : undefined}
+      data-theme={theme}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body>
         <ClerkProvider
           localization={zhCN}
@@ -45,25 +63,26 @@ export default function RootLayout(props: { children: React.ReactNode }) {
             // auth components to match the KnowMesh palette.
             cssLayerName: 'clerk',
             variables: {
-              colorPrimary: '#2383e2',
-              colorForeground: '#2f3437',
-              colorMutedForeground: '#777b80',
-              colorInput: '#ffffff',
-              colorInputForeground: '#2f3437',
-              colorRing: '#2383e2',
-              colorDanger: '#d14343',
+              colorPrimary: 'var(--accent)',
+              colorBackground: 'var(--card)',
+              colorForeground: 'var(--ink)',
+              colorMutedForeground: 'var(--ink-muted)',
+              colorInput: 'var(--card)',
+              colorInputForeground: 'var(--ink)',
+              colorRing: 'var(--accent)',
+              colorDanger: 'var(--danger)',
               fontFamily:
                 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif',
               borderRadius: '0.5rem',
             },
             elements: {
-              card: 'border border-black/10 rounded-2xl shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)]',
-              formButtonPrimary: 'rounded-lg font-semibold hover:bg-[#1f74c9]',
+              card: 'border border-line rounded-2xl shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)]',
+              formButtonPrimary: 'rounded-lg font-semibold hover:bg-accent-strong',
               formFieldInput: 'rounded-lg',
-              socialButtonsButton: 'rounded-lg border-black/10 bg-white',
-              headerTitle: 'text-[#202124]',
-              headerSubtitle: 'text-[#777b80]',
-              footerActionLink: 'text-[#2383e2] hover:text-[#1f74c9]',
+              socialButtonsButton: 'rounded-lg border-line bg-card',
+              headerTitle: 'text-ink',
+              headerSubtitle: 'text-ink-muted',
+              footerActionLink: 'text-accent hover:text-accent-strong',
             },
           }}
           signInUrl="/sign-in"

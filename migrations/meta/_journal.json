@@ -85,6 +85,13 @@
       "when": 1786695102692,
       "tag": "0011_add-notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786895969105,
+      "tag": "0012_add-user-preferences",
+      "breakpoints": true
     }
   ]
 }

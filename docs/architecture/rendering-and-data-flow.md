@@ -120,6 +120,12 @@ Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服�
 
 Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Personal 区域始终读取当前用户的 Personal Workspace；Collaboration 区域只在活动 Workspace 为 Team 时显示并读取该 Team 的项目。文件没有独立 ACL，因此文件总览验证文件读取能力后返回所属项目的授权来源；界面通过“项目名称 \ 文件名称”路径呈现文件的所属项目。
 
+## 外观主题渲染
+
+主题偏好持久化在 `user_preferences`，但渲染路径不查询数据库：根布局读取 `knowmesh-theme` cookie 镜像，在 `<html>` 上输出 `data-theme` 与可选的 `dark` 类，首帧前由内联脚本把 `system` 解析为当前系统偏好并持续监听其变化。`updateThemePreference` Server Action 同时 upsert 数据库和 cookie，并 `revalidatePath('/', 'layout')`。设置页的乐观切换在本地立即应用同一解析逻辑，Action 失败时回滚。
+
+由此产生的渲染边界：根布局读取 cookie，因此所有路由（含公开首页）均为动态渲染。细节见[系统偏好设置](../features/preferences.md)。
+
 ## 安全不变量
 
 - 客户端输入永远不作为身份依据。
@@ -155,6 +161,8 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/features/workspaces/components/AcceptWorkspaceInvitation.tsx`：呈现邀请状态，并在用户确认后调用接受 Action。
 - `src/features/permissions/`：能力矩阵与服务端资源授权。
 - `src/features/notifications/`：通知事件、用户级读取和已读 Action。
+- `src/features/preferences/server/UpdateThemePreference.ts`：主题偏好 Server Action（数据库 + cookie 双写）。
+- `src/app/layout.tsx`：根布局主题 cookie 读取与 `<html>` 主题输出。
 - `src/components/layout/AppShell.tsx`：客户端工作区外壳。
 - `src/features/documents/components/ProjectDocumentsPage.tsx`：项目文档服务端页面组合。
 - `src/features/documents/server/GetProjectDocuments.ts`：文档 server-only 查询。

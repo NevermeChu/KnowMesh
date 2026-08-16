@@ -5,6 +5,7 @@ import {
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
+  userPreferencesSchema,
   workspaceAccessRequestsSchema,
   workspaceInvitationsSchema,
   workspaceMembersSchema,
@@ -98,6 +99,7 @@ describe(deleteUserData, () => {
       workspaceAccessRequestsSchema,
       projectMembersSchema,
       workspaceMembersSchema,
+      userPreferencesSchema,
     ]);
     expect(state.update.mock.calls).toStrictEqual([[notificationsSchema], [documentsSchema]]);
     expect(state.updateSet.mock.calls).toStrictEqual([

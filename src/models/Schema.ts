@@ -20,6 +20,7 @@ import {
 import type { DocumentContent } from '@/features/documents/Document';
 import { notificationTargetKinds, notificationTypes } from '@/features/notifications/Notification';
 import { memberRoles } from '@/features/permissions/Permission';
+import { userThemePreferences } from '@/features/preferences/Preferences';
 import { workspaceKinds } from '@/features/workspaces/Workspace';
 
 // This file defines the structure of your database tables using the Drizzle ORM.
@@ -38,6 +39,7 @@ export const notificationTargetKindEnum = pgEnum(
   notificationTargetKinds,
 );
 export const workspaceKindEnum = pgEnum('workspace_kind', workspaceKinds);
+export const userThemePreferenceEnum = pgEnum('user_theme_preference', userThemePreferences);
 
 export const notificationsSchema = pgTable(
   'notifications',
@@ -63,6 +65,20 @@ export const notificationsSchema = pgTable(
       .on(table.recipientUserId)
       .where(sql`${table.readAt} is null`),
   ],
+);
+
+export const userPreferencesSchema = pgTable(
+  'user_preferences',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: varchar('user_id', { length: 255 }).notNull(),
+    theme: userThemePreferenceEnum('theme').notNull().default('system'),
+    updatedAt: timestamp('updated_at', { mode: 'date' })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex('user_preferences_user_id_idx').on(table.userId)],
 );
 
 export const workspacesSchema = pgTable(
