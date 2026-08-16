@@ -70,7 +70,7 @@ PostgreSQL / 本地 PGlite
 ## 当前页面状态
 
 - `/`：公开根页面，根据 Clerk 登录状态显示登录、退出或进入工作台入口；页面中的产品示意内容不连接文档数据。
-- `/dashboard`：显示静态工作台介绍和账户设置入口。
+- `/dashboard`：工作台首页，聚合最近可打开的文档、通知摘要、待处理邀请与协作权限申请。
 - `/personal`、`/collaboration`：读取 `project` 和可选的 `document` 查询参数，呈现项目文档列表、创建入口及单人编辑器；未选择项目时显示引导状态。
 - `/search`、`/starred`：当前渲染 `AppSectionPlaceholder`，没有对应的数据读取或业务操作。
 - `/settings/preferences`：系统偏好设置页，当前提供外观主题（浅色/深色/跟随系统）选择，更改立即保存并对全站生效。
