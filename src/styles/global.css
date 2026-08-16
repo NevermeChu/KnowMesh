@@ -80,6 +80,17 @@
   }
 }
 
+/* Embedded Clerk UserProfile: the settings page frame already provides the heading,
+   and the active nav button should match the sidebar's selected-item styling. */
+.cl-navbar div:has(> h1) {
+  display: none;
+}
+
+.cl-navbarButton.cl-active {
+  background-color: var(--overlay-strong);
+  color: var(--ink);
+}
+
 @layer components {
   .tiptap > * + * {
     margin-top: 0.75rem;
