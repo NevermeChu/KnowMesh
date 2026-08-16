@@ -1,5 +1,6 @@
 import { ChevronRight, FileText, Inbox, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { getRecentDocuments } from '@/features/documents/server/GetRecentDocuments';
 import {
   getNotifications,
@@ -44,32 +45,24 @@ export default async function DashboardPage() {
             </h2>
           </div>
           {recentDocuments.length === 0 ? (
-            <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-line bg-card text-center">
-              <div>
-                <FileText
-                  aria-hidden="true"
-                  className="mx-auto size-7 text-ink-faint"
-                  strokeWidth={1.5}
-                />
-                <p className="mt-2 text-sm font-medium text-ink-secondary">还没有可打开的文档</p>
-                <p className="mt-1 text-xs text-ink-faint">
-                  在左侧创建项目后，即可在这里看到最近的文档。
-                </p>
-              </div>
+            <div className="mt-3">
+              <EmptyState
+                description="在左侧创建项目后，即可在这里看到最近的文档。"
+                icon={<FileText aria-hidden="true" className="size-5" strokeWidth={1.6} />}
+                title="还没有可打开的文档"
+              />
             </div>
           ) : (
-            <ul className="mt-3 divide-y divide-line-soft rounded-lg border border-line bg-card">
+            <ul className="mt-3 divide-y divide-line-soft rounded-xl border border-line bg-card shadow-card">
               {recentDocuments.map((document) => (
                 <li key={document.documentId}>
                   <Link
                     href={`/${document.workspaceKind === 'personal' ? 'personal' : 'collaboration'}?project=${document.projectId}&document=${document.documentId}`}
                     className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-overlay"
                   >
-                    <FileText
-                      aria-hidden="true"
-                      className="size-4 shrink-0 text-ink-faint"
-                      strokeWidth={1.8}
-                    />
+                    <span className="grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
+                      <FileText aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                    </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-ink">
                         {document.title}
@@ -105,7 +98,7 @@ export default async function DashboardPage() {
                 <ChevronRight aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
               </Link>
             </div>
-            <div className="mt-3 rounded-lg border border-line bg-card p-4">
+            <div className="mt-3 rounded-xl border border-line bg-card p-4 shadow-card">
               {unreadCount > 0 && (
                 <p className="text-sm text-ink">
                   <span className="font-semibold text-accent">{unreadCount}</span> 条未读通知
@@ -141,7 +134,7 @@ export default async function DashboardPage() {
             <h2 id="pending-items-heading" className="text-sm font-semibold text-ink">
               待处理
             </h2>
-            <div className="mt-3 rounded-lg border border-line bg-card p-4">
+            <div className="mt-3 rounded-xl border border-line bg-card p-4 shadow-card">
               {pendingInvitations.length === 0 && pendingApprovals.length === 0 ? (
                 <p className="text-sm text-ink-muted">暂无待处理的邀请与协作请求。</p>
               ) : (

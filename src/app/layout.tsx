@@ -76,7 +76,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
               borderRadius: '0.5rem',
             },
             elements: {
-              card: 'border border-line rounded-2xl shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)]',
+              card: 'border border-line rounded-xl shadow-overlay',
               formButtonPrimary: 'rounded-lg font-semibold hover:bg-accent-strong',
               formFieldInput: 'rounded-lg',
               socialButtonsButton: 'rounded-lg border-line bg-card',

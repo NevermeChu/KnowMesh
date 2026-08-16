@@ -44,7 +44,7 @@ function WorkspaceSectionNavigation(props: {
     <nav aria-label={props.section.label}>
       <div
         className={`flex min-h-9 items-center rounded-lg transition-colors ${
-          isActive ? 'bg-overlay-strong text-ink' : 'text-ink-muted hover:bg-overlay hover:text-ink'
+          isActive ? 'bg-accent-soft text-accent' : 'text-ink-muted hover:bg-overlay hover:text-ink'
         }`}
       >
         <button
@@ -99,7 +99,7 @@ function WorkspaceSectionNavigation(props: {
                   <div
                     className={`flex min-h-8 items-center rounded-lg transition-colors ${
                       isProjectActive
-                        ? 'bg-overlay-strong text-ink'
+                        ? 'bg-accent-soft text-accent'
                         : 'text-ink-muted hover:bg-overlay hover:text-ink'
                     }`}
                     onContextMenu={(event) => {
@@ -167,7 +167,7 @@ function WorkspaceSectionNavigation(props: {
                                 aria-current={isDocumentActive ? 'page' : undefined}
                                 className={`flex min-h-8 items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                                   isDocumentActive
-                                    ? 'bg-overlay-strong font-medium text-ink'
+                                    ? 'bg-accent-soft font-medium text-accent'
                                     : 'text-ink-muted hover:bg-overlay hover:text-ink'
                                 }`}
                                 onClick={props.onNavigate}

@@ -27,7 +27,9 @@ function DocumentPlaceholder(props: {
 
   return (
     <div className="mx-auto flex min-h-[28rem] max-w-lg flex-col items-center justify-center text-center">
-      <FileText aria-hidden="true" className="size-9 text-ink-faint-strong" strokeWidth={1.5} />
+      <span className="grid size-12 place-items-center rounded-full bg-surface text-ink-muted">
+        <FileText aria-hidden="true" className="size-5" strokeWidth={1.6} />
+      </span>
       <h2 className="mt-4 text-lg font-semibold text-ink">{props.title ?? '选择一篇文档'}</h2>
       <p className="mt-2 text-sm leading-6 text-ink-muted">{description}</p>
       {!props.canRead && <ProjectAccessActions {...props.accessState} />}

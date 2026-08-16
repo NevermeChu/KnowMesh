@@ -53,7 +53,7 @@ export function ModalDialog(props: {
         open
         aria-labelledby={props.titleId}
         aria-modal="true"
-        className={`relative z-10 m-auto rounded-lg border border-line bg-card p-0 text-ink shadow-lg ${props.surfaceClassName ?? ''}`}
+        className={`relative z-10 m-auto rounded-xl border border-line bg-card p-0 text-ink shadow-overlay ${props.surfaceClassName ?? ''}`}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && props.dismissal && !props.dismissal.isDisabled) {
             event.preventDefault();

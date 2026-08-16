@@ -65,10 +65,10 @@ export function ThemePreferenceSection(props: { theme: UserThemePreference }) {
             onClick={() => {
               selectTheme(option.value);
             }}
-            className={`flex h-28 flex-col items-start justify-between rounded-lg border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+            className={`flex h-28 flex-col items-start justify-between rounded-xl border p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-45 ${
               option.value === selectedTheme
-                ? 'border-accent bg-accent-soft'
-                : 'border-line bg-card hover:bg-overlay'
+                ? 'border-accent bg-accent-soft shadow-card'
+                : 'border-line bg-card hover:-translate-y-0.5 hover:shadow-card'
             }`}
           >
             <option.icon

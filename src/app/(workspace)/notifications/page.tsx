@@ -1,4 +1,5 @@
 import { Bell, Check, CheckCheck } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   getNotifications,
   getUnreadNotificationCount,
@@ -42,12 +43,12 @@ export default async function NotificationsPage() {
       </header>
 
       {notifications.length === 0 ? (
-        <div className="grid min-h-72 place-items-center text-center">
-          <div>
-            <Bell aria-hidden="true" className="mx-auto size-8 text-ink-faint" strokeWidth={1.5} />
-            <p className="mt-3 text-sm font-medium text-ink-secondary">暂无通知</p>
-            <p className="mt-1 text-xs text-ink-faint">新的邀请和权限动态会显示在这里。</p>
-          </div>
+        <div className="mt-6">
+          <EmptyState
+            description="新的邀请和权限动态会显示在这里。"
+            icon={<Bell aria-hidden="true" className="size-5" strokeWidth={1.6} />}
+            title="暂无通知"
+          />
         </div>
       ) : (
         <ul className="divide-y divide-line-soft">

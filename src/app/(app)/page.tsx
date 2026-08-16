@@ -42,7 +42,7 @@ export default function HomePage() {
               <SignOutButton>
                 <button
                   type="button"
-                  className="rounded-lg border border-line bg-card px-4 py-2 text-ink-secondary shadow-sm transition-colors hover:bg-surface hover:text-ink"
+                  className="rounded-lg border border-line bg-card px-4 py-2 text-ink-secondary shadow-card transition-colors hover:bg-surface hover:text-ink"
                 >
                   退出登录
                 </button>
@@ -55,7 +55,7 @@ export default function HomePage() {
       <main>
         <section className="mx-auto grid max-w-6xl items-center gap-14 px-5 pt-20 pb-16 sm:px-8 sm:pt-28 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:pb-24">
           <div className="max-w-xl">
-            <p className="mb-5 inline-flex items-center rounded-full border border-line bg-card px-3 py-1 text-sm text-ink-muted shadow-sm">
+            <p className="mb-5 inline-flex items-center rounded-full border border-line bg-card px-3 py-1 text-sm text-ink-muted shadow-card">
               为团队打造的知识工作空间
             </p>
             <h1 className="text-5xl leading-[1.08] font-bold tracking-[-0.045em] text-ink sm:text-6xl">
@@ -70,7 +70,7 @@ export default function HomePage() {
               <Show when="signed-out">
                 <Link
                   href="/sign-in"
-                  className="rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-strong"
+                  className="rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-white shadow-card transition-colors hover:bg-accent-strong"
                 >
                   开始使用
                 </Link>
@@ -78,7 +78,7 @@ export default function HomePage() {
               <Show when="signed-in">
                 <Link
                   href="/dashboard"
-                  className="rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-strong"
+                  className="rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-white shadow-card transition-colors hover:bg-accent-strong"
                 >
                   进入工作台
                 </Link>
@@ -94,7 +94,7 @@ export default function HomePage() {
 
           <div className="relative">
             <div className="absolute -inset-5 -z-10 rounded-[2rem] bg-linear-to-br from-accent-soft via-card to-warning-soft blur-2xl" />
-            <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-[0_24px_80px_-32px_rgba(15,23,42,0.35)]">
+            <div className="overflow-hidden rounded-xl border border-line bg-card shadow-overlay">
               <div className="flex h-11 items-center gap-2 border-b border-line bg-surface px-4">
                 <span className="size-2.5 rounded-full bg-[#ff6b6b]" />
                 <span className="size-2.5 rounded-full bg-[#ffd43b]" />
@@ -161,7 +161,7 @@ export default function HomePage() {
             </div>
 
             <div className="mt-12 grid gap-4 md:grid-cols-3">
-              <article className="rounded-2xl border border-line bg-canvas p-6">
+              <article className="rounded-xl border border-line bg-canvas p-6">
                 <span className="grid size-10 place-items-center rounded-xl bg-accent-soft text-lg">
                   ✦
                 </span>
@@ -171,7 +171,7 @@ export default function HomePage() {
                 </p>
               </article>
 
-              <article className="rounded-2xl border border-line bg-canvas p-6">
+              <article className="rounded-xl border border-line bg-canvas p-6">
                 <span className="grid size-10 place-items-center rounded-xl bg-[#f1edfc] text-lg">
                   ⌘
                 </span>
@@ -181,7 +181,7 @@ export default function HomePage() {
                 </p>
               </article>
 
-              <article className="rounded-2xl border border-line bg-canvas p-6">
+              <article className="rounded-xl border border-line bg-canvas p-6">
                 <span className="grid size-10 place-items-center rounded-xl bg-[#eaf5ee] text-lg">
                   ◎
                 </span>
