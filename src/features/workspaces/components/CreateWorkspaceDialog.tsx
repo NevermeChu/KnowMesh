@@ -23,7 +23,7 @@ export function CreateWorkspaceDialog(props: { onClose: () => void; onCreated: (
         isDisabled: isPending,
         onDismiss: props.onClose,
       }}
-      surfaceClassName="w-full max-w-88"
+      surfaceClassName="w-full max-w-96"
       titleId="create-workspace-title"
     >
       <ModalDialogHeader

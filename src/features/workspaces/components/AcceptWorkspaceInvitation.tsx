@@ -43,7 +43,7 @@ export function AcceptWorkspaceInvitation(props: {
 
     return (
       <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl items-center py-12">
-        <section className="w-full rounded-2xl border border-line bg-card px-6 py-10 text-center shadow-sm sm:px-10">
+        <section className="w-full rounded-2xl border border-line bg-card px-6 py-10 text-center shadow-card sm:px-10">
           <div className="mx-auto grid size-11 place-items-center rounded-xl bg-ink text-lg font-semibold text-canvas">
             K
           </div>
@@ -61,7 +61,7 @@ export function AcceptWorkspaceInvitation(props: {
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl items-center py-12">
-      <section className="w-full overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+      <section className="w-full overflow-hidden rounded-2xl border border-line bg-card shadow-card">
         <header className="px-6 pt-8 text-center sm:px-10">
           <div className="mx-auto grid size-11 place-items-center rounded-xl bg-ink text-lg font-semibold text-canvas">
             K
