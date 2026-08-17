@@ -18,7 +18,7 @@ export default defineConfig({
     'typescript/no-unsafe-member-access': 'off', // Allow member access on implicit `any` values
     'typescript/strict-boolean-expressions': 'off', // Allow non-boolean conditional checks
     'typescript/consistent-type-definitions': ['error', 'type'], // Use `type` instead of `interface`
-    'typescript/no-misused-promises': 'off', // React Hook Form's handleSubmit returns a Promise-typed handler
+    'typescript/no-misused-promises': 'off', // Allow async functions where void handlers are expected (e.g. form actions and onClick handlers)
     'typescript/strict-void-return': 'off', // Allow functions returning Promise<void> where void functions are expected
     'typescript/prefer-regexp-exec': 'off', // Allow use of String#match
 

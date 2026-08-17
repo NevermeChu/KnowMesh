@@ -17,7 +17,7 @@
     "chai",
     // Use Zod v4 instead of v3
     "zod/v3",
-    // Use Input from Shadcn UI instead of Input from Postcss
+    // Do not auto-import from postcss
     "postcss"
   ],
 
@@ -30,40 +30,9 @@
   "editor.formatOnSaveMode": "file", // Tell oxfmt to format the whole file, not only the modified lines
   "oxc.typeAware": true, // Enable type-aware linting
 
-  // Auto fix with ESLint on save
+  // Auto fix on save
   "editor.codeActionsOnSave": {
     "source.addMissingImports": "explicit",
     "source.fixAll.oxc": "explicit"
-  },
-
-  // Enable eslint for all supported languages
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact",
-    "vue",
-    "html",
-    "markdown",
-    "json",
-    "jsonc",
-    "yaml",
-    "toml",
-    "xml",
-    "gql",
-    "graphql",
-    "astro",
-    "svelte",
-    "css",
-    "less",
-    "scss",
-    "pcss",
-    "postcss",
-    "github-actions-workflow"
-  ],
-
-  // JSON Schema
-  "json.schemaDownload.trustedDomains": {
-    "https://ui.shadcn.com": true
   }
 }

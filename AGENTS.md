@@ -7,7 +7,7 @@
 - No unnecessary `try/catch`. Avoid casting; use narrowing.
 - Named exports only (no default exports, except Next.js pages).
 - Absolute imports via `@/` unless same directory.
-- Follow existing ESLint setup; don't reformat unrelated code.
+- Follow existing Ultracite / Oxlint setup; don't reformat unrelated code.
 - Zod type-only: `import type * as z from 'zod';`.
 - Let compiler infer return types unless annotation adds clarity.
 - Options object for 3+ params, optional flags, or ambiguous args.
