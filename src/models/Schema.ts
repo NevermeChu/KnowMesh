@@ -203,6 +203,7 @@ export const projectMembersSchema = pgTable(
     uniqueIndex('project_members_single_owner_idx')
       .on(table.projectId)
       .where(sql`${table.role} = 'owner'`),
+    index('project_members_user_project_idx').on(table.userId, table.projectId),
   ],
 );
 
