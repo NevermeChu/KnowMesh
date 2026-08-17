@@ -389,4 +389,80 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 - 为 `getRecentDocuments`、`getPendingApprovals` 与 `getPendingInvitations` 补充 `React.cache()` 封装。
 - 在 `project_members` 表中添加 `(user_id, project_id)` 索引加速用户项目成员关系关联。
 
+## 24. 全局检索入口割裂与辅助页面全阻塞过渡延迟
+
+### 问题
+
+全局搜索必须跳出当前编辑工作流进入独立 `/search` 页面；同时收藏页与通知页在路由切换时存在全阻塞服务端等待，长文档阅读时右侧大纲缺乏视口滚动位置指示。
+
+### 根因
+
+1. 搜索功能仅以独立页面形式组织，缺少全局模态快捷指令面板体系。
+2. `/starred` 与 `/notifications` 路由未采用 Suspense 流式拆分，客户端导航必须等待服务端完整数据库查询返回才渲染新页面。
+3. 大纲组件只实现了单向点击跳转，未结合视口位置建立双向联动。
+
+### 解决方法
+
+- 新增 `CommandPalette` 组件并在 `AppShell` 全局挂载，支持 `Cmd+K` / `Ctrl+K` 随时唤起，集成 180ms 防抖文档检索、空间过滤与快捷导航/动作。
+- 将 `SearchWorkspaceContent` 改为 Server Action 支持客户端即时检索。
+- 将 `/starred` 与 `/notifications` 页面改造为流式 Suspense 架构，标头 0ms 瞬间响应，列表通过骨架屏平滑过渡。
+- 为 `DocumentOutline` 增加基于视口坐标的 Scrollspy 滚动高亮跟踪，并在文档元信息栏增加字数与预估阅读时间。
+
+## 25. 编辑器首屏 JS 体积庞大与代办清单及导出功能缺失
+
+### 问题
+
+无论用户是否打开文档，Tiptap 相关全套依赖（ProseMirror 核心及扩展）均打包进工作台首屏，导致初始包体积膨胀；同时文档缺少代办任务清单（Task Lists）交互能力，缺乏 Markdown 源码导出与文件下载功能。
+
+### 根因
+
+1. `DocumentWorkspace` 直接同步引入了大型客户端组件 `DocumentEditor`。
+2. Tiptap 未定义 TaskList / TaskItem 节点扩展与样式。
+3. 系统缺少由 ProseMirror JSON 转换为标准 Markdown 的序列化体系。
+
+### 解决方法
+
+- 使用 `next/dynamic` 懒加载 `DocumentEditor` 并配合 `DocumentEditorSkeleton` 消除布局抖动与首屏开销。
+- 开发原生 `TaskList` 与 `TaskItem` 扩展，支持交互式复选框状态联动、删除线样式与 Slash Menu 快速插入（`/todo`、`/task`、`/任务`）。
+- 构建 `DocumentMarkdown.ts` 递归转换器与 `DocumentExportMenu.tsx` 下拉菜单，提供 Markdown 文件下载、复制剪贴板以及原生打印/PDF 导出功能。
+
+## 26. 全局操作依赖鼠标与检索相关度缺乏加权
+
+### 问题
+
+平台内各项操作缺乏快捷键速查指南与沉浸式全屏快捷键；全文搜索仅按更新时间降序排列，当用户搜索明确关键词时，标题完全命中的文档容易被正文中偶然出现关键词的文档淹没。
+
+### 根因
+
+1. 快捷指令体系未建立分类帮助指南弹窗。
+2. 全局缺乏针对侧边栏与全屏专注阅读的热键响应。
+3. `searchWorkspaceContent` 缺少匹配位置权重（Score）计算。
+
+### 解决方法
+
+- 新增 `ShortcutsHelpDialog` 支持通过 `Cmd+/` 或非编辑态按 `?` 随时唤起系统/编辑/排版全套快捷键指南。
+- 在 `AppShell` 中监听 `Cmd+\` 快速折叠侧边栏、`Cmd+Shift+F` 切换全屏沉浸专注模式。
+- `SearchWorkspaceContent` 引入 `CASE WHEN` 权重评分机制（标题完全匹配 100 > 标题模糊匹配 50 > 正文包含 10），并在 `CommandPalette` 中支持本地最近访问历史记录。
+
+## 27. 编辑器右侧大纲挤压正文破坏居中对称与竖向原生滚动条显现
+
+### 问题
+
+在文章内引入大纲组件后，大纲位于 Flex 布局右侧挤占正文宽度，使得正文两侧留白不再对称（整体向左偏移）；同时在编辑与浏览文档时浏览器默认原生竖向滚动条显现影响视觉纯粹感。
+
+### 根因
+
+1. 大纲组件直接放置在 `WorkspaceContent` 内部参与 Flex 计算，导致正文阅读列无法以 `mx-auto` 在视口居中。
+2. 全局基础层未对原生滚动条进行跨浏览器隐藏规则配置。
+
+### 解决方法
+
+- 在 `global.css` 中为 `html`、`body` 配置 `scrollbar-width: none` 与 `::-webkit-scrollbar { display: none }`，实现全浏览器滚动条视觉隐藏且保留完整平滑滚动能力。
+- 将 `DocumentEditor` 的 `WorkspaceContent` 恢复为独立包裹整篇正文（保证 `mx-auto` 绝对居中对称），并将 `DocumentOutline` 调整为右侧视口固定浮层（`fixed right-6 top-20`）。
+- 在 `DocumentEditor` 与 `DocumentOutline` 间实现受控联动与自适应空间竞争避让（`transition-[padding] duration-200 xl:pr-64 2xl:pr-0`）：大纲展开时中屏正文平滑避让防遮挡、大屏自然停靠免位移，大纲收起时平滑回弹至完全对称居中。
+
+
+
+
+
 
