@@ -62,21 +62,28 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
   );
   const lastSavedContent = useRef(JSON.stringify(props.document.content));
   const lastSavedTitle = useRef(props.document.title);
-  const latestContent = useRef<DocumentContent | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSavingContent = useRef(false);
   const registeredEditor = useRef<Editor | null>(null);
 
   async function flushContent() {
-    const content = latestContent.current;
+    const currentEditor = registeredEditor.current;
 
-    if (!content || isSavingContent.current) {
+    if (!currentEditor || currentEditor.isDestroyed || isSavingContent.current) {
+      return;
+    }
+
+    const content = currentEditor.getJSON();
+
+    if (!isDocumentContent(content)) {
+      setSaveState('error');
       return;
     }
 
     const serializedContent = JSON.stringify(content);
 
     if (serializedContent === lastSavedContent.current) {
+      setSaveState('saved');
       return;
     }
 
@@ -94,10 +101,13 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
     } finally {
       isSavingContent.current = false;
 
-      if (didSave && JSON.stringify(latestContent.current) !== lastSavedContent.current) {
-        saveTimer.current = setTimeout(() => {
-          void flushContent();
-        }, 0);
+      if (didSave && registeredEditor.current && !registeredEditor.current.isDestroyed) {
+        const nextContent = registeredEditor.current.getJSON();
+        if (JSON.stringify(nextContent) !== lastSavedContent.current) {
+          saveTimer.current = setTimeout(() => {
+            void flushContent();
+          }, 0);
+        }
       }
     }
   }
@@ -130,14 +140,6 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
     },
     onUpdate: ({ editor: currentEditor }) => {
       setWordCount(currentEditor.state.doc.textContent.length);
-      const content = currentEditor.getJSON();
-
-      if (!isDocumentContent(content)) {
-        setSaveState('error');
-        return;
-      }
-
-      latestContent.current = content;
       setSaveState('saving');
 
       if (saveTimer.current) {
