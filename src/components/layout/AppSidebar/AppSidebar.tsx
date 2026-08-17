@@ -276,7 +276,11 @@ export function AppSidebar(props: {
         <button
           type="button"
           aria-label="调整导航栏宽度"
-          className="hover:bg-accent-soft5 focus:bg-accent-soft5 absolute inset-y-0 right-0 hidden w-1 cursor-col-resize touch-none transition-colors focus:outline-none lg:block"
+          title="拖拽调整宽度 / 双击恢复默认"
+          className="group absolute inset-y-0 -right-0.5 z-30 hidden w-1.5 cursor-col-resize touch-none transition-colors hover:bg-accent/40 focus:bg-accent/40 focus:outline-none active:bg-accent lg:block"
+          onDoubleClick={() => {
+            props.onResize(190);
+          }}
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft') {
               props.onResize(props.width - 8);

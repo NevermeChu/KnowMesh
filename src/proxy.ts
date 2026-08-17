@@ -6,6 +6,7 @@ const protectedRoutePrefixes = [
   '/collaboration',
   '/dashboard',
   '/invitations',
+  '/notifications',
   '/personal',
   '/search',
   '/settings',

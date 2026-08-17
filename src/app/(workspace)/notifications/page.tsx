@@ -25,10 +25,7 @@ export default async function NotificationsPage() {
     <WorkspaceContent className="py-10 sm:py-14">
       <header className="flex items-start justify-between gap-4 border-b border-line pb-5">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-ink-faint uppercase">
-            消息中心
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">通知</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">通知</h1>
           <p className="mt-1 text-sm text-ink-muted">查看邀请、权限申请与审批结果。</p>
         </div>
         <form action={markAllNotificationsRead}>

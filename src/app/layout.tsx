@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import '@/styles/global.css';
 import { cookies } from 'next/headers';
 import { GlobalContextMenuBoundary } from '@/components/layout/GlobalContextMenuBoundary';
+import { ToastProvider } from '@/components/ui/Toast';
 import {
   CONTENT_WIDTH_COOKIE,
   isUserThemePreference,
@@ -103,7 +104,9 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
           signUpFallbackRedirectUrl="/"
           afterSignOutUrl="/"
         >
-          <GlobalContextMenuBoundary>{props.children}</GlobalContextMenuBoundary>
+          <ToastProvider>
+            <GlobalContextMenuBoundary>{props.children}</GlobalContextMenuBoundary>
+          </ToastProvider>
         </ClerkProvider>
       </body>
     </html>

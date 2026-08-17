@@ -43,7 +43,7 @@ function WorkspaceSectionNavigation(props: {
   return (
     <nav aria-label={props.section.label}>
       <div
-        className={`flex min-h-9 items-center rounded-lg transition-colors ${
+        className={`relative flex min-h-9 items-center rounded-lg transition-colors ${
           isActive ? 'bg-accent-soft text-accent' : 'text-ink-muted hover:bg-overlay hover:text-ink'
         }`}
       >
@@ -77,127 +77,151 @@ function WorkspaceSectionNavigation(props: {
         >
           <ChevronRight
             aria-hidden="true"
-            className={`size-4 transition-transform ${props.isExpanded ? 'rotate-90' : ''}`}
+            className={`size-4 transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}
             strokeWidth={1.8}
           />
         </button>
       </div>
 
-      {props.isExpanded && (
-        <ul id={`workspace-projects-${props.section.id}`} className="mt-1 space-y-1 pl-5">
-          {props.section.projects.length === 0 ? (
-            <li className="px-3 py-1.5 text-xs text-ink-faint">暂无项目</li>
-          ) : (
-            props.section.projects.map((project) => {
-              const isProjectActive =
-                isActiveRoute(props.pathname, props.section.href) &&
-                props.selectedProjectId === project.id;
-              const isProjectExpanded = props.expandedProjectIds[project.id] ?? false;
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          props.isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <ul id={`workspace-projects-${props.section.id}`} className="mt-1 space-y-1 pl-5">
+            {props.section.projects.length === 0 ? (
+              <li className="px-3 py-1.5 text-xs text-ink-faint">暂无项目</li>
+            ) : (
+              props.section.projects.map((project) => {
+                const isProjectActive =
+                  isActiveRoute(props.pathname, props.section.href) &&
+                  props.selectedProjectId === project.id;
+                const isProjectExpanded = props.expandedProjectIds[project.id] ?? false;
 
-              return (
-                <li key={project.id}>
-                  <div
-                    className={`flex min-h-8 items-center rounded-lg transition-colors ${
-                      isProjectActive
-                        ? 'bg-accent-soft text-accent'
-                        : 'text-ink-muted hover:bg-overlay hover:text-ink'
-                    }`}
-                    onContextMenu={(event) => {
-                      props.onOpenContextMenu(event, { kind: 'project', project });
-                    }}
-                  >
-                    <Link
-                      href={project.href}
-                      aria-current={isProjectActive ? 'page' : undefined}
-                      className="min-w-0 flex-1 truncate px-3 py-1.5 text-sm"
-                      onClick={() => {
-                        if (!isProjectExpanded) {
-                          props.onToggleProject(project.id);
-                        }
-                        props.onNavigate();
+                return (
+                  <li key={project.id}>
+                    <div
+                      className={`relative flex min-h-8 items-center rounded-lg transition-colors ${
+                        isProjectActive
+                          ? 'bg-accent-soft font-medium text-accent'
+                          : 'text-ink-muted hover:bg-overlay hover:text-ink'
+                      }`}
+                      onContextMenu={(event) => {
+                        props.onOpenContextMenu(event, { kind: 'project', project });
                       }}
                     >
-                      {project.label}
-                    </Link>
-                    {isProjectActive && project.permissions.includes('document.create') && (
-                      <button
-                        type="button"
-                        aria-label={`在${project.label}中创建文档`}
-                        title="创建文档"
-                        className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
+                      {isProjectActive && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute top-1.5 bottom-1.5 left-0 w-1 rounded-r-full bg-accent"
+                        />
+                      )}
+                      <Link
+                        href={project.href}
+                        aria-current={isProjectActive ? 'page' : undefined}
+                        className="min-w-0 flex-1 truncate px-3 py-1.5 text-sm"
                         onClick={() => {
-                          props.onCreateDocument(project);
+                          if (!isProjectExpanded) {
+                            props.onToggleProject(project.id);
+                          }
+                          props.onNavigate();
                         }}
                       >
-                        <Plus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      aria-controls={`project-documents-${project.id}`}
-                      aria-expanded={isProjectExpanded}
-                      aria-label={
-                        isProjectExpanded ? `收起${project.label}` : `展开${project.label}`
-                      }
-                      className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
-                      onClick={() => {
-                        props.onToggleProject(project.id);
-                      }}
-                    >
-                      <ChevronRight
-                        aria-hidden="true"
-                        className={`size-3.5 transition-transform ${isProjectExpanded ? 'rotate-90' : ''}`}
-                        strokeWidth={1.8}
-                      />
-                    </button>
-                  </div>
-
-                  {isProjectExpanded && (
-                    <ul id={`project-documents-${project.id}`} className="mt-1 space-y-1 pl-3">
-                      {project.documents.length === 0 ? (
-                        <li className="px-3 py-1 text-xs text-ink-faint">暂无文档</li>
-                      ) : (
-                        project.documents.map((document) => {
-                          const isDocumentActive = props.selectedDocumentId === document.id;
-
-                          return (
-                            <li key={document.id}>
-                              <Link
-                                href={document.href}
-                                aria-current={isDocumentActive ? 'page' : undefined}
-                                className={`flex min-h-8 items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                                  isDocumentActive
-                                    ? 'bg-accent-soft font-medium text-accent'
-                                    : 'text-ink-muted hover:bg-overlay hover:text-ink'
-                                }`}
-                                onClick={props.onNavigate}
-                                onContextMenu={(event) => {
-                                  props.onOpenContextMenu(event, {
-                                    document,
-                                    kind: 'document',
-                                    project,
-                                  });
-                                }}
-                              >
-                                <FileText
-                                  aria-hidden="true"
-                                  className="size-3.5 shrink-0"
-                                  strokeWidth={1.8}
-                                />
-                                <span className="truncate">{document.label}</span>
-                              </Link>
-                            </li>
-                          );
-                        })
+                        {project.label}
+                      </Link>
+                      {isProjectActive && project.permissions.includes('document.create') && (
+                        <button
+                          type="button"
+                          aria-label={`在${project.label}中创建文档`}
+                          title="创建文档"
+                          className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
+                          onClick={() => {
+                            props.onCreateDocument(project);
+                          }}
+                        >
+                          <Plus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+                        </button>
                       )}
-                    </ul>
-                  )}
-                </li>
-              );
-            })
-          )}
-        </ul>
-      )}
+                      <button
+                        type="button"
+                        aria-controls={`project-documents-${project.id}`}
+                        aria-expanded={isProjectExpanded}
+                        aria-label={
+                          isProjectExpanded ? `收起${project.label}` : `展开${project.label}`
+                        }
+                        className="grid size-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-overlay-strong hover:text-ink"
+                        onClick={() => {
+                          props.onToggleProject(project.id);
+                        }}
+                      >
+                        <ChevronRight
+                          aria-hidden="true"
+                          className={`size-3.5 transition-transform duration-200 ${isProjectExpanded ? 'rotate-90' : ''}`}
+                          strokeWidth={1.8}
+                        />
+                      </button>
+                    </div>
+
+                    <div
+                      className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                        isProjectExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <ul id={`project-documents-${project.id}`} className="mt-1 space-y-1 pl-3">
+                          {project.documents.length === 0 ? (
+                            <li className="px-3 py-1 text-xs text-ink-faint">暂无文档</li>
+                          ) : (
+                            project.documents.map((document) => {
+                              const isDocumentActive = props.selectedDocumentId === document.id;
+
+                              return (
+                                <li key={document.id}>
+                                  <Link
+                                    href={document.href}
+                                    aria-current={isDocumentActive ? 'page' : undefined}
+                                    className={`relative flex min-h-8 items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                                      isDocumentActive
+                                        ? 'bg-accent-soft font-medium text-accent'
+                                        : 'text-ink-muted hover:bg-overlay hover:text-ink'
+                                    }`}
+                                    onClick={props.onNavigate}
+                                    onContextMenu={(event) => {
+                                      props.onOpenContextMenu(event, {
+                                        document,
+                                        kind: 'document',
+                                        project,
+                                      });
+                                    }}
+                                  >
+                                    {isDocumentActive && (
+                                      <span
+                                        aria-hidden="true"
+                                        className="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-r-full bg-accent"
+                                      />
+                                    )}
+                                    <FileText
+                                      aria-hidden="true"
+                                      className="size-3.5 shrink-0"
+                                      strokeWidth={1.8}
+                                    />
+                                    <span className="truncate">{document.label}</span>
+                                  </Link>
+                                </li>
+                              );
+                            })
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>
+      </div>
     </nav>
   );
 }

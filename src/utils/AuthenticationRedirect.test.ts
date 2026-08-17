@@ -13,6 +13,14 @@ describe(createSignInUrl, () => {
       '/invitations/accept?token=invitation_token',
     );
   });
+
+  it('preserves notification destination url', () => {
+    const returnBackUrl = new URL('https://knowmesh.example/notifications');
+    const signInUrl = createSignInUrl(returnBackUrl);
+
+    expect(signInUrl.pathname).toBe('/sign-in');
+    expect(signInUrl.searchParams.get('redirect_url')).toBe('/notifications');
+  });
 });
 
 describe(getSafeAuthenticationRedirect, () => {
