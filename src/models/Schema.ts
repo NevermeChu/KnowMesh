@@ -253,3 +253,18 @@ export const documentsSchema = pgTable(
   },
   (table) => [index('documents_project_updated_idx').on(table.projectId, table.updatedAt)],
 );
+
+export const starredDocumentsSchema = pgTable(
+  'starred_documents',
+  {
+    userId: varchar('user_id', { length: 255 }).notNull(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documentsSchema.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.documentId] }),
+    index('starred_documents_user_created_idx').on(table.userId, table.createdAt.desc()),
+  ],
+);

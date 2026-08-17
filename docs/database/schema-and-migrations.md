@@ -86,6 +86,15 @@
 - 偏好是主题持久化真相源；根布局渲染读取的是 Server Action 同步写入的 `knowmesh-theme` cookie 镜像，不查询本表。
 - Clerk `user.deleted` 清理流程删除该用户的偏好行。
 
+### `starred_documents`
+
+- `(user_id, document_id)` 联合主键。
+- `document_id` 非空外键指向 `documents.id`，删除文档时数据库自动级联删除其收藏记录。
+- `user_id` 保存 Clerk 用户 ID 字符串。
+- `(user_id, created_at DESC)` 索引支持按收藏时间倒序检索用户的收藏文档。
+- 包含收藏记录创建时间。
+
+
 当前没有本地用户表、用户镜像同步逻辑或用户外键；`owner_id` 和 `user_id` 直接保存 Clerk user ID 字符串。Clerk `user.deleted` 由应用事务清理：先删除该用户拥有的 Workspace 和 Project，再移除其他资源中的成员、申请、邀请、偏好和收件人通知；其他通知中的触发者引用置空，其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`。
 
 ## 数据库约束与应用层不变量
@@ -126,7 +135,7 @@ Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFE
 
 `0005_add-workspace-kind.sql` 识别个人空间、为缺少个人空间的已知用户补建 Workspace，并将旧 Personal 项目迁移到 owner 的个人空间。`0006_remove-project-kind.sql` 随后删除 `projects.kind`、旧枚举、分类索引和冗余的 `user_onboarding` 表。`0007_remove-redundant-indexes.sql` 删除已经被部分唯一索引或联合主键覆盖、且没有当前查询消费者的三个索引。`0008_dashing_vivisector.sql` 为 Project owner 增加 Workspace 成员复合外键。`0009_cheerful_mockingbird.sql` 增加 Project 邀请和 Workspace/Project 权限申请状态，并移除 Workspace 邀请的可选角色，使接受邀请固定为 viewer。`0010_silly_nomad.sql` 回填 `project_members.workspace_id`，预检既有成员和 owner 数据，增加两级成员复合外键、唯一 owner 索引及事务结束时执行的 owner 不变量触发器。
 
-`0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。`0012_add-user-preferences.sql` 增加用户偏好表、主题枚举和 `user_id` 唯一索引。`0013_add-content-width-preference.sql` 给用户偏好表增加 `content_width` 整数列(默认 80)。
+`0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。`0012_add-user-preferences.sql` 增加用户偏好表、主题枚举和 `user_id` 唯一索引。`0013_add-content-width-preference.sql` 给用户偏好表增加 `content_width` 整数列(默认 80)。`0014_flawless_lilandra.sql` 增加 `starred_documents` 收藏表、级联外键与创建时间倒序索引。
 
 ## 迁移不变量
 

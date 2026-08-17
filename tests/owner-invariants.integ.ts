@@ -52,6 +52,10 @@ describe('database membership and owner invariants', () => {
     `);
 
     await executeMigration('0010_silly_nomad.sql');
+    await executeMigration('0011_add-notifications.sql');
+    await executeMigration('0012_add-user-preferences.sql');
+    await executeMigration('0013_add-content-width-preference.sql');
+    await executeMigration('0014_flawless_lilandra.sql');
   });
 
   afterAll(async () => {
