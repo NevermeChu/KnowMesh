@@ -1,4 +1,5 @@
-import 'server-only';
+'use server';
+
 import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '@/libs/DB';
@@ -18,7 +19,7 @@ export type SearchWorkspaceOptions = {
 
 /**
  * Searches documents across user's accessible projects and workspaces by matching
- * title or document content, scoped to direct project membership.
+ * title or document content, sorted with weighted relevance scoring.
  *
  * @param options - Search keyword and optional workspace filter.
  * @returns Filtered and sorted search results with contextual snippets.
@@ -49,6 +50,14 @@ export async function searchWorkspaceContent(
     whereConditions.push(eq(workspacesSchema.kind, 'team'));
   }
 
+  const scoreSql = sql<number>`
+    CASE
+      WHEN ${documentsSchema.title} ilike ${trimmedQuery} THEN 100
+      WHEN ${documentsSchema.title} ilike ${searchPattern} THEN 50
+      ELSE 10
+    END
+  `;
+
   const rows = await db
     .select({
       content: documentsSchema.content,
@@ -72,7 +81,7 @@ export async function searchWorkspaceContent(
       ),
     )
     .where(and(...whereConditions))
-    .orderBy(desc(documentsSchema.updatedAt))
+    .orderBy(desc(scoreSql), desc(documentsSchema.updatedAt))
     .limit(30);
 
   return rows.map((row) => {

@@ -28,7 +28,7 @@ const state = vi.hoisted(() => {
     await Promise.resolve();
     return [row];
   });
-  const orderBy = vi.fn<(column: unknown) => { limit: typeof limit }>(() => ({ limit }));
+  const orderBy = vi.fn<(...columns: unknown[]) => { limit: typeof limit }>(() => ({ limit }));
   const where = vi.fn<(condition: unknown) => { orderBy: typeof orderBy }>(() => ({ orderBy }));
   const chain: {
     innerJoin: (table: unknown, condition: unknown) => typeof chain;
