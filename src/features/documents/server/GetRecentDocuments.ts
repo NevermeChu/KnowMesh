@@ -1,6 +1,7 @@
 import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq } from 'drizzle-orm';
+import { cache } from 'react';
 import { db } from '@/libs/DB';
 import {
   documentsSchema,
@@ -25,7 +26,7 @@ export type RecentDocumentItem = {
  * @param limit - Maximum number of documents to return.
  * @returns Recently updated documents with their project and workspace context.
  */
-export async function getRecentDocuments(limit = 8): Promise<RecentDocumentItem[]> {
+export const getRecentDocuments = cache(async (limit = 8): Promise<RecentDocumentItem[]> => {
   const { userId } = await auth.protect();
 
   return await db
@@ -49,4 +50,4 @@ export async function getRecentDocuments(limit = 8): Promise<RecentDocumentItem[
     )
     .orderBy(desc(documentsSchema.updatedAt))
     .limit(limit);
-}
+});

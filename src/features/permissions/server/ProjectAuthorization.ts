@@ -1,5 +1,6 @@
 import 'server-only';
 import { and, eq } from 'drizzle-orm';
+import { cache } from 'react';
 import { db } from '@/libs/DB';
 import {
   projectMembersSchema,
@@ -11,7 +12,7 @@ import { AuthorizationError } from '../AuthorizationError';
 import type { Permission } from '../Permission';
 import { getProjectPermissionDecision } from '../PermissionPolicy';
 
-export async function getProjectAuthorization(options: { projectId: string; userId: string }) {
+const getCachedProjectAuthorization = cache(async (projectId: string, userId: string) => {
   const [access] = await db
     .select({
       id: projectsSchema.id,
@@ -28,17 +29,17 @@ export async function getProjectAuthorization(options: { projectId: string; user
       workspaceMembersSchema,
       and(
         eq(workspaceMembersSchema.workspaceId, projectsSchema.workspaceId),
-        eq(workspaceMembersSchema.userId, options.userId),
+        eq(workspaceMembersSchema.userId, userId),
       ),
     )
     .leftJoin(
       projectMembersSchema,
       and(
         eq(projectMembersSchema.projectId, projectsSchema.id),
-        eq(projectMembersSchema.userId, options.userId),
+        eq(projectMembersSchema.userId, userId),
       ),
     )
-    .where(eq(projectsSchema.id, options.projectId))
+    .where(eq(projectsSchema.id, projectId))
     .limit(1);
 
   if (!access) {
@@ -46,13 +47,17 @@ export async function getProjectAuthorization(options: { projectId: string; user
   }
 
   const decision = getProjectPermissionDecision({
-    isProjectOwner: access.ownerId === options.userId,
+    isProjectOwner: access.ownerId === userId,
     projectRole: access.projectRole,
     workspaceRole: access.workspaceRole,
     workspaceKind: access.workspaceKind,
   });
 
   return { decision, project: access };
+});
+
+export async function getProjectAuthorization(options: { projectId: string; userId: string }) {
+  return await getCachedProjectAuthorization(options.projectId, options.userId);
 }
 
 export async function authorizeProject(options: {

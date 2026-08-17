@@ -1,6 +1,7 @@
 import 'server-only';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { cache } from 'react';
 import { db } from '@/libs/DB';
 import { workspaceInvitationsSchema, workspacesSchema } from '@/models/Schema';
 
@@ -16,7 +17,7 @@ export type PendingInvitationItem = {
  * @param limit - Maximum number of invitations to return.
  * @returns Pending invitations with their workspace names.
  */
-export async function getPendingInvitations(limit = 5): Promise<PendingInvitationItem[]> {
+export const getPendingInvitations = cache(async (limit = 5): Promise<PendingInvitationItem[]> => {
   await auth.protect();
   const user = await currentUser();
 
@@ -49,4 +50,4 @@ export async function getPendingInvitations(limit = 5): Promise<PendingInvitatio
     )
     .orderBy(desc(workspaceInvitationsSchema.createdAt))
     .limit(limit);
-}
+});

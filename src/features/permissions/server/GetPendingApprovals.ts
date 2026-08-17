@@ -1,6 +1,7 @@
 import 'server-only';
 import { auth } from '@clerk/nextjs/server';
 import { desc, eq } from 'drizzle-orm';
+import { cache } from 'react';
 import { db } from '@/libs/DB';
 import {
   projectAccessRequestsSchema,
@@ -23,7 +24,7 @@ export type PendingApprovalItem = {
  * @param limit - Maximum number of combined items to return.
  * @returns Newest pending requests across owned workspaces and projects.
  */
-export async function getPendingApprovals(limit = 5): Promise<PendingApprovalItem[]> {
+export const getPendingApprovals = cache(async (limit = 5): Promise<PendingApprovalItem[]> => {
   const { userId } = await auth.protect();
 
   const [workspaceRequests, projectRequests] = await Promise.all([
@@ -60,4 +61,4 @@ export async function getPendingApprovals(limit = 5): Promise<PendingApprovalIte
   ]
     .toSorted((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     .slice(0, limit);
-}
+});
