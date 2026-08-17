@@ -4,7 +4,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
-import { documentsSchema } from '@/models/Schema';
+import { documentsSchema, starredDocumentsSchema } from '@/models/Schema';
 
 export async function getProjectDocuments(options: {
   documentId?: string;
@@ -60,25 +60,43 @@ export async function getProjectDocuments(options: {
     };
   }
 
-  const [selectedContent] = await db
-    .select({
-      content: documentsSchema.content,
-      contentSchemaVersion: documentsSchema.contentSchemaVersion,
-      projectId: documentsSchema.projectId,
-    })
-    .from(documentsSchema)
-    .where(
-      and(
-        eq(documentsSchema.id, selectedMetadata.id),
-        eq(documentsSchema.projectId, options.projectId),
-      ),
-    )
-    .limit(1);
+  const [[selectedContent], [starredRecord]] = await Promise.all([
+    db
+      .select({
+        content: documentsSchema.content,
+        contentSchemaVersion: documentsSchema.contentSchemaVersion,
+        projectId: documentsSchema.projectId,
+      })
+      .from(documentsSchema)
+      .where(
+        and(
+          eq(documentsSchema.id, selectedMetadata.id),
+          eq(documentsSchema.projectId, options.projectId),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ documentId: starredDocumentsSchema.documentId })
+      .from(starredDocumentsSchema)
+      .where(
+        and(
+          eq(starredDocumentsSchema.userId, userId),
+          eq(starredDocumentsSchema.documentId, selectedMetadata.id),
+        ),
+      )
+      .limit(1),
+  ]);
 
   return {
     access: authorization.decision,
     documents,
-    selectedDocument: selectedContent ? { ...selectedMetadata, ...selectedContent } : null,
+    selectedDocument: selectedContent
+      ? {
+          ...selectedMetadata,
+          ...selectedContent,
+          isStarred: Boolean(starredRecord),
+        }
+      : null,
     selectedDocumentTitle: selectedMetadata.title,
   };
 }

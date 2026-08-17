@@ -47,10 +47,23 @@ const state = vi.hoisted(() => {
   const contentWhere = vi.fn<(condition: unknown) => { limit: typeof contentLimit }>(() => ({
     limit: contentLimit,
   }));
+  const starredLimit = vi.fn<(limit: number) => Promise<{ documentId: string }[]>>(async () => {
+    await Promise.resolve();
+    return [{ documentId }];
+  });
+  const starredWhere = vi.fn<(condition: unknown) => { limit: typeof starredLimit }>(() => ({
+    limit: starredLimit,
+  }));
   let selectCallCount = 0;
   const from = vi.fn<(table: unknown) => object>(() => {
     selectCallCount += 1;
-    return selectCallCount === 1 ? { where: listWhere } : { where: contentWhere };
+    if (selectCallCount === 1) {
+      return { where: listWhere };
+    }
+    if (selectCallCount === 2) {
+      return { where: contentWhere };
+    }
+    return { where: starredWhere };
   });
   const select = vi.fn<(selection: unknown) => { from: typeof from }>(() => ({ from }));
 
@@ -126,6 +139,7 @@ describe('project document queries', () => {
       selectedDocument: {
         ...state.documents[0],
         ...state.selectedContent[0],
+        isStarred: true,
       },
       selectedDocumentTitle: '产品方案',
     });

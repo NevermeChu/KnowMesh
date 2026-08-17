@@ -28,6 +28,7 @@ export type Document = {
   contentSchemaVersion: number;
   createdAt: Date;
   id: string;
+  isStarred?: boolean;
   projectId: string;
   title: string;
   updatedAt: Date;
