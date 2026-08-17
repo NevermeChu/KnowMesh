@@ -10,19 +10,53 @@ import type { Document, DocumentContent } from '../Document';
 import { documentExtensions } from '../DocumentExtensions';
 import { isDocumentContent } from '../DocumentSchema';
 import { updateDocument } from '../server/UpdateDocument';
+import { DocumentBubbleMenu } from './DocumentBubbleMenu';
 import {
   useDocumentEditorCommands,
   useDocumentEditorToolbarRegistration,
 } from './DocumentEditorToolbar';
+import { DocumentOutline } from './DocumentOutline';
+import { DocumentSaveStatus } from './DocumentSaveStatus';
+import { DocumentSlashMenu } from './DocumentSlashMenu';
+import { StarDocumentButton } from './StarDocumentButton';
 
 type SaveState = 'error' | 'saved' | 'saving';
 
+function countCharacters(content: DocumentContent | null | undefined): number {
+  if (!content || !content.content) {
+    return 0;
+  }
+  let count = 0;
+  const traverse = (node: unknown) => {
+    if (typeof node === 'object' && node !== null) {
+      const n = node as { content?: unknown[]; text?: string };
+      if (typeof n.text === 'string') {
+        count += n.text.length;
+      }
+      if (Array.isArray(n.content)) {
+        for (const child of n.content) {
+          traverse(child);
+        }
+      }
+    }
+  };
+  traverse(content);
+  return count;
+}
+
+/**
+ * Main rich text document editor with auto-save, outline, slash commands, and bubble toolbar.
+ *
+ * @param props - Document details and permission flag.
+ * @returns The document editor layout.
+ */
 export function DocumentEditor(props: { canEdit: boolean; document: Document }) {
   const router = useRouter();
   const toolbarRegistration = useDocumentEditorToolbarRegistration();
   const editorCommands = useDocumentEditorCommands();
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [title, setTitle] = useState(props.document.title);
+  const [wordCount, setWordCount] = useState(() => countCharacters(props.document.content));
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -61,7 +95,9 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
       isSavingContent.current = false;
 
       if (didSave && JSON.stringify(latestContent.current) !== lastSavedContent.current) {
-        saveTimer.current = setTimeout(() => void flushContent(), 0);
+        saveTimer.current = setTimeout(() => {
+          void flushContent();
+        }, 0);
       }
     }
   }
@@ -93,6 +129,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
       void flushContent();
     },
     onUpdate: ({ editor: currentEditor }) => {
+      setWordCount(currentEditor.state.doc.textContent.length);
       const content = currentEditor.getJSON();
 
       if (!isDocumentContent(content)) {
@@ -107,7 +144,9 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
         clearTimeout(saveTimer.current);
       }
 
-      saveTimer.current = setTimeout(() => void flushContent(), 700);
+      saveTimer.current = setTimeout(() => {
+        void flushContent();
+      }, 700);
     },
   });
 
@@ -140,66 +179,90 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
 
   return (
     <WorkspaceContent as="article" className="py-8">
-      <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-ink-faint">
-        <span>{props.canEdit ? '自动保存' : '只读'}</span>
-        {props.canEdit && (
-          <span aria-live="polite">
-            {saveState === 'saving' && '保存中…'}
-            {saveState === 'saved' && '已保存'}
-            {saveState === 'error' && '保存失败，请重试'}
-          </span>
-        )}
+      <div className="flex items-start justify-between gap-8">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-ink-faint">
+            <div className="flex items-center gap-2.5">
+              <DocumentSaveStatus canEdit={props.canEdit} state={saveState} />
+              <span aria-hidden="true" className="text-line">
+                ·
+              </span>
+              <span className="text-xs font-medium text-ink-faint">{wordCount} 字</span>
+              <span aria-hidden="true" className="text-line">
+                ·
+              </span>
+              <StarDocumentButton
+                documentId={props.document.id}
+                initialIsStarred={props.document.isStarred}
+              />
+            </div>
+          </div>
+
+          <input
+            aria-label="文档标题"
+            className="mt-5 w-full bg-transparent text-4xl font-bold tracking-tight text-ink outline-none placeholder:text-ink-faint-strong disabled:opacity-100"
+            disabled={!props.canEdit}
+            maxLength={200}
+            placeholder="无标题"
+            value={title}
+            onBlur={() => {
+              void saveTitle();
+            }}
+            onChange={(event) => {
+              setTitle(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                event.currentTarget.blur();
+                editor?.commands.focus('start');
+              }
+            }}
+          />
+
+          <div
+            onContextMenu={(event) => {
+              if (!editorCommands) {
+                return;
+              }
+
+              event.preventDefault();
+              event.stopPropagation();
+              setContextMenuPosition(
+                fitContextMenuPosition({
+                  itemCount: editorCommands.length,
+                  x: event.clientX,
+                  y: event.clientY,
+                }),
+              );
+            }}
+          >
+            <EditorContent editor={editor} />
+          </div>
+
+          {props.canEdit && (
+            <>
+              <DocumentBubbleMenu
+                editor={editor}
+                onOpenLinkEditor={toolbarRegistration.openLinkEditor}
+              />
+              <DocumentSlashMenu editor={editor} />
+            </>
+          )}
+
+          <ContextMenu
+            id="document-format-context-menu"
+            items={editorCommands ?? []}
+            label="文档格式"
+            position={contextMenuPosition}
+            onClose={() => {
+              setContextMenuPosition(null);
+            }}
+          />
+        </div>
+
+        <DocumentOutline editor={editor} />
       </div>
-
-      <input
-        aria-label="文档标题"
-        className="mt-5 w-full bg-transparent text-4xl font-bold tracking-tight text-ink outline-none placeholder:text-ink-faint-strong disabled:opacity-100"
-        disabled={!props.canEdit}
-        maxLength={200}
-        placeholder="无标题"
-        value={title}
-        onBlur={() => void saveTitle()}
-        onChange={(event) => {
-          setTitle(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            event.currentTarget.blur();
-            editor?.commands.focus('start');
-          }
-        }}
-      />
-
-      <div
-        onContextMenu={(event) => {
-          if (!editorCommands) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-          setContextMenuPosition(
-            fitContextMenuPosition({
-              itemCount: editorCommands.length,
-              x: event.clientX,
-              y: event.clientY,
-            }),
-          );
-        }}
-      >
-        <EditorContent editor={editor} />
-      </div>
-
-      <ContextMenu
-        id="document-format-context-menu"
-        items={editorCommands ?? []}
-        label="文档格式"
-        position={contextMenuPosition}
-        onClose={() => {
-          setContextMenuPosition(null);
-        }}
-      />
     </WorkspaceContent>
   );
 }

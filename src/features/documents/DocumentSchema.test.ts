@@ -47,15 +47,36 @@ describe('document schemas', () => {
     ).toThrow('文档内容格式无效');
   });
 
-  it('rejects invalid node nesting', () => {
-    expect(() =>
-      updateDocumentSchema.parse({
-        content: {
-          content: [{ content: [{ type: 'paragraph' }], type: 'paragraph' }],
-          type: 'doc',
+  it('accepts callout and details blocks in document schema', () => {
+    const validContent = {
+      content: [
+        {
+          attrs: { type: 'info' },
+          content: [{ content: [{ text: '提示信息', type: 'text' }], type: 'paragraph' }],
+          type: 'callout',
         },
+        {
+          content: [
+            { content: [{ text: '折叠标题', type: 'text' }], type: 'detailsSummary' },
+            {
+              content: [{ content: [{ text: '折叠正文', type: 'text' }], type: 'paragraph' }],
+              type: 'detailsContent',
+            },
+          ],
+          type: 'details',
+        },
+      ],
+      type: 'doc',
+    };
+
+    expect(
+      updateDocumentSchema.parse({
+        content: validContent,
         documentId,
       }),
-    ).toThrow('文档内容格式无效');
+    ).toStrictEqual({
+      content: validContent,
+      documentId,
+    });
   });
 });
