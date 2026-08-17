@@ -1,7 +1,18 @@
 import { FileText } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { ProjectAccessActions } from '@/features/projects/components/ProjectAccessActions';
 import type { Document } from '../Document';
-import { DocumentEditor } from './DocumentEditor';
+import { DocumentEditorSkeleton } from './DocumentEditorSkeleton';
+
+const DynamicDocumentEditor = dynamic(
+  async () => {
+    const mod = await import('./DocumentEditor');
+    return { default: mod.DocumentEditor };
+  },
+  {
+    loading: () => <DocumentEditorSkeleton />,
+  },
+);
 
 type DocumentAccessState = {
   hasInvitation: boolean;
@@ -68,7 +79,7 @@ export function DocumentWorkspace(props: {
 
   if (props.selectedDocument) {
     content = (
-      <DocumentEditor
+      <DynamicDocumentEditor
         key={props.selectedDocument.id}
         canEdit={props.canEdit}
         document={props.selectedDocument}

@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/react';
 import {
   AlertTriangle,
   CheckCircle2,
+  CheckSquare,
   ChevronDownSquare,
   FileCode,
   Heading1,
@@ -96,6 +97,17 @@ const slashCommands: SlashCommandItem[] = [
       editor.chain().focus().toggleOrderedList().run();
     },
     title: '有序列表',
+  },
+  {
+    category: '基础排版',
+    description: '带复选框的交互式代办清单',
+    icon: <CheckSquare aria-hidden="true" className="size-4" />,
+    id: 'task-list',
+    keywords: ['todo', 'task', 'checklist', '任务', '清单', '代办', '待办'],
+    onSelect: (editor) => {
+      editor.chain().focus().toggleTaskList().run();
+    },
+    title: '任务列表',
   },
   {
     category: '基础排版',
