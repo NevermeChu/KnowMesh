@@ -16,8 +16,11 @@ type BreadcrumbItem = {
 };
 
 const routeLabels: Record<string, string> = {
+  accept: '接受邀请',
   collaboration: '协作区域',
   dashboard: '首页',
+  invitations: '邀请',
+  notifications: '通知',
   personal: '个人区域',
   preferences: '系统偏好设置',
   search: '搜索',

@@ -21,10 +21,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  OPEN_COMMAND_PALETTE_EVENT,
-  TOGGLE_FULLSCREEN_EVENT,
-} from '@/components/layout/ShellEvents';
+import { OPEN_COMMAND_PALETTE_EVENT, toggleZenMode } from '@/components/layout/ShellEvents';
 import { openShortcutsHelp } from '@/components/ui/ShortcutsHelpDialog';
 import { applyThemePreference } from '@/features/preferences/components/ApplyThemePreference';
 import { isUserThemePreference } from '@/features/preferences/Preferences';
@@ -426,7 +423,7 @@ export function CommandPalette() {
       icon: <Maximize2 aria-hidden="true" className="size-4" strokeWidth={1.8} />,
       id: 'action-zen-mode',
       onSelect: () => {
-        window.dispatchEvent(new CustomEvent(TOGGLE_FULLSCREEN_EVENT));
+        toggleZenMode();
       },
       title: '切换全屏专注模式',
     },
