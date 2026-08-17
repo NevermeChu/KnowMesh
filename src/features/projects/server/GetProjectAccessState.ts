@@ -12,26 +12,28 @@ export async function getProjectAccessState(projectId: string) {
     projectId,
     userId,
   });
-  const [invitation] = await db
-    .select({ projectId: projectInvitationsSchema.projectId })
-    .from(projectInvitationsSchema)
-    .where(
-      and(
-        eq(projectInvitationsSchema.projectId, projectId),
-        eq(projectInvitationsSchema.userId, userId),
-      ),
-    )
-    .limit(1);
-  const [request] = await db
-    .select({ requestedRole: projectAccessRequestsSchema.requestedRole })
-    .from(projectAccessRequestsSchema)
-    .where(
-      and(
-        eq(projectAccessRequestsSchema.projectId, projectId),
-        eq(projectAccessRequestsSchema.userId, userId),
-      ),
-    )
-    .limit(1);
+  const [[invitation], [request]] = await Promise.all([
+    db
+      .select({ projectId: projectInvitationsSchema.projectId })
+      .from(projectInvitationsSchema)
+      .where(
+        and(
+          eq(projectInvitationsSchema.projectId, projectId),
+          eq(projectInvitationsSchema.userId, userId),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ requestedRole: projectAccessRequestsSchema.requestedRole })
+      .from(projectAccessRequestsSchema)
+      .where(
+        and(
+          eq(projectAccessRequestsSchema.projectId, projectId),
+          eq(projectAccessRequestsSchema.userId, userId),
+        ),
+      )
+      .limit(1),
+  ]);
 
   return {
     hasInvitation: Boolean(invitation),
