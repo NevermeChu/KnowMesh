@@ -315,6 +315,39 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 ### 解决方法
 
 - 新增用户级 `notifications` 历史表，保存事件类型、展示快照、可选资源上下文和显式已读时间。
-- 在邀请接受、申请提交和审批通过的业务事务内同步写入通知，保证权限状态与通知历史共同提交或回滚。
 - Workspace Layout 按当前用户读取未读数量，在设置上方显示通知角标；`/notifications` 提供最近通知以及单条和全部已读操作。
 - 当前采用页面刷新时更新的最小闭环，不引入轮询、实时连接、事件总线或 outbox；出现即时性和跨服务投递需求后再扩展。
+
+## 20. 中间件受保护路由前缀遗漏通知路径
+
+### 问题
+
+未登录用户直接访问 `/notifications` 路径时，中间件未将其识别为受保护路由进行拦截，未走附带 `redirect_url` 的登录回跳流程，破坏了受保护页面登录后保留目标地址的一致性体验。
+
+### 根因
+
+`src/proxy.ts` 中的 `protectedRoutePrefixes` 静态路由前缀数组在增加通知功能后未同步补齐 `'/notifications'`。
+
+### 解决方法
+
+- 在 `protectedRoutePrefixes` 中加入 `'/notifications'`，确保全部 workspace 子路由统一由代理层通过 `createSignInUrl` 拦截并传递回跳目标。
+- 补充单元测试，验证未登录访问通知路径正确保留目标 URL。
+
+## 21. 文档自动保存失败与富文本内容校验异常
+
+### 问题
+
+用户在编辑器中编辑文档（尤其是输入空行、高亮提示块、折叠块等）时，文档自动保存失败，保存状态显示为错误。
+
+### 根因
+
+1. `Callout` 与 `DetailsContent` 节点的 ProseMirror Schema 将内容约束定义为 `'block+'`，要求子节点必须包含至少一个非空 block。在创建空提示块或在提示块/折叠块中连续按退格键时，客户端 `Node.fromJSON(...).check()` 因内容为空抛出 schema 异常，导致 `isDocumentContent` 校验失败并触发保存错误。
+2. 悬浮选区菜单 `DocumentBubbleMenu`、斜杠菜单 `DocumentSlashMenu` 与大纲组件 `DocumentOutline` 初始在组件渲染体内直接调用 `editor.on(...)` 注册事件并调用 `setOptions` 覆盖 `editorProps`，导致事件监听器重复叠加与配置覆盖。
+
+### 解决方法
+
+- 将 `Callout` 与 `DetailsContent` 的 content 约束从 `'block+'` 调整为 `'block*'`，`DetailsSummary` 调整为 `'inline*'`，允许块级容器在编辑和空状态下平滑过渡并通过 ProseMirror schema 校验。
+- 重构 `DocumentBubbleMenu`、`DocumentSlashMenu` 与 `DocumentOutline`，全面改用 `@tiptap/react` 提供的 `useEditorState` 响应式提取状态与坐标，消除重复事件绑定与配置覆盖。
+- 将文档总字数移至顶部元信息栏（与保存状态微徽标和收藏按钮并列展示），移除右侧大纲多余的文档信息卡片，大纲仅保留目录树。
+
+
