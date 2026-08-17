@@ -39,7 +39,7 @@
 → 页面结构和序列化数据发送给浏览器
 ```
 
-`getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。`getWorkspaceContext` 使用 React 请求级缓存，使 Layout 与具体页面在同一次 Server Component 渲染中复用结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
+`getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。`getWorkspaceContext`、`getProjectAuthorization` 和 `getUnreadNotificationCount` 使用 React 请求级缓存（`cache()`），使 Layout、具体页面与鉴权入口在同一次 Server Component 渲染中复用结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
 
 `getWorkspaceContext` 是只读查询，不再创建 Personal Workspace。Clerk 注册完成后的初始化流程为：
 

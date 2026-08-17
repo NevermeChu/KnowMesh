@@ -350,4 +350,43 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 - 重构 `DocumentBubbleMenu`、`DocumentSlashMenu` 与 `DocumentOutline`，全面改用 `@tiptap/react` 提供的 `useEditorState` 响应式提取状态与坐标，消除重复事件绑定与配置覆盖。
 - 将文档总字数移至顶部元信息栏（与保存状态微徽标和收藏按钮并列展示），移除右侧大纲多余的文档信息卡片，大纲仅保留目录树。
 
+## 22. 编辑器击键频繁序列化卡顿与服务端重复查询瀑布流
+
+### 问题
+
+长文档编辑时打字存在掉帧与输入延迟（INP 偏高）；同时，工作区与文档页面在服务端渲染期间执行了多次重复的 4 表 JOIN 鉴权与未读通知统计 SQL，且部分无依赖查询串行等待，增加了页面响应时间与数据库负载。
+
+### 根因
+
+1. `DocumentEditor` 在每一次按键触发的 `onUpdate` 中同步调用 `editor.getJSON()` 递归构建整棵 ProseMirror JSON 树并执行 `isDocumentContent` 校验，高频占用主线程。
+2. `getProjectAuthorization` 与 `getUnreadNotificationCount` 缺少 React 请求级记忆化（`cache()`），导致同一次 SSR 渲染中父子组件（如 `WorkspaceLayout` 和 `DashboardPage`、`ProjectDocumentsPage` 和 `GetProjectAccessState`）重复发起相同的 SQL 查询。
+3. 文档页面及项目访问状态的独立只读查询采用串行 `await` 导致异步瀑布流。
+
+### 解决方法
+
+- 将 `currentEditor.getJSON()` 与 `isDocumentContent` 校验延后至 700ms 防抖定时器内部及失焦时执行，按键阶段仅做纯字符数更新与计时器重置，彻底消除每次击键的深层对象序列化开销。
+- 使用 `React.cache()` 包装 `getProjectAuthorization` 与 `getUnreadNotificationCount`，实现单次请求生命周期内的请求级结果复用，避免重复执行 4 表 JOIN 与计数查询。
+- 在 `ProjectDocumentsPage` 与 `GetProjectAccessState` 中使用 `Promise.all` 并行化独立查询，消除瀑布流等待时间。
+- 在 `next.config.ts` 中配置 `experimental.optimizePackageImports` 对 `lucide-react` 与 `@clerk/localizations` 进行精确摇树打包。
+
+## 23. 首页切换全阻塞与外部鉴权延迟引发的卡顿
+
+### 问题
+
+用户在工作台侧边栏点击切换到首页（`/dashboard`）时出现明显的界面无响应与卡顿感（等待 500ms~1500ms+ 界面才发生切换）。
+
+### 根因
+
+1. `DashboardPage` 采用顶层全阻塞 `await Promise.all` 并行等待 5 项数据，缺少 `<Suspense>` 边界与 `loading.tsx` 路由过渡态；Next.js App Router 在没有 Suspense/Loading 边界时，客户端路由跳转必须等待服务端全部异步任务完成才渲染新页面，导致点击时界面停留在原页面处于假死状态。
+2. `getPendingInvitations` 内部调用了 Clerk 的 `currentUser()`，该方法向外部 `api.clerk.com` 发送远程 HTTPS 请求获取邮箱，网络延迟直接阻塞整页渲染。
+3. `getRecentDocuments`、`getPendingApprovals` 与 `getPendingInvitations` 未包装 `React.cache()`。
+4. `project_members` 表只有 `(project_id, user_id)` 主键，缺少以 `user_id` 为前缀的索引，导致 `getRecentDocuments` 等关联查询需要遍历整个成员表。
+
+### 解决方法
+
+- 重构 `DashboardPage` 为流式架构（Streaming SSR）：标头与快捷入口卡片同步即时渲染（0ms 响应），最近文档、通知、待处理事项拆分为独立异步组件并用 `<Suspense>` 包裹，将外部 Clerk 远程调用隔离在独立流式边界内，互不阻塞。
+- 新增 `src/app/(workspace)/loading.tsx` 提供工作台通用过渡骨架屏，确保路由切换在 16ms 内立即给出视觉反馈。
+- 为 `getRecentDocuments`、`getPendingApprovals` 与 `getPendingInvitations` 补充 `React.cache()` 封装。
+- 在 `project_members` 表中添加 `(user_id, project_id)` 索引加速用户项目成员关系关联。
+
 
