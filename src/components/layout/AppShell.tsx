@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppSidebar } from '@/components/layout/AppSidebar/AppSidebar';
 import { ContentToolbar } from '@/components/layout/ContentToolbar';
+import { TOGGLE_FULLSCREEN_EVENT } from '@/components/layout/ShellEvents';
+import { ShortcutsHelpDialog } from '@/components/ui/ShortcutsHelpDialog';
 import { DocumentEditorToolbarProvider } from '@/features/documents/components/DocumentEditorToolbar';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import type { ContentWidthPercentage } from '@/features/preferences/Preferences';
 import type { Project } from '@/features/projects/Project';
+import { CommandPalette } from '@/features/search/components/CommandPalette';
 import type { Workspace } from '@/features/workspaces/Workspace';
 
 const DEFAULT_SIDEBAR_WIDTH = 190;
@@ -18,7 +21,7 @@ type AppShellStyle = React.CSSProperties & {
 };
 
 /**
- * Renders the shared shell for authenticated application pages.
+ * Renders the shared shell for authenticated application pages with global hotkeys.
  *
  * @param props - Shell content.
  * @returns The authenticated application layout.
@@ -37,6 +40,35 @@ export function AppShell(props: {
   const shellStyle: AppShellStyle = {
     '--app-sidebar-width': `${sidebarWidth}px`,
   };
+
+  useEffect(() => {
+    const handleToggleZen = () => {
+      setIsContentFullscreen((prev) => !prev);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Cmd+\ or Ctrl+\ to toggle sidebar visibility
+      if ((event.metaKey || event.ctrlKey) && event.key === '\\') {
+        event.preventDefault();
+        setIsContentFullscreen((prev) => !prev);
+        return;
+      }
+
+      // Cmd+Shift+F or Ctrl+Shift+F to toggle fullscreen
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setIsContentFullscreen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener(TOGGLE_FULLSCREEN_EVENT, handleToggleZen);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener(TOGGLE_FULLSCREEN_EVENT, handleToggleZen);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   return (
     <DocumentEditorToolbarProvider>
@@ -67,6 +99,8 @@ export function AppShell(props: {
           />
           <div className="px-5 sm:px-8 lg:px-12">{props.children}</div>
         </main>
+        <CommandPalette />
+        <ShortcutsHelpDialog />
       </div>
     </DocumentEditorToolbarProvider>
   );
