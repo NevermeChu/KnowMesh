@@ -49,7 +49,7 @@ export function LandingHero(props: { isAuthenticated: boolean }) {
             lineHeight: 1.12,
             letterSpacing: '-0.04em',
             color: 'var(--ink)',
-            maxWidth: '960px',
+            maxWidth: '1200px',
             margin: '0 auto',
           }}
         >
@@ -58,8 +58,11 @@ export function LandingHero(props: { isAuthenticated: boolean }) {
           <span
             style={{
               background: 'linear-gradient(135deg, var(--accent) 0%, var(--teal) 100%)',
+              display: 'inline-block',
+              fontSize: 'clamp(1rem, 4.2vw, 4.25rem)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
+              whiteSpace: 'nowrap',
             }}
           >
             让团队协作在上下文中自然发生。

@@ -17,6 +17,32 @@ test.describe('Sanity', () => {
       );
     });
 
+    test('uses the product icon and keeps the collaboration headline on one line', async ({
+      page,
+    }) => {
+      await page.goto('/');
+
+      await expect(page.locator('img[src*="apple-touch-icon.png"]')).toHaveCount(3);
+
+      const collaborationHeadline = page.locator('h1 > span');
+      const headlineLayout = await collaborationHeadline.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+
+        return {
+          fitsViewport: bounds.left >= 0 && bounds.right <= window.innerWidth,
+          isSingleLine: bounds.height <= lineHeight * 1.05,
+          whiteSpace: getComputedStyle(element).whiteSpace,
+        };
+      });
+
+      expect(headlineLayout).toStrictEqual({
+        fitsViewport: true,
+        isSingleLine: true,
+        whiteSpace: 'nowrap',
+      });
+    });
+
     test('publishes the homepage in the sitemap', async ({ baseURL, request }) => {
       const response = await request.get('/sitemap.xml');
       const sitemap = await response.text();

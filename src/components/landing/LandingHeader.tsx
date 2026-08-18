@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AppLogo } from '@/components/ui/AppLogo';
 import { SignOutButton } from '@/features/auth/components/SignOutButton';
 import { ThemeToggle } from '@/features/preferences/components/ThemeToggle';
 
@@ -31,24 +32,7 @@ export function LandingHeader(props: { isAuthenticated: boolean }) {
             color: 'var(--ink)',
           }}
         >
-          <div
-            style={{
-              width: '2.25rem',
-              height: '2.25rem',
-              background: 'var(--ink)',
-              borderRadius: '0.625rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--canvas)',
-              fontWeight: 800,
-              fontSize: '1.125rem',
-              letterSpacing: '-0.05em',
-              boxShadow: 'var(--shadow-card)',
-            }}
-          >
-            KM
-          </div>
+          <AppLogo className="size-9 rounded-[0.625rem] shadow-card" />
           <div>
             <span
               style={{

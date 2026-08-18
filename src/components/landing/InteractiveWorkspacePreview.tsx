@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AppLogo } from '@/components/ui/AppLogo';
 
 type DocumentItem = {
   badge: string;
@@ -206,22 +207,7 @@ export function InteractiveWorkspacePreview() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div
-                  style={{
-                    width: '1.5rem',
-                    height: '1.5rem',
-                    borderRadius: '0.375rem',
-                    background: 'var(--accent)',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  KM
-                </div>
+                <AppLogo className="size-6 rounded-md" />
                 <div>
                   <div
                     style={{

@@ -1,3 +1,5 @@
+import { AppLogo } from '@/components/ui/AppLogo';
+
 /**
  * Renders the public landing footer.
  *
@@ -23,22 +25,7 @@ export function LandingFooter() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div
-            style={{
-              width: '1.75rem',
-              height: '1.75rem',
-              background: 'var(--ink)',
-              borderRadius: '0.4rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--canvas)',
-              fontWeight: 800,
-              fontSize: '0.875rem',
-            }}
-          >
-            KM
-          </div>
+          <AppLogo className="size-7 rounded-[0.4rem]" />
           <span style={{ fontWeight: 700, color: 'var(--ink)' }}>KnowMesh 知序</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--ink-faint)' }}>
             · 让知识持续创造价值
