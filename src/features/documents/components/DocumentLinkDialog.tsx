@@ -2,10 +2,12 @@
 
 import { Link2 } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/Button';
+import { FormField } from '@/components/ui/FormField';
+import { Input } from '@/components/ui/Input';
 import {
   ModalDialog,
   ModalDialogBody,
-  ModalDialogButton,
   ModalDialogFooter,
   ModalDialogHeader,
 } from '@/components/ui/ModalDialog';
@@ -49,40 +51,34 @@ export function DocumentLinkDialog(props: {
         }}
       >
         <ModalDialogBody>
-          <label
-            htmlFor="document-link-href"
-            className="block text-xs font-medium text-ink-secondary"
-          >
-            链接地址
-          </label>
-          <input
-            autoFocus
-            required
-            id="document-link-href"
-            aria-label="链接地址"
-            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none placeholder:text-ink-faint-strong focus:border-accent focus:ring-2 focus:ring-accent/15"
-            placeholder="https://example.com"
-            value={href}
-            onChange={(event) => {
-              setHref(event.target.value);
-            }}
-          />
+          <FormField htmlFor="document-link-href" label="链接地址" reserveErrorSpace={false}>
+            <Input
+              autoFocus
+              id="document-link-href"
+              onChange={(event) => {
+                setHref(event.target.value);
+              }}
+              placeholder="https://example.com"
+              required
+              value={href}
+            />
+          </FormField>
         </ModalDialogBody>
         <ModalDialogFooter alignment="between">
           <div>
             {props.href !== 'https://' && (
-              <ModalDialogButton type="button" variant="danger" onClick={props.onRemove}>
+              <Button onClick={props.onRemove} type="button" variant="danger">
                 移除链接
-              </ModalDialogButton>
+              </Button>
             )}
           </div>
           <div className="flex gap-2">
-            <ModalDialogButton type="button" onClick={props.onClose}>
+            <Button onClick={props.onClose} type="button">
               取消
-            </ModalDialogButton>
-            <ModalDialogButton type="submit" variant="primary">
+            </Button>
+            <Button type="submit" variant="primary">
               保存
-            </ModalDialogButton>
+            </Button>
           </div>
         </ModalDialogFooter>
       </form>

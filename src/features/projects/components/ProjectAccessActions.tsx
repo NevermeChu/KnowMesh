@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ModalDialogButton } from '@/components/ui/ModalDialog';
+import { Button } from '@/components/ui/Button';
 import type { MemberRole } from '@/features/permissions/Permission';
 import {
   acceptProjectInvitation,
@@ -35,7 +35,7 @@ export function ProjectAccessActions(props: {
     <div className="mt-4 flex flex-wrap items-center gap-2">
       {isInvitationPending ? (
         <>
-          <ModalDialogButton
+          <Button
             type="button"
             variant="primary"
             disabled={isPending}
@@ -52,8 +52,8 @@ export function ProjectAccessActions(props: {
             }}
           >
             接受项目邀请
-          </ModalDialogButton>
-          <ModalDialogButton
+          </Button>
+          <Button
             type="button"
             variant="neutral"
             disabled={isPending}
@@ -70,10 +70,10 @@ export function ProjectAccessActions(props: {
             }}
           >
             拒绝邀请
-          </ModalDialogButton>
+          </Button>
         </>
       ) : (
-        <ModalDialogButton
+        <Button
           type="button"
           variant="primary"
           disabled={isPending}
@@ -90,7 +90,7 @@ export function ProjectAccessActions(props: {
           }}
         >
           {actionLabel}
-        </ModalDialogButton>
+        </Button>
       )}
       {error && <p className="mt-2 w-full text-xs text-danger-strong">{error}</p>}
     </div>

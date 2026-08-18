@@ -2,6 +2,8 @@
 
 import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import type { ButtonVariant } from './Button';
+import { Button } from './Button';
 
 type ModalDialogDismissal = {
   ariaLabel: string;
@@ -9,14 +11,7 @@ type ModalDialogDismissal = {
   onDismiss: () => void;
 };
 
-type ModalDialogButtonVariant = 'accent' | 'danger' | 'neutral' | 'primary';
-
-const modalDialogButtonVariantClassNames: Record<ModalDialogButtonVariant, string> = {
-  accent: 'bg-accent text-white hover:bg-accent-strong',
-  danger: 'bg-danger text-white hover:bg-danger-strong',
-  neutral: 'text-ink-secondary hover:bg-overlay hover:text-ink',
-  primary: 'bg-ink text-canvas hover:bg-ink-secondary',
-};
+export type ModalDialogButtonVariant = ButtonVariant;
 
 /**
  * Renders a shared modal surface with a frosted backdrop, entrance motion, and
@@ -164,13 +159,13 @@ export function ModalDialogButton(props: {
   variant?: ModalDialogButtonVariant;
 }) {
   return (
-    <button
-      type={props.type}
-      className={`h-9 rounded-lg px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${modalDialogButtonVariantClassNames[props.variant ?? 'neutral']}`}
+    <Button
       disabled={props.disabled}
       onClick={props.onClick}
+      type={props.type}
+      variant={props.variant}
     >
       {props.children}
-    </button>
+    </Button>
   );
 }

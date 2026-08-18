@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { OPEN_COMMAND_PALETTE_EVENT, toggleZenMode } from '@/components/layout/ShellEvents';
+import { Kbd } from '@/components/ui/Kbd';
 import { openShortcutsHelp } from '@/components/ui/ShortcutsHelpDialog';
 import { applyThemePreference } from '@/features/preferences/components/ApplyThemePreference';
 import { isUserThemePreference } from '@/features/preferences/Preferences';
@@ -119,9 +120,9 @@ function SearchTrailingElement(props: {
   }
 
   return (
-    <kbd className="hidden rounded border border-line bg-surface px-1.5 py-0.5 text-[11px] font-medium text-ink-faint sm:inline-block">
-      ESC
-    </kbd>
+    <span className="hidden sm:inline-block">
+      <Kbd>ESC</Kbd>
+    </span>
   );
 }
 
@@ -681,17 +682,17 @@ export function CommandPalette() {
         <div className="flex items-center justify-between border-t border-line bg-surface/30 px-4 py-2 text-[11px] text-ink-faint">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-line bg-card px-1 py-0.5 font-sans">↑</kbd>
-              <kbd className="rounded border border-line bg-card px-1 py-0.5 font-sans">↓</kbd>
+              <Kbd surface="card">↑</Kbd>
+              <Kbd surface="card">↓</Kbd>
               <span>导航</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border border-line bg-card px-1 py-0.5 font-sans">↵</kbd>
+              <Kbd surface="card">↵</Kbd>
               <span>选择</span>
             </span>
           </div>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border border-line bg-card px-1 py-0.5 font-sans">ESC</kbd>
+            <Kbd surface="card">ESC</Kbd>
             <span>关闭</span>
           </span>
         </div>

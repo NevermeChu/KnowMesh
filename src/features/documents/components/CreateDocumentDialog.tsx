@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { Button } from '@/components/ui/Button';
+import { FormField } from '@/components/ui/FormField';
+import { Input } from '@/components/ui/Input';
 import {
   ModalDialog,
   ModalDialogBody,
-  ModalDialogButton,
   ModalDialogFooter,
   ModalDialogHeader,
 } from '@/components/ui/ModalDialog';
@@ -59,38 +61,32 @@ export function CreateDocumentDialog(props: {
         }}
       >
         <ModalDialogBody>
-          <label htmlFor="document-title" className="block text-xs font-medium text-ink-secondary">
-            文件名
-          </label>
-          <input
-            autoFocus
-            id="document-title"
-            type="text"
-            aria-label="文件名"
-            autoComplete="off"
-            className="mt-1.5 h-9 w-full rounded-lg border border-line bg-card px-3 text-sm transition-colors outline-none placeholder:text-ink-faint-strong focus:border-accent focus:ring-2 focus:ring-accent/15"
-            disabled={isPending}
-            maxLength={200}
-            placeholder="输入文件名"
-            value={title}
-            onChange={(event) => {
-              setTitle(event.target.value);
-              if (error) {
-                setError(undefined);
-              }
-            }}
-          />
-          <p className="mt-1.5 min-h-4 text-xs text-danger" role="alert">
-            {error}
-          </p>
+          <FormField error={error} htmlFor="document-title" label="文件名">
+            <Input
+              autoComplete="off"
+              autoFocus
+              disabled={isPending}
+              hasError={Boolean(error)}
+              id="document-title"
+              maxLength={200}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                if (error) {
+                  setError(undefined);
+                }
+              }}
+              placeholder="输入文件名"
+              value={title}
+            />
+          </FormField>
         </ModalDialogBody>
         <ModalDialogFooter>
-          <ModalDialogButton type="button" disabled={isPending} onClick={props.onClose}>
+          <Button disabled={isPending} onClick={props.onClose} type="button">
             取消
-          </ModalDialogButton>
-          <ModalDialogButton type="submit" disabled={isPending} variant="primary">
+          </Button>
+          <Button disabled={isPending} type="submit" variant="primary">
             {isPending ? '创建中…' : '创建'}
-          </ModalDialogButton>
+          </Button>
         </ModalDialogFooter>
       </form>
     </ModalDialog>

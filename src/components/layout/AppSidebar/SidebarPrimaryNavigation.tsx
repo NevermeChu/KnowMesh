@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Home, Search, Star } from 'lucide-react';
 import Link from 'next/link';
 import { openCommandPalette } from '@/components/layout/ShellEvents';
+import { Kbd } from '@/components/ui/Kbd';
 
 type NavigationItem = {
   href: string;
@@ -55,9 +56,9 @@ export function SidebarPrimaryNavigation(props: { pathname: string; onNavigate: 
                 <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
                 <span className="flex-1">{item.label}</span>
                 {item.href === '/search' && (
-                  <kbd className="hidden rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-ink-faint lg:inline-block">
-                    ⌘K
-                  </kbd>
+                  <span className="hidden lg:inline-block">
+                    <Kbd>⌘K</Kbd>
+                  </span>
                 )}
               </Link>
             </li>

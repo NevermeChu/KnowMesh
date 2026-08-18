@@ -3,6 +3,7 @@
 import { Command, Keyboard, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Kbd } from './Kbd';
 
 export const OPEN_SHORTCUTS_HELP_EVENT = 'knowmesh:open-shortcuts-help';
 
@@ -173,12 +174,13 @@ export function ShortcutsHelpDialog() {
                     <span className="text-ink-secondary">{shortcut.description}</span>
                     <div className="flex items-center gap-1">
                       {shortcut.keys.map((key) => (
-                        <kbd
+                        <Kbd
                           key={key}
-                          className="min-w-5 rounded border border-line bg-card px-1.5 py-0.5 text-center font-sans font-medium text-ink shadow-xs"
+                          className="min-w-5 text-center font-medium text-ink shadow-xs"
+                          surface="card"
                         >
                           {key}
-                        </kbd>
+                        </Kbd>
                       ))}
                     </div>
                   </div>
@@ -195,7 +197,7 @@ export function ShortcutsHelpDialog() {
             <span>Windows 用户请将 ⌘ 替换为 Ctrl，⌥ 替换为 Alt</span>
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border border-line bg-card px-1 py-0.5 font-sans">ESC</kbd>
+            <Kbd surface="card">ESC</Kbd>
             <span>关闭</span>
           </span>
         </div>

@@ -13,6 +13,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { NotificationItem, NotificationType } from '@/features/notifications/Notification';
 import {
@@ -125,22 +127,22 @@ async function NotificationsHeader() {
         <div className="flex items-center gap-2.5">
           <h1 className="text-2xl font-semibold tracking-tight text-ink">通知</h1>
           {unreadCount > 0 && (
-            <span className="inline-flex items-center rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent">
+            <Badge size="md" variant="accent">
               {unreadCount} 条未读
-            </span>
+            </Badge>
           )}
         </div>
         <p className="mt-1 text-sm text-ink-muted">查看邀请、权限申请与项目协同动态。</p>
       </div>
       <form action={markAllNotificationsRead}>
-        <button
-          type="submit"
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-card px-3.5 text-sm font-medium text-ink-secondary shadow-xs transition-colors hover:bg-overlay hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+        <Button
           disabled={unreadCount === 0}
+          icon={<CheckCheck aria-hidden="true" className="size-4" strokeWidth={1.8} />}
+          type="submit"
+          variant="secondary"
         >
-          <CheckCheck aria-hidden="true" className="size-4" strokeWidth={1.8} />
           全部标为已读
-        </button>
+        </Button>
       </form>
     </header>
   );
@@ -172,9 +174,9 @@ function NotificationCard(props: { notification: NotificationItem }) {
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold text-ink">{props.notification.title}</h2>
           {props.notification.targetKind && (
-            <span className="inline-flex items-center rounded-md bg-overlay px-1.5 py-0.5 text-[11px] font-medium text-ink-muted">
+            <Badge size="sm" variant="neutral">
               {props.notification.targetKind === 'project' ? '项目' : '工作区'}
-            </span>
+            </Badge>
           )}
           {isUnread && <span aria-label="未读" className="size-2 rounded-full bg-accent" />}
         </div>
@@ -213,14 +215,14 @@ function NotificationCard(props: { notification: NotificationItem }) {
 
       {isUnread && (
         <form action={markReadAction} className="shrink-0">
-          <button
-            type="submit"
+          <Button
             aria-label={`将“${props.notification.title}”标为已读`}
-            className="grid size-8 place-items-center rounded-lg border border-line/60 bg-card text-ink-muted shadow-xs transition-colors hover:border-line hover:bg-overlay hover:text-ink"
+            icon={<Check aria-hidden="true" className="size-4" strokeWidth={1.8} />}
+            size="icon"
             title="标为已读"
-          >
-            <Check aria-hidden="true" className="size-4" strokeWidth={1.8} />
-          </button>
+            type="submit"
+            variant="secondary"
+          />
         </form>
       )}
     </li>

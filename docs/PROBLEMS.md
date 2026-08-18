@@ -491,3 +491,20 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 - 实现 `revokeProjectInvitation` 与 `rejectProjectInvitation`，在项目访问条和成员管理中提供主动撤回与拒绝操作。
 - 在 Clerk Webhook `user.created` 中增加 `syncPendingWorkspaceInvitations`，新注册用户自动补发未过期历史邀请通知。
 - 升级通知中心卡片式视觉与语义化分类图标，支持一键直达对应项目或工作区。
+
+## 30. 基础交互控件缺失导致跨业务样式碎片化与弹窗组件倒挂
+
+### 问题
+
+系统缺乏通用的基础按钮、表单输入域、状态徽章与快捷键按键组件，导致弹窗外组件（如项目访问操作条、通知中心）倒挂引用模态弹窗专属的 `ModalDialogButton`；各实体创建弹窗大量重复拼装表单标签、输入框与错误提示样式；全站快捷键与状态角标视觉规范分散。
+
+### 根因
+
+基础交互按钮与表单输入控件早期被直接硬编码在 `ModalDialog` 与各个业务页面中，未在 `src/components/ui/` 层建立标准的基础原子组件（Atoms）。
+
+### 解决方法
+
+- 抽象并实现通用的 `Button`（多语义变体与尺寸）、`Input`、`FormField`（集成 Label、Input、Role-Alert 错误信息与高度避震占位）、`Badge` 与 `Kbd` 原子组件，并编写单元测试覆盖。
+- 重构 `ModalDialogButton` 使其底层复用通用 `Button`，消除倒挂同时保持原有弹窗 API 完全向后兼容。
+- 将创建文件、创建项目、创建工作区、链接编辑弹窗以及通知中心、命令面板、侧边栏导航全面平滑迁移至通用原子组件。
+
