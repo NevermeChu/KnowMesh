@@ -44,6 +44,7 @@ describe(getPermissionOverviewRemovalMode, () => {
         currentUserRole: 'viewer',
         description: '团队工作区',
         groups: [{ ...baseGroup, source: 'workspace' }],
+        invitations: [],
         permissions: [],
         requests: [],
         scope: 'workspace',

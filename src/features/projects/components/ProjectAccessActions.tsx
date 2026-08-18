@@ -6,6 +6,7 @@ import { ModalDialogButton } from '@/components/ui/ModalDialog';
 import type { MemberRole } from '@/features/permissions/Permission';
 import {
   acceptProjectInvitation,
+  rejectProjectInvitation,
   requestProjectAccess,
 } from '@/features/permissions/server/ProjectMembers';
 
@@ -19,11 +20,8 @@ export function ProjectAccessActions(props: {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const requestedRole = props.projectRole === 'viewer' ? 'editor' : 'viewer';
-  let actionLabel = requestedRole === 'editor' ? '申请编辑权限' : '申请查看权限';
-
-  if (props.hasInvitation && !props.projectRole) {
-    actionLabel = '接受项目邀请';
-  }
+  const isInvitationPending = props.hasInvitation && !props.projectRole;
+  const actionLabel = requestedRole === 'editor' ? '申请编辑权限' : '申请查看权限';
 
   if (props.projectRole === 'editor' || props.projectRole === 'owner') {
     return null;
@@ -34,28 +32,67 @@ export function ProjectAccessActions(props: {
   }
 
   return (
-    <div className="mt-4">
-      <ModalDialogButton
-        type="button"
-        variant="primary"
-        disabled={isPending}
-        onClick={() => {
-          setError(null);
-          startTransition(async () => {
-            try {
-              await (props.hasInvitation && !props.projectRole
-                ? acceptProjectInvitation({ projectId: props.projectId })
-                : requestProjectAccess({ projectId: props.projectId, requestedRole }));
-              router.refresh();
-            } catch {
-              setError('权限操作失败，请稍后重试。');
-            }
-          });
-        }}
-      >
-        {actionLabel}
-      </ModalDialogButton>
-      {error && <p className="mt-2 text-xs text-danger-strong">{error}</p>}
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      {isInvitationPending ? (
+        <>
+          <ModalDialogButton
+            type="button"
+            variant="primary"
+            disabled={isPending}
+            onClick={() => {
+              setError(null);
+              startTransition(async () => {
+                try {
+                  await acceptProjectInvitation({ projectId: props.projectId });
+                  router.refresh();
+                } catch {
+                  setError('接受邀请失败，请稍后重试。');
+                }
+              });
+            }}
+          >
+            接受项目邀请
+          </ModalDialogButton>
+          <ModalDialogButton
+            type="button"
+            variant="neutral"
+            disabled={isPending}
+            onClick={() => {
+              setError(null);
+              startTransition(async () => {
+                try {
+                  await rejectProjectInvitation({ projectId: props.projectId });
+                  router.refresh();
+                } catch {
+                  setError('拒绝邀请失败，请稍后重试。');
+                }
+              });
+            }}
+          >
+            拒绝邀请
+          </ModalDialogButton>
+        </>
+      ) : (
+        <ModalDialogButton
+          type="button"
+          variant="primary"
+          disabled={isPending}
+          onClick={() => {
+            setError(null);
+            startTransition(async () => {
+              try {
+                await requestProjectAccess({ projectId: props.projectId, requestedRole });
+                router.refresh();
+              } catch {
+                setError('权限操作失败，请稍后重试。');
+              }
+            });
+          }}
+        >
+          {actionLabel}
+        </ModalDialogButton>
+      )}
+      {error && <p className="mt-2 w-full text-xs text-danger-strong">{error}</p>}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { getBaseUrl } from '@/utils/Helpers';
 import {
   acceptWorkspaceInvitationSchema,
   inviteWorkspaceMemberSchema,
+  revokeWorkspaceInvitationSchema,
   workspaceMemberMutationSchema,
   workspaceAccessRequestSchema,
   workspaceAccessReviewSchema,
@@ -34,6 +35,7 @@ import {
 import type {
   AcceptWorkspaceInvitationInput,
   InviteWorkspaceMemberInput,
+  RevokeWorkspaceInvitationInput,
   WorkspaceMemberMutationInput,
   WorkspaceAccessRequestInput,
   WorkspaceAccessReviewInput,
@@ -122,6 +124,17 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
     throw error;
   }
 
+  if (existingUser) {
+    await createNotification(db, {
+      actorUserId: userId,
+      body: `${getWorkspaceInvitationInviterName(inviter)} 邀请你加入工作区“${authorization.workspace.name}”。`,
+      recipientUserId: existingUser.id,
+      target: { id: invitationInput.workspaceId, kind: 'workspace' },
+      title: '收到工作区邀请',
+      type: 'workspace_invited',
+    });
+  }
+
   return invitation;
 }
 
@@ -192,6 +205,41 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
   return { workspaceId: invitation.workspaceId };
 }
 
+export async function revokeWorkspaceInvitation(input: RevokeWorkspaceInvitationInput) {
+  const { userId } = await auth.protect();
+  const revokeInput = revokeWorkspaceInvitationSchema.parse(input);
+  const authorization = await authorizeWorkspace({
+    permission: 'workspace.members.manage',
+    userId,
+    workspaceId: revokeInput.workspaceId,
+  });
+
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不支持撤销邀请');
+  }
+
+  const now = new Date();
+  const [revoked] = await db
+    .update(workspaceInvitationsSchema)
+    .set({ revokedAt: now })
+    .where(
+      and(
+        eq(workspaceInvitationsSchema.id, revokeInput.invitationId),
+        eq(workspaceInvitationsSchema.workspaceId, revokeInput.workspaceId),
+        isNull(workspaceInvitationsSchema.acceptedAt),
+        isNull(workspaceInvitationsSchema.revokedAt),
+      ),
+    )
+    .returning({ id: workspaceInvitationsSchema.id });
+
+  if (!revoked) {
+    throw new Error('邀请不存在或已处理');
+  }
+
+  revalidatePath('/(workspace)', 'layout');
+  return revoked;
+}
+
 export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationInput) {
   const { userId } = await auth.protect();
   const memberInput = workspaceMemberMutationSchema.required({ role: true }).parse(input);
@@ -209,24 +257,45 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
     throw new Error('工作区所有者角色不可修改');
   }
 
-  if (memberInput.role !== 'viewer') {
-    throw new Error('提升工作区角色必须通过权限申请');
-  }
+  const membership = await db.transaction(async (transaction) => {
+    const [updatedMembership] = await transaction
+      .update(workspaceMembersSchema)
+      .set({ role: memberInput.role })
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, memberInput.workspaceId),
+          eq(workspaceMembersSchema.userId, memberInput.memberUserId),
+        ),
+      )
+      .returning({ userId: workspaceMembersSchema.userId });
 
-  const [membership] = await db
-    .update(workspaceMembersSchema)
-    .set({ role: memberInput.role })
-    .where(
-      and(
-        eq(workspaceMembersSchema.workspaceId, memberInput.workspaceId),
-        eq(workspaceMembersSchema.userId, memberInput.memberUserId),
-      ),
-    )
-    .returning({ userId: workspaceMembersSchema.userId });
+    if (!updatedMembership) {
+      throw new Error('工作区成员不存在');
+    }
 
-  if (!membership) {
-    throw new Error('工作区成员不存在');
-  }
+    await transaction
+      .delete(workspaceAccessRequestsSchema)
+      .where(
+        and(
+          eq(workspaceAccessRequestsSchema.workspaceId, memberInput.workspaceId),
+          eq(workspaceAccessRequestsSchema.userId, memberInput.memberUserId),
+        ),
+      );
+
+    if (memberInput.memberUserId !== userId) {
+      const roleLabel = memberInput.role === 'editor' ? '编辑者' : '查看者';
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你在工作区“${authorization.workspace.name}”中的角色已变更为${roleLabel}。`,
+        recipientUserId: memberInput.memberUserId,
+        target: { id: memberInput.workspaceId, kind: 'workspace' },
+        title: '工作区角色变更',
+        type: 'workspace_member_role_updated',
+      });
+    }
+
+    return updatedMembership;
+  });
 
   revalidatePath('/(workspace)', 'layout');
   return membership;
@@ -313,6 +382,47 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
       target: { id: reviewInput.workspaceId, kind: 'workspace' },
       title: '工作区权限申请已通过',
       type: 'workspace_access_approved',
+    });
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+}
+
+export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewInput) {
+  const { userId } = await auth.protect();
+  const reviewInput = workspaceAccessReviewSchema.parse(input);
+  const authorization = await authorizeWorkspace({
+    permission: 'workspace.members.manage',
+    userId,
+    workspaceId: reviewInput.workspaceId,
+  });
+
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不支持权限申请');
+  }
+
+  await db.transaction(async (transaction) => {
+    const [request] = await transaction
+      .delete(workspaceAccessRequestsSchema)
+      .where(
+        and(
+          eq(workspaceAccessRequestsSchema.workspaceId, reviewInput.workspaceId),
+          eq(workspaceAccessRequestsSchema.userId, reviewInput.memberUserId),
+        ),
+      )
+      .returning({ userId: workspaceAccessRequestsSchema.userId });
+
+    if (!request) {
+      throw new Error('权限申请不存在');
+    }
+
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `你在“${authorization.workspace.name}”的 Editor 权限申请未通过。`,
+      recipientUserId: request.userId,
+      target: { id: reviewInput.workspaceId, kind: 'workspace' },
+      title: '工作区权限申请未通过',
+      type: 'workspace_access_rejected',
     });
   });
 
@@ -416,6 +526,17 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
           eq(workspaceMembersSchema.userId, memberInput.memberUserId),
         ),
       );
+
+    if (memberInput.memberUserId !== userId) {
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你已被移出工作区“${authorization.workspace.name}”。`,
+        recipientUserId: memberInput.memberUserId,
+        target: { id: memberInput.workspaceId, kind: 'workspace' },
+        title: '已移出工作区',
+        type: 'workspace_member_removed',
+      });
+    }
   });
 
   revalidatePath('/(workspace)', 'layout');

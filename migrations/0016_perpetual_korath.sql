@@ -1,0 +1,2 @@
+ALTER TYPE "public"."notification_type" ADD VALUE 'workspace_access_rejected' BEFORE 'project_invitation_accepted';--> statement-breakpoint
+ALTER TYPE "public"."notification_type" ADD VALUE 'project_access_rejected';

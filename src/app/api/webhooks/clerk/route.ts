@@ -2,6 +2,7 @@ import { verifyWebhook } from '@clerk/nextjs/webhooks';
 import type { NextRequest } from 'next/server';
 import { deleteUserData } from '@/features/users/server/DeleteUserData';
 import { ensureUserWorkspace } from '@/features/workspaces/server/EnsureUserWorkspace';
+import { syncPendingWorkspaceInvitations } from '@/features/workspaces/server/SyncPendingInvitations';
 import { Env } from '@/libs/Env';
 
 export async function POST(request: NextRequest) {
@@ -22,6 +23,20 @@ export async function POST(request: NextRequest) {
   if (event.type === 'user.created') {
     try {
       await ensureUserWorkspace(event.data.id);
+      const emailList: string[] = [];
+      if (Array.isArray(event.data.email_addresses)) {
+        for (const item of event.data.email_addresses) {
+          if (
+            item &&
+            typeof item === 'object' &&
+            'email_address' in item &&
+            typeof item.email_address === 'string'
+          ) {
+            emailList.push(item.email_address);
+          }
+        }
+      }
+      await syncPendingWorkspaceInvitations(event.data.id, emailList);
     } catch {
       return new Response('Failed to provision personal workspace', { status: 500 });
     }

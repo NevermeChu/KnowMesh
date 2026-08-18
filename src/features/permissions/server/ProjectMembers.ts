@@ -64,7 +64,7 @@ async function authorizeProjectMemberMutation(input: ProjectMemberMutationInput)
 export async function inviteProjectMember(input: ProjectInvitationInput) {
   const { userId } = await auth.protect();
   const invitationInput = projectInvitationSchema.parse(input);
-  const { memberInput } = await authorizeProjectMemberMutation({
+  const { authorization, memberInput } = await authorizeProjectMemberMutation({
     ...invitationInput,
     role: 'viewer',
   });
@@ -83,14 +83,28 @@ export async function inviteProjectMember(input: ProjectInvitationInput) {
     throw new Error('该用户已经是项目成员');
   }
 
-  await db
-    .insert(projectInvitationsSchema)
-    .values({
-      invitedById: userId,
-      projectId: memberInput.projectId,
-      userId: memberInput.memberUserId,
-    })
-    .onConflictDoNothing();
+  await db.transaction(async (transaction) => {
+    const [invitation] = await transaction
+      .insert(projectInvitationsSchema)
+      .values({
+        invitedById: userId,
+        projectId: memberInput.projectId,
+        userId: memberInput.memberUserId,
+      })
+      .onConflictDoNothing()
+      .returning({ projectId: projectInvitationsSchema.projectId });
+
+    if (invitation) {
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你收到了加入项目“${authorization.project.name}”的邀请。`,
+        recipientUserId: memberInput.memberUserId,
+        target: { id: memberInput.projectId, kind: 'project' },
+        title: '收到项目邀请',
+        type: 'project_invited',
+      });
+    }
+  });
 
   return { userId: memberInput.memberUserId };
 }
@@ -301,47 +315,172 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
   revalidatePath('/(workspace)', 'layout');
 }
 
+export async function rejectProjectAccessRequest(input: ProjectAccessReviewInput) {
+  const reviewInput = projectAccessReviewSchema.parse(input);
+  const { userId } = await authorizeProjectMemberMutation({
+    memberUserId: reviewInput.memberUserId,
+    projectId: reviewInput.projectId,
+    role: 'viewer',
+  });
+
+  await db.transaction(async (transaction) => {
+    const [project] = await transaction
+      .select({ name: projectsSchema.name })
+      .from(projectsSchema)
+      .where(eq(projectsSchema.id, reviewInput.projectId))
+      .limit(1);
+
+    if (!project) {
+      throw new Error('项目不存在');
+    }
+
+    const [request] = await transaction
+      .delete(projectAccessRequestsSchema)
+      .where(
+        and(
+          eq(projectAccessRequestsSchema.projectId, reviewInput.projectId),
+          eq(projectAccessRequestsSchema.userId, reviewInput.memberUserId),
+        ),
+      )
+      .returning({ requestedRole: projectAccessRequestsSchema.requestedRole });
+
+    if (!request) {
+      throw new Error('权限申请不存在');
+    }
+
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `你在“${project.name}”的 ${request.requestedRole} 权限申请未通过。`,
+      recipientUserId: reviewInput.memberUserId,
+      target: { id: reviewInput.projectId, kind: 'project' },
+      title: '项目权限申请未通过',
+      type: 'project_access_rejected',
+    });
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+}
+
 export async function updateProjectMemberRole(input: ProjectMemberMutationInput) {
   const memberInput = projectMemberMutationSchema.required({ role: true }).parse(input);
+  const { authorization, userId } = await authorizeProjectMemberMutation(memberInput);
 
-  if (memberInput.role !== 'viewer') {
-    throw new Error('提升项目角色必须通过权限申请');
-  }
-  await authorizeProjectMemberMutation(memberInput);
-  const [membership] = await db
-    .update(projectMembersSchema)
-    .set({ role: memberInput.role })
-    .where(
-      and(
-        eq(projectMembersSchema.projectId, memberInput.projectId),
-        eq(projectMembersSchema.userId, memberInput.memberUserId),
-      ),
-    )
-    .returning({ userId: projectMembersSchema.userId });
+  const membership = await db.transaction(async (transaction) => {
+    const [updatedMembership] = await transaction
+      .update(projectMembersSchema)
+      .set({ role: memberInput.role })
+      .where(
+        and(
+          eq(projectMembersSchema.projectId, memberInput.projectId),
+          eq(projectMembersSchema.userId, memberInput.memberUserId),
+        ),
+      )
+      .returning({ userId: projectMembersSchema.userId });
 
-  if (!membership) {
-    throw new Error('项目成员不存在');
-  }
+    if (!updatedMembership) {
+      throw new Error('项目成员不存在');
+    }
+
+    await transaction
+      .delete(projectAccessRequestsSchema)
+      .where(
+        and(
+          eq(projectAccessRequestsSchema.projectId, memberInput.projectId),
+          eq(projectAccessRequestsSchema.userId, memberInput.memberUserId),
+        ),
+      );
+
+    if (memberInput.memberUserId !== userId) {
+      const roleLabel = memberInput.role === 'editor' ? '编辑者' : '查看者';
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你在项目“${authorization.project.name}”中的角色已变更为${roleLabel}。`,
+        recipientUserId: memberInput.memberUserId,
+        target: { id: memberInput.projectId, kind: 'project' },
+        title: '项目角色变更',
+        type: 'project_member_role_updated',
+      });
+    }
+
+    return updatedMembership;
+  });
 
   revalidatePath('/(workspace)', 'layout');
   return membership;
 }
 
 export async function removeProjectMember(input: ProjectMemberMutationInput) {
-  const { memberInput } = await authorizeProjectMemberMutation(input);
-  const [membership] = await db
-    .delete(projectMembersSchema)
+  const { authorization, memberInput, userId } = await authorizeProjectMemberMutation(input);
+  const membership = await db.transaction(async (transaction) => {
+    const [deletedMembership] = await transaction
+      .delete(projectMembersSchema)
+      .where(
+        and(
+          eq(projectMembersSchema.projectId, memberInput.projectId),
+          eq(projectMembersSchema.userId, memberInput.memberUserId),
+        ),
+      )
+      .returning({ userId: projectMembersSchema.userId });
+
+    if (!deletedMembership) {
+      throw new Error('项目成员不存在');
+    }
+
+    if (memberInput.memberUserId !== userId) {
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你已被移出项目“${authorization.project.name}”。`,
+        recipientUserId: memberInput.memberUserId,
+        target: { id: memberInput.projectId, kind: 'project' },
+        title: '已移出项目',
+        type: 'project_member_removed',
+      });
+    }
+
+    return deletedMembership;
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+  return membership;
+}
+
+export async function revokeProjectInvitation(input: ProjectInvitationInput) {
+  const invitationInput = projectInvitationSchema.parse(input);
+  const { memberInput } = await authorizeProjectMemberMutation({
+    ...invitationInput,
+    role: 'viewer',
+  });
+
+  const [revoked] = await db
+    .delete(projectInvitationsSchema)
     .where(
       and(
-        eq(projectMembersSchema.projectId, memberInput.projectId),
-        eq(projectMembersSchema.userId, memberInput.memberUserId),
+        eq(projectInvitationsSchema.projectId, memberInput.projectId),
+        eq(projectInvitationsSchema.userId, memberInput.memberUserId),
       ),
     )
-    .returning({ userId: projectMembersSchema.userId });
+    .returning({ userId: projectInvitationsSchema.userId });
 
-  if (!membership) {
-    throw new Error('项目成员不存在');
+  if (!revoked) {
+    throw new Error('邀请不存在或已处理');
   }
+
   revalidatePath('/(workspace)', 'layout');
-  return { userId: memberInput.memberUserId };
+  return revoked;
+}
+
+export async function rejectProjectInvitation(input: { projectId: string }) {
+  const { userId } = await auth.protect();
+  const invitationInput = projectAccessRequestSchema.pick({ projectId: true }).parse(input);
+
+  await db
+    .delete(projectInvitationsSchema)
+    .where(
+      and(
+        eq(projectInvitationsSchema.projectId, invitationInput.projectId),
+        eq(projectInvitationsSchema.userId, userId),
+      ),
+    );
+
+  revalidatePath('/(workspace)', 'layout');
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull } from 'drizzle-orm';
 import * as z from 'zod';
 import { memberRoles } from '@/features/permissions/Permission';
 import type { MemberRole } from '@/features/permissions/Permission';
@@ -20,6 +20,7 @@ import {
   projectAccessRequestsSchema,
   projectMembersSchema,
   workspaceAccessRequestsSchema,
+  workspaceInvitationsSchema,
   workspaceMembersSchema,
 } from '@/models/Schema';
 
@@ -193,6 +194,25 @@ async function getProjectRequests(options: { currentUserId: string; projectId: s
   });
 }
 
+async function getWorkspaceInvitations(workspaceId: string) {
+  return await db
+    .select({
+      email: workspaceInvitationsSchema.email,
+      expiresAt: workspaceInvitationsSchema.expiresAt,
+      id: workspaceInvitationsSchema.id,
+    })
+    .from(workspaceInvitationsSchema)
+    .where(
+      and(
+        eq(workspaceInvitationsSchema.workspaceId, workspaceId),
+        isNull(workspaceInvitationsSchema.acceptedAt),
+        isNull(workspaceInvitationsSchema.revokedAt),
+        gt(workspaceInvitationsSchema.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(asc(workspaceInvitationsSchema.createdAt));
+}
+
 async function getWorkspaceRequests(workspaceId: string) {
   const requests = await db
     .select({
@@ -238,6 +258,9 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
       groupName: authorization.workspace.name,
       workspaceId: authorization.workspace.id,
     });
+    const canManageMembers = authorization.decision.permissions.includes(
+      'workspace.members.manage',
+    );
 
     return {
       description:
@@ -245,11 +268,12 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
           ? '个人空间只承载不参与协作的个人项目，由当前 owner 管理。'
           : '团队工作区成员可以发现其中的项目和文件结构；项目正文访问由项目直接成员关系控制。',
       groups: [workspaceGroup],
+      invitations: canManageMembers
+        ? await getWorkspaceInvitations(authorization.workspace.id)
+        : [],
       currentUserRole: authorization.workspace.role,
       permissions: authorization.decision.permissions,
-      requests: authorization.decision.permissions.includes('workspace.members.manage')
-        ? await getWorkspaceRequests(authorization.workspace.id)
-        : [],
+      requests: canManageMembers ? await getWorkspaceRequests(authorization.workspace.id) : [],
       scope: 'workspace' as const,
       title: authorization.workspace.kind === 'personal' ? '个人空间' : '工作区权限',
       workspaceId: authorization.workspace.id,

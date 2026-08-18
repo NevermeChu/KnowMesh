@@ -17,13 +17,16 @@ import type { MemberRole, Permission } from '@/features/permissions/Permission';
 import {
   approveProjectAccessRequest,
   inviteProjectMember,
+  rejectProjectAccessRequest,
   removeProjectMember,
   updateProjectMemberRole,
 } from '@/features/permissions/server/ProjectMembers';
 import {
-  inviteWorkspaceMember,
   approveWorkspaceAccessRequest,
+  inviteWorkspaceMember,
+  rejectWorkspaceAccessRequest,
   removeWorkspaceMember,
+  revokeWorkspaceInvitation,
   updateWorkspaceMemberRole,
   requestWorkspaceEditAccess,
 } from '@/features/permissions/server/WorkspaceMembers';
@@ -192,6 +195,56 @@ function WorkspaceAccessRequest(props: {
   );
 }
 
+function WorkspacePendingInvitations(props: {
+  overview: Extract<PermissionOverview, { scope: 'workspace' }>;
+  onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  if (props.overview.invitations.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mb-6 last:mb-0">
+      <h3 className={`mb-2 ${sectionTitleClassName}`}>待接受邀请</h3>
+      <ul className="space-y-2">
+        {props.overview.invitations.map((invitation) => (
+          <li
+            key={invitation.id}
+            className="flex items-center gap-3 rounded-lg bg-overlay px-3 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-ink">
+                {invitation.email}
+              </span>
+              <span className="block text-xs text-ink-faint">
+                {new Date(invitation.expiresAt).toLocaleDateString('zh-CN')} 过期
+              </span>
+            </div>
+            <ModalDialogButton
+              type="button"
+              variant="neutral"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  await revokeWorkspaceInvitation({
+                    invitationId: invitation.id,
+                    workspaceId: props.overview.workspaceId,
+                  });
+                  props.onMutated('update', 'workspace');
+                });
+              }}
+            >
+              撤销
+            </ModalDialogButton>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function ProjectAccessRequests(props: {
   overview: Extract<PermissionOverview, { scope: 'project' }>;
   onMutated: (operation: 'delete' | 'update', scope: PermissionOverview['scope']) => void;
@@ -218,22 +271,40 @@ function ProjectAccessRequests(props: {
                 申请成为{memberRoleLabels[request.requestedRole]}
               </span>
             </span>
-            <ModalDialogButton
-              type="button"
-              variant="primary"
-              disabled={isPending}
-              onClick={() => {
-                startTransition(async () => {
-                  await approveProjectAccessRequest({
-                    memberUserId: request.userId,
-                    projectId: props.overview.project.id,
+            <div className="flex shrink-0 items-center gap-2">
+              <ModalDialogButton
+                type="button"
+                variant="neutral"
+                disabled={isPending}
+                onClick={() => {
+                  startTransition(async () => {
+                    await rejectProjectAccessRequest({
+                      memberUserId: request.userId,
+                      projectId: props.overview.project.id,
+                    });
+                    props.onMutated('update', 'project');
                   });
-                  props.onMutated('update', 'project');
-                });
-              }}
-            >
-              批准
-            </ModalDialogButton>
+                }}
+              >
+                拒绝
+              </ModalDialogButton>
+              <ModalDialogButton
+                type="button"
+                variant="primary"
+                disabled={isPending}
+                onClick={() => {
+                  startTransition(async () => {
+                    await approveProjectAccessRequest({
+                      memberUserId: request.userId,
+                      projectId: props.overview.project.id,
+                    });
+                    props.onMutated('update', 'project');
+                  });
+                }}
+              >
+                批准
+              </ModalDialogButton>
+            </div>
           </li>
         ))}
       </ul>
@@ -264,22 +335,40 @@ function WorkspaceAccessReviews(props: {
               {request.displayName}
               <span className="text-ink-muted"> 申请成为可编辑成员</span>
             </span>
-            <ModalDialogButton
-              type="button"
-              variant="primary"
-              disabled={isPending}
-              onClick={() => {
-                startTransition(async () => {
-                  await approveWorkspaceAccessRequest({
-                    memberUserId: request.userId,
-                    workspaceId: props.overview.workspaceId,
+            <div className="flex shrink-0 items-center gap-2">
+              <ModalDialogButton
+                type="button"
+                variant="neutral"
+                disabled={isPending}
+                onClick={() => {
+                  startTransition(async () => {
+                    await rejectWorkspaceAccessRequest({
+                      memberUserId: request.userId,
+                      workspaceId: props.overview.workspaceId,
+                    });
+                    props.onMutated('update', 'workspace');
                   });
-                  props.onMutated('update', 'workspace');
-                });
-              }}
-            >
-              批准
-            </ModalDialogButton>
+                }}
+              >
+                拒绝
+              </ModalDialogButton>
+              <ModalDialogButton
+                type="button"
+                variant="primary"
+                disabled={isPending}
+                onClick={() => {
+                  startTransition(async () => {
+                    await approveWorkspaceAccessRequest({
+                      memberUserId: request.userId,
+                      workspaceId: props.overview.workspaceId,
+                    });
+                    props.onMutated('update', 'workspace');
+                  });
+                }}
+              >
+                批准
+              </ModalDialogButton>
+            </div>
           </li>
         ))}
       </ul>
@@ -713,6 +802,9 @@ export function PermissionOverviewDialog(props: {
           )}
           {!props.isLoading && props.overview && (
             <PermissionMemberManager overview={props.overview} onMutated={props.onMutated} />
+          )}
+          {!props.isLoading && props.overview?.scope === 'workspace' && (
+            <WorkspacePendingInvitations overview={props.overview} onMutated={props.onMutated} />
           )}
           {!props.isLoading && props.overview?.scope === 'workspace' && (
             <WorkspaceAccessRequest overview={props.overview} />

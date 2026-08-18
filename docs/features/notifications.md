@@ -29,16 +29,24 @@ Clerk `user.deleted` 清理会删除该用户收到的全部通知，并把其�
 
 ## 当前事件
 
-首期通知覆盖权限闭环中的六类状态变化：
+首期通知覆盖权限闭环中的状态变化：
 
 | 事件 | 收件人 |
 | --- | --- |
+| 收到 Workspace 邀请（已注册用户 / 新注册同步） | 被邀请人 |
 | Workspace 邀请被接受 | 邀请人 |
 | Workspace Editor 申请提交 | Workspace owner |
 | Workspace Editor 申请通过 | 申请人 |
+| Workspace Editor 申请未通过 | 申请人 |
+| Workspace 成员角色变更 | 被修改成员 |
+| 被移出 Workspace | 被移除成员 |
+| 收到 Project 邀请 | 被邀请人 |
 | Project 邀请被接受 | 邀请人 |
 | Project viewer/editor 申请提交 | Project owner |
 | Project viewer/editor 申请通过 | 申请人 |
+| Project viewer/editor 申请未通过 | 申请人 |
+| Project 成员角色变更 | 被修改成员 |
+| 被移出 Project | 被移除成员 |
 
 业务状态变化和对应通知在同一数据库事务写入。通知写入失败会回滚邀请接受、申请提交或审批，避免界面状态与通知历史互相矛盾。重复提交已存在的 Workspace 申请不会新增通知；Project 申请的 upsert 仍视为一次新的提交并新增通知。
 

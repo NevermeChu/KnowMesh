@@ -475,7 +475,19 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 
 尚未实施。应停止持久化正文片段，只保存最小文档标识，并在命令面板打开时通过已认证的服务端查询重新解析当前用户仍可读取的最近文档；同时补充账户切换、成员移除和 Project 权限撤销后的回归测试。
 
+## 29. 邀请与权限变更通知链路缺失及管理操作闭环不完整
 
+### 问题
 
+已注册用户被邀请加入工作区或项目时在站内无法获知；管理员直接调整成员角色或移出成员时未向受影响成员推送通知；项目邀请受邀人无法主动拒绝，管理员无法撤回项目邀请；新注册用户历史有效邀请无法自动感知。
 
+### 根因
 
+邀请与角色变更的写操作事务中未集成站内通知服务；项目邀请缺少撤回与拒绝能力对应的 Server Action 与前端交互；Clerk Webhook 用户注册事件未与历史待处理工作区邀请进行邮箱关联同步。
+
+### 解决方法
+
+- 在工作区与项目邀请、角色变更（`workspace_member_role_updated`/`project_member_role_updated`）、移出成员（`workspace_member_removed`/`project_member_removed`）以及权限申请驳回操作中，原子写入对应站内通知。
+- 实现 `revokeProjectInvitation` 与 `rejectProjectInvitation`，在项目访问条和成员管理中提供主动撤回与拒绝操作。
+- 在 Clerk Webhook `user.created` 中增加 `syncPendingWorkspaceInvitations`，新注册用户自动补发未过期历史邀请通知。
+- 升级通知中心卡片式视觉与语义化分类图标，支持一键直达对应项目或工作区。

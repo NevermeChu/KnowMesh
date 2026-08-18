@@ -72,11 +72,12 @@ Clerk `user.deleted` Webhook 触发 `deleteUserData`，并复用统一删除与�
 
 - Personal Workspace 只显示 owner，不提供邀请和成员管理。
 - Personal 项目只显示 owner，不提供项目成员管理或 Workspace 继承组。
-- Team Workspace 支持 Resend 邮箱邀请、成员角色修改和移除；邮件负责静态通知和导航，受保护的接受页负责实时状态校验和用户确认，两者共享展示数据但不共享运行时 UI。
+- Team Workspace 支持 Resend 邮箱邀请、待接受邀请查看与撤回、成员角色修改和移除；邮件负责静态通知和导航，受保护的接受页负责实时状态校验和用户确认，两者共享展示数据但不共享运行时 UI。
 - Workspace 邀请生成七天有效的一次性原始令牌，数据库只保存其哈希。应用先写邀请记录，再调用 Resend；发送失败时会尝试删除刚创建的记录并向调用方返回失败。数据库和邮件服务不共享事务，因此该补偿不能被视为跨服务原子提交。
 - Team 项目只显示项目直接成员；Workspace 成员作为邀请候选人而不是项目权限成员。
-- Workspace 和 Project 邀请接受后默认加入为 viewer。Workspace viewer 可申请 editor；非项目成员可申请 viewer；Project viewer 可申请 editor。
-- 邀请接受、权限申请提交和审批通过会在业务事务内为邀请人、owner 或申请人写入用户级站内通知；通知历史不随 Workspace 切换。
+- Workspace 和 Project 邀请接受后默认加入为 viewer。Workspace viewer 可申请 editor；非项目成员可申请 viewer；Project viewer 可申请 editor。项目受邀人可选择接受或主动拒绝邀请。
+- 管理员可批准或拒绝权限申请，亦可在成员列表中直接调整成员的角色（editor 与 viewer）；申请被拒绝、审批通过、成员角色变更或移出成员均会在业务事务内为相关成员写入站内通知。
+- 邀请发出、邀请接受、权限申请提交、审批通过与申请未通过会在业务事务内写入用户级站内通知；通知历史不随 Workspace 切换。
 - 文件权限总览继续展示所属项目的授权来源，不增加文档级 ACL。
 
 ## 数据不变量

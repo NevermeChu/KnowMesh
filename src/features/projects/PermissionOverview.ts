@@ -42,6 +42,12 @@ export type PermissionRequest = {
   userId: string;
 };
 
+export type PermissionInvitation = {
+  email: string;
+  expiresAt: Date;
+  id: string;
+};
+
 export type PermissionGroup = {
   id: string;
   members: PermissionMember[];
@@ -64,6 +70,7 @@ export type PermissionOverview =
   | {
       description: string;
       groups: PermissionGroup[];
+      invitations: PermissionInvitation[];
       permissions: Permission[];
       currentUserRole: MemberRole;
       requests: PermissionRequest[];
