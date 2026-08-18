@@ -19,23 +19,24 @@
 │   └── meta/
 ├── public/
 ├── scripts/
-│   ├── local-runtime.ts
-│   └── local-runtime.test.ts
+│   └── local-runtime.ts
 ├── src/
 │   ├── app/
 │   │   ├── (app)/
 │   │   │   └── page.tsx
 │   │   ├── (auth)/
 │   │   │   ├── layout.tsx
-│   │   │   ├── sign-in/[[...sign-in]]/page.tsx
-│   │   │   └── sign-up/[[...sign-up]]/page.tsx
+│   │   │   ├── forgot-password/page.tsx
+│   │   │   ├── reset-password/page.tsx
+│   │   │   ├── sign-in/page.tsx
+│   │   │   └── sign-up/page.tsx
 │   │   ├── api/
-│   │   │   └── counter/route.old.md
+│   │   │   └── auth/[...all]/route.ts
 │   │   ├── dashboard/
 │   │   │   ├── layout.tsx
 │   │   │   └── page.tsx
 │   │   ├── settings/
-│   │   │   └── user-profile/[[...user-profile]]/page.tsx
+│   │   │   └── user-profile/page.tsx
 │   │   ├── global-error.tsx
 │   │   ├── layout.tsx
 │   │   ├── robots.ts
@@ -91,7 +92,7 @@
 - 输出 `<html>` 和 `<body>`。
 - 导入 `global.css`。
 - 声明 favicon 和 viewport。
-- 使用 `ClerkProvider` 为全部路由提供 Clerk 认证上下文。
+- 从主题 cookie 输出首屏主题，并挂载全站 Toast 容器。
 
 只属于某一类页面的 Header、Sidebar 或导航不应放入根布局。
 
@@ -117,7 +118,7 @@ src/app/(app)/
 括号目录是路由组，不会出现在 URL 中：
 
 - `(app)/page.tsx` 对应 `/`。
-- 当前没有 `(app)/layout.tsx`，首页直接继承 `RootLayout`，并在自身定义公开态的 Header、Main 和 Footer。
+- 当前没有 `(app)/layout.tsx`，首页直接继承 `RootLayout`，并由 `components/landing` 中的区块组件组合公开态 Header、Main 和 Footer。
 
 路由组名称不具备鉴权能力。将页面放入 `(app)` 不会自动要求用户登录，真正的访问保护由 `src/proxy.ts` 或页面附近的服务端鉴权逻辑完成。
 
@@ -126,45 +127,49 @@ src/app/(app)/
 ```text
 src/app/(auth)/
 ├── layout.tsx
-├── sign-in/[[...sign-in]]/page.tsx
-└── sign-up/[[...sign-up]]/page.tsx
+├── forgot-password/page.tsx
+├── reset-password/page.tsx
+├── sign-in/page.tsx
+└── sign-up/page.tsx
 ```
 
-用于 Clerk 登录和注册页面：
+用于 Better Auth 邮箱密码认证页面：
 
-- `sign-in/[[...sign-in]]` 对应 `/sign-in` 及其 Clerk 子路径。
-- `sign-up/[[...sign-up]]` 对应 `/sign-up` 及其 Clerk 子路径。
+- `sign-in` 与 `sign-up` 提供登录、注册和邮箱验证入口。
+- `forgot-password` 与 `reset-password` 提供密码恢复流程。
 - `(auth)/layout.tsx` 使用全屏 Flex 布局将认证组件居中。
 
-`ClerkProvider` 已位于根布局，这里不重复创建 Provider。
-
-### `dashboard`
+### `(workspace)` 工作区路由
 
 ```text
-src/app/dashboard/
+src/app/(workspace)/
 ├── layout.tsx
-└── page.tsx
+├── dashboard/page.tsx
+├── personal/page.tsx
+├── collaboration/page.tsx
+├── notifications/page.tsx
+├── search/page.tsx
+├── starred/page.tsx
+└── settings/
 ```
 
-- `page.tsx` 对应 `/dashboard`。
-- `layout.tsx` 声明 Dashboard Metadata，并使用 `BaseTemplate` 提供 Dashboard 导航和退出按钮。
-
-该目录使用自己的布局，不与公开首页共享页面外壳。
+- `layout.tsx` 通过 `requireUser()` 间接验证 Better Auth Session，并组合 `AppShell`。
+- 路由组名称不会进入 URL；例如 `dashboard/page.tsx` 对应 `/dashboard`。
+- 工作区、项目和文档数据由共享布局与具体页面的 Server Component 查询组合。
 
 ### `settings`
 
 ```text
-src/app/settings/
-└── user-profile/[[...user-profile]]/page.tsx
+src/app/(workspace)/settings/
+├── preferences/page.tsx
+└── user-profile/page.tsx
 ```
 
-对应 `/settings/user-profile` 及其 Clerk 子路径，当前使用 Clerk 的 `UserProfile` 组件。
-
-该目录没有自己的 `layout.tsx`，也不在 `(app)` 内，所以当前只继承根布局。
+`user-profile` 使用 KnowMesh 自有账户设置组件管理 Better Auth 资料、密码和原子账户删除；`preferences` 管理主题与内容宽度。
 
 ### `api`
 
-当前没有生效的 Route Handler。`api/counter/route.old.md` 是旧 Counter API 的参考文档，因为最终扩展名是 `.md`，不会被 Next.js 当作 API 路由，也不会参与 TypeScript 编译。
+当前 `/api/auth/[...all]` Route Handler 挂载 Better Auth 认证接口。其他业务写入仍优先使用经过认证和授权的 Server Action。
 
 将来新增 Route Handler 时使用：
 
@@ -256,10 +261,10 @@ src/utils/
 
 ## `src/proxy.ts`：请求鉴权
 
-当前使用 Clerk middleware：
+当前使用轻量 Session cookie 预检：
 
-- 所有被 proxy matcher 命中的页面请求都会经过 `clerkMiddleware()`，以便公开页面也能读取登录状态。
-- 保护 `/dashboard` 及其子路径。
+- `proxy()` 仅通过 Better Auth Session cookie 判断是否需要快速跳转，不把 cookie 当作完整授权依据。
+- 保护工作区、邀请、通知、搜索、收藏和设置等路由。
 - 未登录访问受保护页面时跳转到 `/sign-in`。
 - 当前 matcher 排除了 `/api`。
 
@@ -307,28 +312,20 @@ npm run db:studio
 4. 根据运行模式启动 Next.js、生产构建或 Playwright 所需服务。
 5. 收到退出信号后清理子进程。
 
-### `local-runtime.test.ts`
-
-与运行脚本同目录的单元测试，验证命令生成、进程退出和清理逻辑。
-
 ## `tests`：集成与端到端测试
 
 ```text
 tests/
-├── integration/
-│   └── Counter.integ.ts
+├── owner-invariants.integ.ts
 └── e2e/
-    ├── Counter.e2e.ts
     └── Sanity.e2e.ts
 ```
 
-- `*.test.ts` 和 `*.test.tsx` 是单元或组件测试，通常与实现文件放在一起。
-- `*.integ.ts` 是集成测试，放在 `tests/` 下。
-- `*.e2e.ts` 是 Playwright 端到端测试，放在 `tests/` 下。
+- `*.test.ts` 和 `*.test.tsx` 是纯业务逻辑/核心边界单元测试，与实现文件放在一起。
+- `*.integ.ts` 是数据库约束与迁移集成测试，放在 `tests/` 下。
+- `*.e2e.ts` 是 Playwright 端到端冒烟测试，放在 `tests/` 下。
 - `npm run test` 运行 Vitest 测试。
-- `npm run test:e2e` 根据当前 Playwright 配置运行 `tests/` 下的 `*.integ.*` 和 `*.e2e.*`。
-
-当前 Counter 测试仍然存在，而生效的 Counter 页面和 API 已经移除；后续应根据是否保留 Counter 功能决定更新或删除这些测试。
+- `npm run test:e2e` 根据当前 Playwright 配置运行 `tests/` 下的 `*.e2e.*`。
 
 ## `public`：静态资源
 
@@ -348,7 +345,6 @@ public/favicon.ico → /favicon.ico
 - `.vscode/`：推荐扩展、任务、调试以及 Oxc 保存时格式化配置。
 - `.codegraph/`：CodeGraph 生成的本地代码索引，不放业务代码。
 - `.cursor/`、`.claude/`：本地 AI 工具配置。
-- `.clerk/`：Clerk 本地临时数据。
 - `.storybook/`：Storybook 配置目录，当前没有配置文件。
 
 ### 根级文件
@@ -396,21 +392,29 @@ src/features/
 
 ### `src/components`
 
-用于跨业务共享的组件：
+用于跨业务共享的组件与公开展示组件：
 
 ```text
 src/components/
+├── auth/
+│   └── AuthenticationPanel.tsx
+├── landing/
+│   ├── InteractiveSearchSimulator.tsx
+│   ├── InteractiveWorkspacePreview.tsx
+│   ├── KnowledgeMeshCanvas.tsx
+│   └── Landing*.tsx
 ├── layout/
 │   ├── AppShell.tsx
-│   └── AppHeader.tsx
+│   └── AppSidebar/
 └── ui/
     ├── Button.tsx
-    ├── Dialog.tsx
+    ├── ModalDialog.tsx
     └── Input.tsx
 ```
 
+- `landing/` 存放产品介绍首页的独立展示区块与交互示意组件；样式通过 `.landing-root` 限定在公开首页内。
 - `layout/` 存放普通 React 应用外壳组件；Next.js 路由布局仍必须位于 `app/**/layout.tsx`。
-- `ui/` 存放不包含业务语义的基础 UI。
+- `ui/` 存放不包含特定业务语义的基础 UI 控件。
 - 包含明确业务概念的组件应放在对应 `features/<feature>/components/`。
 
 ## 新代码放置判断

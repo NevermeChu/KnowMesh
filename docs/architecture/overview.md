@@ -6,7 +6,7 @@
 
 ## 应用边界
 
-KnowMesh 使用 Next.js App Router、React Server Components、Clerk、Drizzle ORM 和 PostgreSQL 兼容数据库。
+KnowMesh 使用 Next.js App Router、React Server Components、Better Auth、Drizzle ORM 和 PostgreSQL 兼容数据库。
 
 ```text
 浏览器
@@ -20,8 +20,7 @@ KnowMesh 使用 Next.js App Router、React Server Components、Clerk、Drizzle O
             ▼
 Next.js 服务器
 ├─ Server Components 和路由布局
-├─ Clerk 服务端鉴权
-├─ Clerk Webhook Route Handler
+├─ Better Auth 服务端会话验证与 API Route Handler
 ├─ server-only 查询
 └─ Drizzle
        │
@@ -34,11 +33,11 @@ PostgreSQL / 本地 PGlite
 - `src/app/(app)`：公开根页面，包含登录或进入工作台的入口及产品介绍内容。
 - `src/app/(auth)`：登录和注册页面。
 - `src/app/(workspace)`：登录后的工作区页面，共享 `WorkspaceLayout` 和 `AppShell`。
-- `src/proxy.ts`：声明受保护路由并通过 Clerk middleware 执行访问保护。
+- `src/proxy.ts`：声明受保护路由，通过 Better Auth Session cookie 做快速重定向；页面和服务端入口仍调用 `requireUser()` 完整验证会话。
 
 路由组只组织代码，不自动提供鉴权；新增工作区路由时必须同时确认 `src/proxy.ts` 的保护范围。
 
-当前仓库提供 `/api/webhooks/clerk` Route Handler。middleware matcher 排除了 `/api`，该端点不使用浏览器会话鉴权，而是通过 Clerk Webhook 签名验证来源；其他新增 API 路由必须单独定义认证和授权边界。
+当前仓库提供 `/api/auth/[...all]` Better Auth Route Handler，处理登录、注册、会话、邮箱验证、密码重置和账户操作。其他新增 API 路由必须单独定义认证和授权边界。
 
 ## 代码职责
 
@@ -69,7 +68,7 @@ PostgreSQL / 本地 PGlite
 
 ## 当前页面状态
 
-- `/`：公开根页面，根据 Clerk 登录状态显示登录、退出或进入工作台入口；页面中的产品示意内容不连接文档数据。
+- `/`：公开根页面，根据 Better Auth 登录状态显示登录、退出或进入工作台入口；页面中的产品示意内容不连接文档数据。
 - `/dashboard`：工作台首页，聚合最近可打开的文档、通知摘要、待处理邀请与协作权限申请。
 - `/personal`、`/collaboration`：读取 `project` 和可选的 `document` 查询参数，呈现项目文档列表、创建入口及单人编辑器；未选择项目时显示引导状态。
 - `/search`：按个人空间或 Team Workspace 范围搜索当前用户有权读取的文档标题和 ProseMirror 正文，并返回高亮上下文片段。
@@ -77,19 +76,19 @@ PostgreSQL / 本地 PGlite
 - `/notifications`：列出站内通知，支持单条或全部标记为已读。
 - `/invitations/accept`：验证 Workspace 邀请状态与当前用户邮箱，并完成邀请接受流程。
 - `/settings/preferences`：系统偏好设置页，当前提供外观主题（浅色/深色/跟随系统）选择，更改立即保存并对全站生效。
-- `/settings/user-profile`：渲染 Clerk `UserProfile`。
+- `/settings/user-profile`：管理本地用户资料、密码和账户删除。
 - 侧边栏可以创建和列出个人、协作项目；点击项目通过 `project` 查询参数打开对应文档工作区。
 
 ## 已实现与未实现
 
 已实现：
 
-- Clerk 登录与工作区路由保护。
+- Better Auth 邮箱密码登录、邮箱验证、密码重置与工作区路由保护。
 - 登录后共享应用外壳。
 - 个人与协作项目创建。
 - Workspace 创建、切换和项目归属。
-- Clerk 注册完成后通过签名 Webhook 幂等创建 Personal Workspace；owner 可以从工作区管理删除该空间，Clerk 账户删除时也会清理该空间。
-- Clerk 账户删除后通过签名 Webhook 删除用户拥有的 Workspace 和 Project，并退出其他共享资源。
+- Better Auth 用户创建和 Session 创建 hook 幂等创建或补偿 Personal Workspace；owner 也可以从工作区管理删除该空间。
+- 账户删除前同步删除用户拥有的 Workspace 和 Project，并退出其他共享资源；业务清理失败会阻止身份删除。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
@@ -120,4 +119,5 @@ PostgreSQL / 本地 PGlite
 - [ADR 0003](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0008](../adr/0008-delete-owned-resources-on-account-removal.md)
+- [ADR 0009](../adr/0009-use-better-auth-for-local-identity.md)
 - [系统偏好设置](../features/preferences.md)

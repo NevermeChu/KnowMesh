@@ -6,7 +6,7 @@ KnowMesh 是一个面向团队的知识工作空间，用于汇聚文档、项�
 
 - Next.js 16、React 19 和 TypeScript
 - Tailwind CSS 4
-- Clerk 身份认证
+- Better Auth 身份认证
 - Drizzle ORM、PostgreSQL 和本地 PGlite 运行环境
 - Zod 环境变量验证
 - Ultracite、Oxlint 和 Oxfmt
@@ -32,17 +32,19 @@ npx playwright install chromium
 仓库中的 `.env.example` 列出所需变量和非敏感默认值。本地开发密钥应写入不会提交的 `.env.local`：
 
 ```shell
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
+BETTER_AUTH_SECRET=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=KnowMesh <invite@example.com>
 ```
 
 生产环境可在 `.env.production.local` 中配置：
 
 ```shell
 NEXT_PUBLIC_APP_URL=https://example.com
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
+BETTER_AUTH_SECRET=
 DATABASE_URL=postgresql://user:password@host:5432/database
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=KnowMesh <invite@example.com>
 ```
 
 所有应用环境变量统一在 `src/libs/Env.ts` 中验证。
@@ -64,6 +66,8 @@ npm run dev
 | `/` | 产品首页 | 公开 |
 | `/sign-in` | 登录 | 公开 |
 | `/sign-up` | 注册 | 公开 |
+| `/forgot-password` | 找回密码 | 公开 |
+| `/reset-password` | 重置密码 | 公开 |
 | `/dashboard` | 团队知识工作台 | 需要登录 |
 | `/personal` | 个人 Workspace 的项目与文档 | 需要登录 |
 | `/collaboration` | 当前 Team Workspace 的项目与文档 | 需要登录 |
@@ -72,12 +76,12 @@ npm run dev
 | `/notifications` | 查看和标记站内通知 | 需要登录 |
 | `/invitations/accept` | 验证并接受 Workspace 邀请 | 需要登录 |
 | `/settings/preferences` | 外观与内容宽度偏好 | 需要登录 |
-| `/settings/user-profile` | Clerk 账户资料 | 从已登录工作台进入 |
-| `/api/webhooks/clerk` | Clerk 用户生命周期 Webhook | Clerk 签名验证 |
+| `/settings/user-profile` | 账户资料与密码管理 | 从已登录工作台进入 |
+| `/api/auth/[...all]` | Better Auth 认证与生命周期 API | Better Auth 处理 |
 | `/robots.txt` | 搜索引擎规则 | 公开 |
 | `/sitemap.xml` | 公开页面 sitemap | 公开 |
 
-`/api/webhooks/clerk` 不使用浏览器会话鉴权。它验证 Clerk Webhook 签名，并处理 Personal Workspace 创建和账户删除后的资源清理；新增 API 路由需要独立定义认证与授权边界。
+`/api/auth/[...all]` 为 Better Auth 提供的服务端认证与生命周期接口，处理登录、注册、邮箱验证、密码重置和会话读取。受保护页面通过 `src/proxy.ts` 快速重定向，并在服务端通过 `requireUser()` 进行完整的数据库 Session 校验。
 
 ## 常用命令
 
@@ -140,8 +144,6 @@ GitHub Actions 的 `Release` 工作流会在推送到 `main` 或手动触发时�
 | 类型 | 名称 | 用途 |
 | --- | --- | --- |
 | Environment variable | `PRODUCTION_APP_URL` | 构建时写入的生产站点 HTTPS 地址 |
-| Environment secret | `PRODUCTION_CLERK_PUBLISHABLE_KEY` | 构建时写入的 Clerk 生产环境公钥 |
-| Environment variable | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | CI 构建和 E2E 使用的 Clerk 开发环境公钥 |
-| Environment secret | `CLERK_SECRET_KEY` | CI E2E 使用的 Clerk 开发环境密钥 |
+| Environment secret | `BETTER_AUTH_SECRET` | 构建和运行 Better Auth 所需的密钥 |
 
-下载并解压 artifact 后，入口文件为 `server.js`。生产服务器仍需在运行时提供 `CLERK_SECRET_KEY` 和 `DATABASE_URL`，并在切换应用版本前单独执行数据库迁移；这些运行时密钥不会打包进 artifact。
+下载并解压 artifact 后，入口文件为 `server.js`。生产服务器仍需在运行时提供 `BETTER_AUTH_SECRET` 和 `DATABASE_URL`，并在切换应用版本前单独执行数据库迁移；这些运行时密钥不会打包进 artifact。

@@ -8,7 +8,7 @@
 
 `Workspace` 是项目的唯一顶层资源边界，并通过 `kind` 决定其中所有项目的模式：
 
-- `personal`：每个有效 Clerk 用户拥有一个，只承载个人项目；账户删除时随用户业务数据一起清理。
+- `personal`：每个有效 Better Auth 用户拥有一个，只承载个人项目；账户删除时随用户业务数据一起清理。
 - `team`：可创建、加入和删除的团队工作区，其中项目参与协作。
 
 `projects` 不再保存 `kind`。项目通过非空 `workspace_id` 唯一归属 Workspace，个人或协作语义必须从 `workspaces.kind` 推导。文件完全继承所属项目能力，没有独立 ACL。
@@ -23,7 +23,7 @@ User
 
 ## 个人空间
 
-- Clerk `user.created` Webhook 在注册完成后调用 `ensureUserWorkspace` 创建 Personal Workspace；数据库部分唯一索引和事务使重复投递保持幂等，并保证同一 owner 最多一个。
+- Better Auth 用户创建 hook 调用 `ensureUserWorkspace` 创建 Personal Workspace，Session 创建 hook 在缺失时补偿；数据库部分唯一索引和事务使重复执行保持幂等，并保证同一 owner 最多一个。
 - Personal Workspace 不支持邀请成员或管理项目成员，但 owner 可以修改名称、创建项目，并从“设置 → 工作区管理”删除整个空间。
 - Personal 项目只允许项目 owner 访问，不继承 Workspace 成员能力，也不授予 `project.members.manage`。
 - Personal 区域始终读取当前用户的 Personal Workspace，与活动 Team Workspace 无关。
@@ -47,11 +47,11 @@ Workspace 和 Project 使用同一套 owner/member 规则，不区分 Personal �
 - 当前用户是资源 member 时，操作显示为“退出”，资源保持存在，只清理当前用户的成员、申请和邀请关系。
 - member 退出 Workspace 时，先对该 Workspace 中自己直接参与的 Project 应用同一规则：自己拥有的 Project 删除，其他人的 Project 只退出；随后再移除 Workspace 成员关系。
 
-Project 的删除或退出入口位于侧边栏 Project 右键打开的权限弹窗；Workspace 的删除或退出入口位于“设置 → 工作区管理”。服务端分别由 `deleteOrLeaveProject` 和 `deleteOrLeaveWorkspace` 重新读取 Clerk 身份和资源访问关系，不信任客户端传入的 owner/member 状态。
+Project 的删除或退出入口位于侧边栏 Project 右键打开的权限弹窗；Workspace 的删除或退出入口位于“设置 → 工作区管理”。服务端分别由 `deleteOrLeaveProject` 和 `deleteOrLeaveWorkspace` 通过 `requireUser()` 重新读取身份和资源访问关系，不信任客户端传入的 owner/member 状态。
 
 ## 账户删除过渡策略
 
-Clerk `user.deleted` Webhook 触发 `deleteUserData`，并复用统一删除与退出规则遍历该用户的 Workspace 成员关系。应用删除该用户拥有的 Personal/Team Workspace；对于其他人的 Workspace，先删除其中由该用户拥有的 Project、退出其他直接参与的 Project，再退出 Workspace。数据库级联删除自有资源的 Document 和协作状态。
+KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，并在同一个数据库事务中删除 Better Auth 身份。该流程复用统一删除与退出规则遍历用户的 Workspace 成员关系：删除该用户拥有的 Personal/Team Workspace；对于其他人的 Workspace，先删除其中由该用户拥有的 Project、退出其他直接参与的 Project，再退出 Workspace。数据库级联删除自有资源的 Document 和协作状态。
 
 共享 Project 中由该用户创建、但不由该用户拥有的 Document 继续保留，并把 `created_by_id` 匿名化为 `deleted_user`。该策略可能删除其他成员参与的 Team Workspace 或 Project，是明确记录的过渡行为，不代表未来所有权转让方案。
 
@@ -61,12 +61,12 @@ Clerk `user.deleted` Webhook 触发 `deleteUserData`，并复用统一删除与�
 
 - Personal 创建入口把当前用户的 Personal Workspace ID 交给 Server Action。
 - Collaboration 创建入口只在活动 Workspace 为 `team` 且具有 `project.create` 时显示。
-- `createProject` 从 Clerk 获取身份、验证目标 Workspace 能力，并在事务内锁定和重新校验 owner 的 Workspace 成员关系后写入项目与 owner 成员关系。
+- `createProject` 从 Better Auth Session 获取身份、验证目标 Workspace 能力，并在事务内锁定和重新校验 owner 的 Workspace 成员关系后写入项目与 owner 成员关系。
 - `getWorkspaceNavigation` 向 Workspace 成员返回目标 Workspace 的项目和文档导航元数据；导航元数据不包含正文、正文层级、摘要或预览。
 - Workspace Layout 合并 Personal Workspace 与可选活动 Team Workspace 的项目和文档导航。
 - `/personal` 只接受 Personal Workspace 中的项目；`/collaboration` 只接受当前活动 Team Workspace 中的项目。
 
-客户端传入的 Workspace、Project、Document ID 和能力只用于定位候选资源；Server Action 必须重新读取 Clerk 身份和资源关系执行授权。
+客户端传入的 Workspace、Project、Document ID 和能力只用于定位候选资源；Server Action 必须通过 `requireUser()` 重新读取身份和资源关系执行授权。
 
 ## 权限总览
 
@@ -109,6 +109,7 @@ Clerk `user.deleted` Webhook 触发 `deleteUserData`，并复用统一删除与�
 - `src/features/projects/server/CreateProject.ts`
 - `src/features/workspaces/server/GetWorkspaceNavigation.ts`
 - `src/features/users/server/DeleteUserData.ts`
+- `src/features/auth/server/DeleteAccount.ts`
 - `src/features/projects/server/GetPermissionOverview.ts`
 - `src/features/permissions/PermissionPolicy.ts`
 - `src/features/permissions/server/ProjectAuthorization.ts`

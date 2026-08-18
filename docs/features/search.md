@@ -15,7 +15,7 @@
 
 ## 查询与排序
 
-`searchWorkspaceContent` 先从 Clerk 会话取得当前用户，再按标题或 `documents.content` 的 JSON 文本表示执行不区分大小写的包含匹配。空白查询不访问数据库。结果按以下顺序排序，最多返回 30 条：
+`searchWorkspaceContent` 先通过 `requireUser()` 取得当前 Better Auth 用户，再按标题或 `documents.content` 的 JSON 文本表示执行不区分大小写的包含匹配。空白查询不访问数据库。结果按以下顺序排序，最多返回 30 条：
 
 1. 标题完全匹配，权重 100。
 2. 标题包含查询词，权重 50。
@@ -30,13 +30,13 @@
 
 搜索正文必须以 Project 直接成员关系为边界。查询通过 `project_members.user_id` 限制结果，不因用户能在 Team Workspace 导航中发现 Project 或 Document 名称而返回正文或片段。Personal 与 Team 筛选同样不能扩大此权限。
 
-客户端传入的查询词和筛选只用于构造候选结果，身份始终由 Server Action 的 Clerk 会话提供。返回浏览器的数据只包含结果导航所需的 Workspace、Project、Document 元数据和正文片段，不包含完整 ProseMirror JSON。
+客户端传入的查询词和筛选只用于构造候选结果，身份始终由 Server Action 的 Better Auth Session 提供。返回浏览器的数据只包含结果导航所需的 Workspace、Project、Document 元数据和正文片段，不包含完整 ProseMirror JSON。
 
 ## 命令面板与最近访问
 
 没有查询词时，命令面板显示快捷导航、主题与专注模式等操作，以及最近从命令面板打开的最多四篇文档。当前实现把完整 `SearchResultItem` 写入固定的浏览器 `localStorage` 键 `knowmesh:recent-documents`，其中包含标题、Workspace、Project 和正文片段。
 
-这份客户端缓存当前没有按 Clerk 用户隔离，打开命令面板时也不会重新向服务端验证缓存项的读取权限。同一浏览器切换账户或用户失去 Project 权限后，旧结果可能继续显示，直到缓存被后续访问覆盖或由用户清理。该问题已记录在 `docs/PROBLEMS.md`，在修复前不得把最近访问缓存视为授权来源；真正打开文档时仍由文档页面重新鉴权。
+这份客户端缓存当前没有按 Better Auth 用户隔离，打开命令面板时也不会重新向服务端验证缓存项的读取权限。同一浏览器切换账户或用户失去 Project 权限后，旧结果可能继续显示，直到缓存被后续访问覆盖或由用户清理。该问题已记录在 `docs/PROBLEMS.md`，在修复前不得把最近访问缓存视为授权来源；真正打开文档时仍由文档页面重新鉴权。
 
 ## 相关代码
 

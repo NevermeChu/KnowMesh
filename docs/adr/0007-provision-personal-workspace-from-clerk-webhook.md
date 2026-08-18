@@ -1,6 +1,6 @@
 # ADR 0007：通过 Clerk 注册 Webhook 创建 Personal Workspace
 
-- 状态：Accepted
+- 状态：Superseded by [ADR 0009](0009-use-better-auth-for-local-identity.md)
 - 日期：2026-08-13
 
 ## 背景

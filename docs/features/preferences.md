@@ -6,12 +6,12 @@
 
 ## 产品边界
 
-偏好属于 Clerk 用户，不属于任何 Workspace。已实现的偏好：
+偏好属于 Better Auth 用户，不属于任何 Workspace。已实现的偏好：
 
 - **外观主题**：`浅色`、`深色`、`跟随系统`，默认 `跟随系统`。`/settings/preferences` 在「外观」小节呈现三张主题卡片；点击后立即在本地切换主题并调用 Server Action 持久化，失败时回滚到之前的主题并显示错误信息。侧边栏底部另有一个明暗快捷切换按钮，在浅色与深色之间翻转并写入同一偏好。
 - **内容宽度**：工作区阅读内容的容器宽度，可选 `60%`、`70%`、`80%`、`90%`，默认 `80%`，步长 10%。`ContentToolbar` 全屏按钮左侧的下拉显示当前百分比，选中即时应用、乐观更新并持久化，失败回滚。`WorkspaceContent` 组件消费根布局注入的 `--content-read-width` CSS 变量统一各页面内容宽度；移动端始终全宽。
 
-主题对全站生效，包括公开首页、Clerk 登录/注册页、账号设置页和工作区页面。Clerk 组件通过引用同一组 CSS 变量跟随主题。
+主题对全站生效，包括公开首页、登录/注册页、账号设置页和工作区页面。
 
 ## 主题解析与防闪烁
 
@@ -19,7 +19,7 @@
 
 ```text
 updateThemePreference Server Action
-→ auth.protect() 鉴权 + Zod 校验
+→ requireUser() 鉴权 + Zod 校验
 → upsert user_preferences
 → 写入 HttpOnly cookie knowmesh-theme（有效期一年）
 → revalidatePath('/', 'layout')
@@ -37,10 +37,10 @@ updateThemePreference Server Action
 
 `user_preferences` 每个用户最多一行：
 
-- `user_id` 保存 Clerk 用户 ID，带唯一索引，既是 upsert 冲突目标也是读取隔离条件。
+- `user_id` 保存 Better Auth 用户 ID，带唯一索引，既是 upsert 冲突目标也是读取隔离条件。
 - `theme` 为 `light`、`dark`、`system` 枚举，默认 `system`。
 - `content_width` 为整数，取值 `60/70/80/90`，默认 `80`；读取侧用 `parseContentWidth`/`resolveContentWidth` 收窄为字面量类型，越界值回退默认。
-- Clerk `user.deleted` 清理流程会删除该用户的偏好行。
+- Better Auth 删除账户前的业务清理流程会删除该用户的偏好行。
 
 ## 全站颜色约束
 

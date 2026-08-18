@@ -8,7 +8,7 @@
 - Nginx 将公网 HTTPS 请求反向代理到 `127.0.0.1:3000`。
 - standalone release 位于 `/srv/knowmesh-app/releases/<GITHUB_SHA>`，`/srv/knowmesh-app/current` 原子指向当前版本。
 - `/etc/knowmesh.env` 只保留在服务器，workflow 和 release 均不得复制或输出其中内容。
-- `/etc/knowmesh.env` 必须包含 Clerk endpoint 对应的 `CLERK_WEBHOOK_SIGNING_SECRET`；Clerk Dashboard 必须将生产 `/api/webhooks/clerk` 订阅到 `user.created` 和 `user.deleted`。
+- `/etc/knowmesh.env` 必须包含至少 32 字符的高熵 `BETTER_AUTH_SECRET`、生产 `NEXT_PUBLIC_APP_URL`、数据库和 Resend 邮件配置。生产环境不再需要认证 Webhook。
 - `HOSTNAME` 必须保持为 `localhost`，`PORT` 必须保持为 `3000`。
 
 ## 自动部署流程
@@ -40,7 +40,7 @@ CI workflow 中的 `DATABASE_URL` 只连接 runner 内由本地运行器启动�
 production environment 必须提供：
 
 - Secret `PRODUCTION_SSH_PRIVATE_KEY`：与服务器授权公钥匹配的专用部署私钥。
-- Secret `PRODUCTION_CLERK_PUBLISHABLE_KEY`：生产 Clerk publishable key。
+- Secret `BETTER_AUTH_SECRET`：构建和运行 Better Auth 使用的生产密钥；必须与 `/etc/knowmesh.env` 中的当前密钥一致。
 - Variable `PRODUCTION_APP_URL`：生产公网地址。
 
 部署私钥不得复用个人管理密钥。服务器 sudoers 应限制部署身份只能管理 release 目录和 `knowmesh.service`；当前宽泛的 sudo 权限属于待收紧的运维风险。

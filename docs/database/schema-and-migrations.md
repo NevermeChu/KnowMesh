@@ -17,11 +17,20 @@
 
 ## 当前业务表
 
+### Better Auth 身份表
+
+- `user` 保存本地用户 ID、唯一邮箱、邮箱验证状态、姓名和头像，是身份资料的权威来源。
+- `session` 保存有过期时间的登录会话；`token` 唯一，`user_id` 外键在用户删除时级联清理。
+- `account` 保存邮箱密码或其他认证提供方账户；`(issuer, account_id)` 唯一，`user_id` 外键在用户删除时级联清理。
+- `verification` 保存邮箱验证和密码重置等短期令牌，按 `identifier` 建立查询索引。
+
+认证表由 `src/libs/Auth.ts` 通过现有 `db` 实例交给 Better Auth Drizzle adapter 使用，不创建第二套连接池。Better Auth 只负责身份和账户生命周期；Workspace、Project、成员及权限仍由业务表和权限模块负责。
+
 ### `workspaces`
 
 - UUID 主键，名称最长 80 字符。
 - `kind` 为 `personal` 或 `team`，决定其中所有项目的权限模式。
-- `owner_id` 保存唯一所有者的 Clerk 用户 ID，是 Workspace 所有权的权威字段。
+- `owner_id` 保存唯一所有者的 Better Auth 用户 ID，是 Workspace 所有权的权威字段。
 - Personal Workspace 的 `(owner_id) WHERE kind = 'personal'` 部分唯一索引同时支持按 owner 定位个人空间，并保证同一 owner 最多拥有一个。
 - 包含创建和更新时间。
 
@@ -39,7 +48,7 @@
 - UUID 主键。
 - 名称最长 80 字符。
 - `workspace_id` 非空外键指向 `workspaces.id`；删除 Workspace 时级联删除其项目。
-- `owner_id` 保存 Clerk 用户 ID。
+- `owner_id` 保存 Better Auth 用户 ID。
 - `(workspace_id, owner_id)` 复合外键指向 `workspace_members(workspace_id, user_id)`，保证项目 owner 属于项目的 Workspace。
 - 项目的个人或协作语义由所属 Workspace 的 `kind` 推导，不重复保存项目类型。
 - 定义 `(workspace_id, created_at)` 索引，支持读取 Workspace 项目列表。
@@ -67,13 +76,13 @@
 - 标题最长 200 字符。
 - `content` 使用 `JSONB` 保存 ProseMirror JSON，默认内容是包含一个空段落的 `doc` 根节点。
 - `content_schema_version` 记录应用文档结构版本，当前为 `1`。
-- `created_by_id` 通常保存创建者的 Clerk user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
+- `created_by_id` 通常保存创建者的 Better Auth user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
 - 与项目相同，`updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
 
 ### `notifications`
 
-- UUID 主键，通知按 Clerk `recipient_user_id` 归属用户，不随当前 Workspace 切换。
+- UUID 主键，通知按 Better Auth `recipient_user_id` 归属用户，不随当前 Workspace 切换。
 - `actor_user_id` 可空；触发者账户删除后置空，收件人账户删除后删除其通知。
 - `type` 使用通知事件枚举；`title` 和 `body` 保存事件发生时的展示快照。
 - 可选的 `target_kind` 与 `target_id` 必须同时为空或同时存在。目标是 Workspace 或 Project 的多态历史上下文，不建立外键，因此资源删除不会删除通知。
@@ -84,18 +93,18 @@
 - UUID 主键；每个用户最多一行，`user_id` 唯一索引既是 upsert 冲突目标也是读取隔离条件。
 - `theme` 为 `light`、`dark`、`system` 枚举，默认 `system`。
 - 偏好是主题持久化真相源；根布局渲染读取的是 Server Action 同步写入的 `knowmesh-theme` cookie 镜像，不查询本表。
-- Clerk `user.deleted` 清理流程删除该用户的偏好行。
+- Better Auth 删除账户前的业务清理流程删除该用户的偏好行。
 
 ### `starred_documents`
 
 - `(user_id, document_id)` 联合主键。
 - `document_id` 非空外键指向 `documents.id`，删除文档时数据库自动级联删除其收藏记录。
-- `user_id` 保存 Clerk 用户 ID 字符串。
+- `user_id` 保存 Better Auth 用户 ID 字符串。
 - `(user_id, created_at DESC)` 索引支持按收藏时间倒序检索用户的收藏文档。
 - 包含收藏记录创建时间。
 
 
-当前没有本地用户表、用户镜像同步逻辑或用户外键；`owner_id` 和 `user_id` 直接保存 Clerk user ID 字符串。Clerk `user.deleted` 由应用事务清理：先删除该用户拥有的 Workspace 和 Project，再移除其他资源中的成员、申请、邀请、偏好和收件人通知；其他通知中的触发者引用置空，其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`。
+当前已经加入 Better Auth 本地用户表。认证迁移完成后，业务表中的 `owner_id` 和 `user_id` 保存 Better Auth 字符串用户 ID；账户删除由应用事务同时删除该用户拥有的 Workspace、Project、其他业务关系和 Better Auth `user` 行。其他通知中的触发者引用置空，其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`，因此这些业务引用不会全部直接级联到 `user`。
 
 ## 数据库约束与应用层不变量
 
@@ -135,7 +144,7 @@ Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFE
 
 `0005_add-workspace-kind.sql` 识别个人空间、为缺少个人空间的已知用户补建 Workspace，并将旧 Personal 项目迁移到 owner 的个人空间。`0006_remove-project-kind.sql` 随后删除 `projects.kind`、旧枚举、分类索引和冗余的 `user_onboarding` 表。`0007_remove-redundant-indexes.sql` 删除已经被部分唯一索引或联合主键覆盖、且没有当前查询消费者的三个索引。`0008_dashing_vivisector.sql` 为 Project owner 增加 Workspace 成员复合外键。`0009_cheerful_mockingbird.sql` 增加 Project 邀请和 Workspace/Project 权限申请状态，并移除 Workspace 邀请的可选角色，使接受邀请固定为 viewer。`0010_silly_nomad.sql` 回填 `project_members.workspace_id`，预检既有成员和 owner 数据，增加两级成员复合外键、唯一 owner 索引及事务结束时执行的 owner 不变量触发器。
 
-`0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。`0012_add-user-preferences.sql` 增加用户偏好表、主题枚举和 `user_id` 唯一索引。`0013_add-content-width-preference.sql` 给用户偏好表增加 `content_width` 整数列(默认 80)。`0014_flawless_lilandra.sql` 增加 `starred_documents` 收藏表、级联外键与创建时间倒序索引。
+`0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。`0012_add-user-preferences.sql` 增加用户偏好表、主题枚举和 `user_id` 唯一索引。`0013_add-content-width-preference.sql` 给用户偏好表增加 `content_width` 整数列(默认 80)。`0014_flawless_lilandra.sql` 增加 `starred_documents` 收藏表、级联外键与创建时间倒序索引。`0019_add-better-auth.sql` 增加 Better Auth 的 `user`、`session`、`account` 和 `verification` 表、认证查询索引及用户级级联外键。
 
 ## 迁移不变量
 
@@ -148,7 +157,7 @@ Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFE
 
 ## 创建项目的一致性
 
-创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。Personal Workspace 由已验证的 Clerk `user.created` Webhook 初始化；与 Team Workspace 相同，owner 删除时通过数据库外键级联清理。用户创建的普通 Workspace 一律为 Team。创建项目前必须验证当前用户具有目标 Workspace 的 `project.create` 能力；项目与包含同一 `workspace_id` 的 owner `project_members` 也必须在同一事务写入。Workspace 或 Project member 退出时只删除自己的关系；Workspace member 若仍拥有下级 Project，必须先在同一事务删除这些 Project，再删除 Workspace 成员关系。
+创建 Workspace 同时写入 `workspaces` 和 owner 的 `workspace_members`，必须使用事务。Personal Workspace 由 Better Auth 用户创建 hook 调用幂等的 `ensureUserWorkspace` 初始化；与 Team Workspace 相同，owner 删除时通过数据库外键级联清理。用户创建的普通 Workspace 一律为 Team。创建项目前必须验证当前用户具有目标 Workspace 的 `project.create` 能力；项目与包含同一 `workspace_id` 的 owner `project_members` 也必须在同一事务写入。Workspace 或 Project member 退出时只删除自己的关系；Workspace member 若仍拥有下级 Project，必须先在同一事务删除这些 Project，再删除 Workspace 成员关系。
 
 ## 本地操作
 
@@ -172,6 +181,7 @@ npm run db:studio
 - `src/models/Schema.ts`
 - `src/libs/DB.ts`
 - `src/libs/DBConnection.ts`
+- `src/libs/Auth.ts`
 - `scripts/local-runtime.ts`
 - `drizzle.config.ts`
 

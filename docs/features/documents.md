@@ -38,7 +38,7 @@
 | 修改标题或内容 | `owner`、`editor` | `updateDocument` Server Action |
 | 删除文档 | `owner`、`editor` | `deleteDocument` Server Action |
 
-客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须从 Clerk 会话取得 `userId`，再由统一权限模块解析资源、项目及所属 Workspace。Personal Workspace 中的项目只允许 owner；Team Workspace 中只有 `project_members` 直接角色授予正文权限，Workspace 角色只授予结构发现能力。
+客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须通过 `requireUser()` 从 Better Auth Session 取得 `userId`，再由统一权限模块解析资源、项目及所属 Workspace。Personal Workspace 中的项目只允许 owner；Team Workspace 中只有 `project_members` 直接角色授予正文权限，Workspace 角色只授予结构发现能力。
 
 ## 读取和编辑流程
 

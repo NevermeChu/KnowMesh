@@ -19,8 +19,9 @@ ADR 记录具有真实替代方案和长期影响的架构决定。它回答“�
 | [0004](0004-use-capability-authorization-and-collaboration-inheritance.md) | Superseded | 使用能力授权并继承协作项目权限 |
 | [0005](0005-use-workspace-kind-as-project-mode.md) | Superseded | 使用 Workspace 类型作为项目权限模式 |
 | [0006](0006-separate-workspace-discovery-from-project-content-access.md) | Accepted | 分离 Workspace 结构发现与 Project 内容访问 |
-| [0007](0007-provision-personal-workspace-from-clerk-webhook.md) | Accepted | 通过 Clerk 注册 Webhook 创建 Personal Workspace |
+| [0007](0007-provision-personal-workspace-from-clerk-webhook.md) | Superseded | 通过 Clerk 注册 Webhook 创建 Personal Workspace |
 | [0008](0008-delete-owned-resources-on-account-removal.md) | Accepted | 统一按 owner 删除资源、按 member 退出资源 |
+| [0009](0009-use-better-auth-for-local-identity.md) | Accepted | 使用 Better Auth 管理本地身份并保持业务授权独立 |
 
 ## 新 ADR 模板
 

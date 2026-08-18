@@ -465,7 +465,7 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 
 ### 问题
 
-命令面板把最近打开的搜索结果长期保存在浏览器中。同一浏览器切换 Clerk 账户或用户失去 Project 权限后，面板仍可能显示前一个权限状态下的文档标题、Workspace、Project 和正文片段。
+命令面板把最近打开的搜索结果长期保存在浏览器中。同一浏览器切换 Better Auth 账户或用户失去 Project 权限后，面板仍可能显示前一个权限状态下的文档标题、Workspace、Project 和正文片段。
 
 ### 根因
 
@@ -483,13 +483,13 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 
 ### 根因
 
-邀请与角色变更的写操作事务中未集成站内通知服务；项目邀请缺少撤回与拒绝能力对应的 Server Action 与前端交互；Clerk Webhook 用户注册事件未与历史待处理工作区邀请进行邮箱关联同步。
+邀请与角色变更的写操作事务中未集成站内通知服务；项目邀请缺少撤回与拒绝能力对应的 Server Action 与前端交互；认证邮箱验证事件未与历史待处理工作区邀请进行邮箱关联同步。
 
 ### 解决方法
 
 - 在工作区与项目邀请、角色变更（`workspace_member_role_updated`/`project_member_role_updated`）、移出成员（`workspace_member_removed`/`project_member_removed`）以及权限申请驳回操作中，原子写入对应站内通知。
 - 实现 `revokeProjectInvitation` 与 `rejectProjectInvitation`，在项目访问条和成员管理中提供主动撤回与拒绝操作。
-- 在 Clerk Webhook `user.created` 中增加 `syncPendingWorkspaceInvitations`，新注册用户自动补发未过期历史邀请通知。
+- 在 Better Auth `afterEmailVerification` 中调用 `syncPendingWorkspaceInvitations`，新注册用户自动补发未过期历史邀请通知。
 - 升级通知中心卡片式视觉与语义化分类图标，支持一键直达对应项目或工作区。
 
 ## 30. 基础交互控件缺失导致跨业务样式碎片化与弹窗组件倒挂
@@ -508,3 +508,34 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 - 重构 `ModalDialogButton` 使其底层复用通用 `Button`，消除倒挂同时保持原有弹窗 API 完全向后兼容。
 - 将创建文件、创建项目、创建工作区、链接编辑弹窗以及通知中心、命令面板、侧边栏导航全面平滑迁移至通用原子组件。
 
+## 31. 认证用户与 Personal Workspace 初始化无法共享事务
+
+### 问题
+
+Better Auth 创建用户后需要立即建立 Personal Workspace，但 Drizzle adapter 的用户 after hook 在认证事务提交后执行；业务初始化失败时用户身份可能已经存在，重试注册会遇到已有账户。
+
+### 根因
+
+Better Auth 的数据库 hook 与 KnowMesh 的 `ensureUserWorkspace` 使用不同事务边界，无法把认证表和 Workspace 表作为一次原子提交。
+
+### 解决方案
+
+- 用户创建 hook 立即调用幂等的 `ensureUserWorkspace`，失败时让注册请求暴露可重试错误。
+- Session 创建 hook 再调用同一服务，仅在 Personal Workspace 缺失时补偿。
+- 保留 Personal Workspace owner 部分唯一索引和事务写入，保证并发或重复补偿不会创建第二个个人空间。
+
+## 32. 账户身份删除与业务清理不在同一事务
+
+### 问题
+
+Better Auth 内置删除入口先运行应用 `beforeDelete` 回调，再独立删除身份。业务清理已经提交而后续身份删除失败时，用户仍可登录但其 Workspace、Project 和成员关系已经消失。
+
+### 根因
+
+`beforeDelete` 是认证生命周期回调，不共享 `deleteUserData` 使用的 Drizzle 业务事务，顺序执行不能提供跨步骤原子性。
+
+### 解决方案
+
+- 关闭 Better Auth 内置账户删除入口，仅允许 KnowMesh 账号设置调用应用自有 Server Action。
+- Server Action 先通过 Better Auth 服务端 API 验证当前密码，再在同一个 Drizzle 事务中执行 `deleteUserData` 和 Better Auth `user` 行删除。
+- 身份外键在同一事务内级联删除 Account 与 Session；任一步失败时整体回滚，并以必要测试固定事务边界。
