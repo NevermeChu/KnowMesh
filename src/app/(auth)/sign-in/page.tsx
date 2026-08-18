@@ -1,8 +1,8 @@
-import { SignIn } from '@clerk/nextjs';
-import { auth } from '@clerk/nextjs/server';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AuthenticationPanel } from '@/components/auth/AuthenticationPanel';
+import { EmailPasswordForm } from '@/features/auth/components/EmailPasswordForm';
+import { getCurrentUser } from '@/features/auth/server/CurrentUser';
 import { AppConfig } from '@/utils/AppConfig';
 import { getSafeAuthenticationRedirect } from '@/utils/AuthenticationRedirect';
 
@@ -16,28 +16,15 @@ export default async function SignInPage(props: {
 }) {
   const searchParams = await props.searchParams;
   const returnBackUrl = getSafeAuthenticationRedirect(searchParams.redirect_url);
-  const { userId } = await auth();
+  const user = await getCurrentUser();
 
-  if (userId) {
+  if (user?.emailVerified) {
     redirect(returnBackUrl ?? '/dashboard');
   }
 
   return (
     <AuthenticationPanel title="欢迎回来" description="登录你的团队知识工作空间">
-      <SignIn
-        appearance={{
-          elements: {
-            rootBox: 'w-full',
-            cardBox: 'w-full',
-            card: 'w-full',
-            header: 'hidden',
-          },
-        }}
-        path="/sign-in"
-        fallbackRedirectUrl="/dashboard"
-        forceRedirectUrl={returnBackUrl}
-        signUpForceRedirectUrl={returnBackUrl}
-      />
+      <EmailPasswordForm mode="sign-in" redirectUrl={returnBackUrl ?? '/dashboard'} />
     </AuthenticationPanel>
   );
 }

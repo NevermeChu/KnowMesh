@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createSignInUrl, getSafeAuthenticationRedirect } from './AuthenticationRedirect';
+import {
+  createAuthenticationPageUrl,
+  createRegistrationSuccessRedirect,
+  createSignInUrl,
+  getSafeAuthenticationRedirect,
+} from './AuthenticationRedirect';
 
 describe(createSignInUrl, () => {
   it('preserves protected destination and invitation token', () => {
@@ -35,5 +40,21 @@ describe(getSafeAuthenticationRedirect, () => {
       getSafeAuthenticationRedirect('https://malicious.example/invitations/accept'),
     ).toBeNull();
     expect(getSafeAuthenticationRedirect('//malicious.example/invitations/accept')).toBeNull();
+  });
+});
+
+describe(createAuthenticationPageUrl, () => {
+  it('preserves destination when switching authentication page', () => {
+    expect(
+      createAuthenticationPageUrl('/sign-up', '/invitations/accept?token=invitation-token'),
+    ).toBe('/sign-up?redirect_url=%2Finvitations%2Faccept%3Ftoken%3Dinvitation-token');
+  });
+});
+
+describe(createRegistrationSuccessRedirect, () => {
+  it('marks registration without dropping invitation token', () => {
+    expect(createRegistrationSuccessRedirect('/invitations/accept?token=invitation-token')).toBe(
+      '/invitations/accept?token=invitation-token&registration=success',
+    );
   });
 });

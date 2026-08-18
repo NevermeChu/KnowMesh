@@ -1,9 +1,9 @@
 'use server';
 
 import { randomBytes } from 'node:crypto';
-import { auth, clerkClient, currentUser } from '@clerk/nextjs/server';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorkspaceInvitationEmail';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
@@ -22,6 +22,7 @@ import {
   workspaceInvitationsSchema,
   workspaceMembersSchema,
   workspacesSchema,
+  userSchema,
 } from '@/models/Schema';
 import { getBaseUrl } from '@/utils/Helpers';
 import {
@@ -45,7 +46,8 @@ import { authorizeWorkspace } from './WorkspaceAuthorization';
 const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
-  const { userId } = await auth.protect();
+  const inviter = await requireUser();
+  const userId = inviter.id;
   const invitationInput = inviteWorkspaceMemberSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.members.manage',
@@ -57,19 +59,11 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
     throw new Error('个人空间不支持邀请成员');
   }
 
-  const inviter = await currentUser();
-
-  if (!inviter) {
-    throw new Error('无法读取当前用户');
-  }
-
-  const client = await clerkClient();
-  const existingUsers = await client.users.getUserList({ emailAddress: [invitationInput.email] });
-  const existingUser = existingUsers.data.find((user) =>
-    user.emailAddresses.some(
-      (emailAddress) => emailAddress.emailAddress.toLowerCase() === invitationInput.email,
-    ),
-  );
+  const [existingUser] = await db
+    .select({ id: userSchema.id })
+    .from(userSchema)
+    .where(eq(sql`lower(${userSchema.email})`, invitationInput.email))
+    .limit(1);
 
   if (existingUser) {
     const [membership] = await db
@@ -139,19 +133,9 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
 }
 
 export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitationInput) {
-  const { userId } = await auth.protect();
+  const user = await requireUser();
+  const userId = user.id;
   const invitationInput = acceptWorkspaceInvitationSchema.parse(input);
-  const user = await currentUser();
-
-  if (!user) {
-    throw new Error('无法读取当前用户');
-  }
-
-  const verifiedEmails = new Set(
-    user.emailAddresses
-      .filter((emailAddress) => emailAddress.verification?.status === 'verified')
-      .map((emailAddress) => emailAddress.emailAddress.toLowerCase()),
-  );
   const now = new Date();
   const [invitation] = await db
     .select()
@@ -168,7 +152,7 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
     )
     .limit(1);
 
-  if (!invitation || invitation.expiresAt <= now || !verifiedEmails.has(invitation.email)) {
+  if (!invitation || invitation.expiresAt <= now || user.email.toLowerCase() !== invitation.email) {
     throw new Error('邀请无效、已过期或与当前账号邮箱不匹配');
   }
 
@@ -206,7 +190,7 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
 }
 
 export async function revokeWorkspaceInvitation(input: RevokeWorkspaceInvitationInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const revokeInput = revokeWorkspaceInvitationSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.members.manage',
@@ -241,7 +225,7 @@ export async function revokeWorkspaceInvitation(input: RevokeWorkspaceInvitation
 }
 
 export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const memberInput = workspaceMemberMutationSchema.required({ role: true }).parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.members.manage',
@@ -302,7 +286,7 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
 }
 
 export async function requestWorkspaceEditAccess(input: WorkspaceAccessRequestInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const requestInput = workspaceAccessRequestSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.read',
@@ -339,7 +323,7 @@ export async function requestWorkspaceEditAccess(input: WorkspaceAccessRequestIn
 }
 
 export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReviewInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const reviewInput = workspaceAccessReviewSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.members.manage',
@@ -389,7 +373,7 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
 }
 
 export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const reviewInput = workspaceAccessReviewSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.members.manage',
@@ -430,7 +414,7 @@ export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewI
 }
 
 export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const memberInput = workspaceMemberMutationSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.members.manage',

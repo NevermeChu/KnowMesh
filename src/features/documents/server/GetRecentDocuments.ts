@@ -1,7 +1,7 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq } from 'drizzle-orm';
 import { cache } from 'react';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { db } from '@/libs/DB';
 import {
   documentsSchema,
@@ -27,7 +27,7 @@ export type RecentDocumentItem = {
  * @returns Recently updated documents with their project and workspace context.
  */
 export const getRecentDocuments = cache(async (limit = 8): Promise<RecentDocumentItem[]> => {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
 
   return await db
     .select({

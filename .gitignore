@@ -24,9 +24,6 @@ TECH_STACK_REMOVAL_ORDER.md
 /.next/
 /out/
 
-# clerk
-.clerk
-
 # production
 /build
 

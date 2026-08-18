@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { AuthorizationError } from '@/features/permissions/AuthorizationError';
 import { getWorkspacePermissions } from '@/features/permissions/PermissionPolicy';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
@@ -12,7 +12,7 @@ import { createProjectSchema } from '../CreateProjectSchema';
 import type { CreateProjectInput } from '../CreateProjectSchema';
 
 export async function createProject(input: CreateProjectInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const projectInput = createProjectSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'project.create',

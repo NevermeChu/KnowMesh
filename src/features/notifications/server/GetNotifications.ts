@@ -1,7 +1,7 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
 import { cache } from 'react';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import type { NotificationItem } from '@/features/notifications/Notification';
 import { db } from '@/libs/DB';
 import { notificationsSchema } from '@/models/Schema';
@@ -9,7 +9,7 @@ import { notificationsSchema } from '@/models/Schema';
 const NOTIFICATION_PAGE_SIZE = 50;
 
 export const getNotifications = cache(async (): Promise<NotificationItem[]> => {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
 
   return await db
     .select({
@@ -29,7 +29,7 @@ export const getNotifications = cache(async (): Promise<NotificationItem[]> => {
 });
 
 export const getUnreadNotificationCount = cache(async () => {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const [result] = await db
     .select({ value: count() })
     .from(notificationsSchema)

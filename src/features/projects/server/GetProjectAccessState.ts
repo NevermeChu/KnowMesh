@@ -1,12 +1,12 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { and, eq } from 'drizzle-orm';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { db } from '@/libs/DB';
 import { projectAccessRequestsSchema, projectInvitationsSchema } from '@/models/Schema';
 
 export async function getProjectAccessState(projectId: string) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const authorization = await authorizeProject({
     permission: 'project.structure.read',
     projectId,

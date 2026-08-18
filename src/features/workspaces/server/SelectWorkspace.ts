@@ -1,16 +1,16 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { db } from '@/libs/DB';
 import { workspaceMembersSchema } from '@/models/Schema';
 import { ACTIVE_WORKSPACE_COOKIE } from '../Workspace';
 import { selectWorkspaceSchema } from '../WorkspaceSchema';
 
 export async function selectWorkspace(input: { workspaceId: string }) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const workspaceInput = selectWorkspaceSchema.parse(input);
   const [membership] = await db
     .select({ workspaceId: workspaceMembersSchema.workspaceId })

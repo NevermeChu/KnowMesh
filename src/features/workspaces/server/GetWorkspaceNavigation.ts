@@ -1,6 +1,6 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectPermissionDecision } from '@/features/permissions/PermissionPolicy';
 import { db } from '@/libs/DB';
 import {
@@ -18,7 +18,7 @@ import {
  * @returns Accessible projects with their document navigation items.
  */
 export async function getWorkspaceNavigation(options: { workspaceId: string }) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const projectRows = await db
     .select({
       id: projectsSchema.id,

@@ -1,7 +1,7 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { desc, eq } from 'drizzle-orm';
 import { cache } from 'react';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { db } from '@/libs/DB';
 import {
   projectAccessRequestsSchema,
@@ -25,7 +25,7 @@ export type PendingApprovalItem = {
  * @returns Newest pending requests across owned workspaces and projects.
  */
 export const getPendingApprovals = cache(async (limit = 5): Promise<PendingApprovalItem[]> => {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
 
   const [workspaceRequests, projectRequests] = await Promise.all([
     db

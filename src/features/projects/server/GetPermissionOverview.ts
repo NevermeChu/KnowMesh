@@ -1,8 +1,8 @@
 'use server';
 
-import { auth, clerkClient } from '@clerk/nextjs/server';
 import { and, asc, eq, gt, inArray, isNull } from 'drizzle-orm';
 import * as z from 'zod';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { memberRoles } from '@/features/permissions/Permission';
 import type { MemberRole } from '@/features/permissions/Permission';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
@@ -14,6 +14,7 @@ import type {
   PermissionOverviewInput,
   PermissionRequest,
 } from '@/features/projects/PermissionOverview';
+import { getUserProfiles } from '@/features/users/server/GetUserProfiles';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
 import {
@@ -35,7 +36,7 @@ const roleOrder = new Map(memberRoles.map((role, index) => [role, index]));
 function mapPermissionMembers(options: {
   currentUserId: string;
   memberships: { role: MemberRole; userId: string }[];
-  profiles: Awaited<ReturnType<typeof getClerkProfiles>>;
+  profiles: Awaited<ReturnType<typeof getUserProfiles>>;
 }) {
   return options.memberships
     .map((membership): PermissionMember => {
@@ -57,40 +58,6 @@ function mapPermissionMembers(options: {
 
       return roleDifference || left.displayName.localeCompare(right.displayName, 'zh-CN');
     });
-}
-
-async function getClerkProfiles(userIds: string[]) {
-  const client = await clerkClient();
-  const batches = Array.from({ length: Math.ceil(userIds.length / 100) }, (_, index) =>
-    userIds.slice(index * 100, (index + 1) * 100),
-  );
-  const responses = [];
-
-  for (const userId of batches) {
-    responses.push(await client.users.getUserList({ limit: userId.length, userId }));
-  }
-
-  return new Map(
-    responses
-      .flatMap((response) => response.data)
-      .map((user) => {
-        const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
-        const primaryEmail = user.emailAddresses.find(
-          (emailAddress) => emailAddress.id === user.primaryEmailAddressId,
-        )?.emailAddress;
-        const displayName =
-          fullName.length > 0 ? fullName : (user.username ?? primaryEmail ?? user.id);
-
-        return [
-          user.id,
-          {
-            displayName,
-            email: primaryEmail ?? null,
-            imageUrl: user.imageUrl ?? null,
-          },
-        ] as const;
-      }),
-  );
 }
 
 async function getPermissionGroups(options: {
@@ -115,7 +82,7 @@ async function getPermissionGroups(options: {
       ),
     )
     .orderBy(asc(projectMembersSchema.createdAt));
-  const profiles = await getClerkProfiles([
+  const profiles = await getUserProfiles([
     ...new Set(memberships.map((membership) => membership.userId)),
   ]);
   const membershipsByProject = Map.groupBy(memberships, (membership) => membership.projectId);
@@ -148,7 +115,7 @@ async function getWorkspacePermissionGroup(options: {
     .from(workspaceMembersSchema)
     .where(eq(workspaceMembersSchema.workspaceId, options.workspaceId))
     .orderBy(asc(workspaceMembersSchema.createdAt));
-  const profiles = await getClerkProfiles(memberships.map((membership) => membership.userId));
+  const profiles = await getUserProfiles(memberships.map((membership) => membership.userId));
 
   return {
     id: options.groupId,
@@ -181,7 +148,7 @@ async function getProjectRequests(options: { currentUserId: string; projectId: s
     .from(projectAccessRequestsSchema)
     .where(eq(projectAccessRequestsSchema.projectId, options.projectId))
     .orderBy(asc(projectAccessRequestsSchema.createdAt));
-  const profiles = await getClerkProfiles(requests.map((request) => request.userId));
+  const profiles = await getUserProfiles(requests.map((request) => request.userId));
 
   return requests.map((request): PermissionRequest => {
     const profile = profiles.get(request.userId);
@@ -222,7 +189,7 @@ async function getWorkspaceRequests(workspaceId: string) {
     .from(workspaceAccessRequestsSchema)
     .where(eq(workspaceAccessRequestsSchema.workspaceId, workspaceId))
     .orderBy(asc(workspaceAccessRequestsSchema.createdAt));
-  const profiles = await getClerkProfiles(requests.map((request) => request.userId));
+  const profiles = await getUserProfiles(requests.map((request) => request.userId));
 
   return requests.map((request): PermissionRequest => {
     const profile = profiles.get(request.userId);
@@ -243,7 +210,7 @@ async function getWorkspaceRequests(workspaceId: string) {
  * @throws When the current member cannot access the requested resource.
  */
 export async function getPermissionOverview(input: PermissionOverviewInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const permissionInput = permissionOverviewInputSchema.parse(input);
 
   if (permissionInput.scope === 'workspace') {

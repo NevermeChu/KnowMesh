@@ -1,7 +1,7 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { db } from '@/libs/DB';
 import {
   documentsSchema,
@@ -27,7 +27,7 @@ export type SearchWorkspaceOptions = {
 export async function searchWorkspaceContent(
   options: SearchWorkspaceOptions,
 ): Promise<SearchResultItem[]> {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const trimmedQuery = options.query.trim();
 
   if (!trimmedQuery) {

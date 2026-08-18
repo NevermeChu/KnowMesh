@@ -14,7 +14,7 @@ const baseConfig: NextConfig = {
     browserToTerminal: process.env.BROWSER_TO_TERMINAL_DISABLED !== 'true',
   },
   experimental: {
-    optimizePackageImports: ['lucide-react', '@clerk/localizations'],
+    optimizePackageImports: ['lucide-react'],
   },
   outputFileTracingIncludes: {
     '/': ['./migrations/**/*'],

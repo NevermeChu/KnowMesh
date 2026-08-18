@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import { db } from '@/libs/DB';
 import { workspacesSchema } from '@/models/Schema';
@@ -10,7 +10,7 @@ import { updateWorkspaceSchema } from '../WorkspaceSchema';
 import type { UpdateWorkspaceInput } from '../WorkspaceSchema';
 
 export async function updateWorkspace(input: UpdateWorkspaceInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const workspaceInput = updateWorkspaceSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.update',

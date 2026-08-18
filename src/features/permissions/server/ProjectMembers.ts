@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { db } from '@/libs/DB';
 import {
@@ -27,7 +27,7 @@ import type {
 import { authorizeProject } from './ProjectAuthorization';
 
 async function authorizeProjectMemberMutation(input: ProjectMemberMutationInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const memberInput = projectMemberMutationSchema.parse(input);
   const authorization = await authorizeProject({
     permission: 'project.members.manage',
@@ -62,7 +62,7 @@ async function authorizeProjectMemberMutation(input: ProjectMemberMutationInput)
 }
 
 export async function inviteProjectMember(input: ProjectInvitationInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const invitationInput = projectInvitationSchema.parse(input);
   const { authorization, memberInput } = await authorizeProjectMemberMutation({
     ...invitationInput,
@@ -110,7 +110,7 @@ export async function inviteProjectMember(input: ProjectInvitationInput) {
 }
 
 export async function acceptProjectInvitation(input: { projectId: string }) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const invitationInput = projectAccessRequestSchema.pick({ projectId: true }).parse(input);
 
   await db.transaction(async (transaction) => {
@@ -187,7 +187,7 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
 }
 
 export async function requestProjectAccess(input: ProjectAccessRequestInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const requestInput = projectAccessRequestSchema.parse(input);
   const authorization = await authorizeProject({
     permission: 'project.structure.read',
@@ -470,7 +470,7 @@ export async function revokeProjectInvitation(input: ProjectInvitationInput) {
 }
 
 export async function rejectProjectInvitation(input: { projectId: string }) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const invitationInput = projectAccessRequestSchema.pick({ projectId: true }).parse(input);
 
   await db

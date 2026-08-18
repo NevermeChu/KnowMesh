@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { removeWorkspaceForUser } from '@/features/permissions/server/ResourceRemoval';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import { db } from '@/libs/DB';
@@ -11,7 +11,7 @@ import { deleteWorkspaceSchema } from '../WorkspaceSchema';
 import type { DeleteWorkspaceInput } from '../WorkspaceSchema';
 
 export async function deleteOrLeaveWorkspace(input: DeleteWorkspaceInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const workspaceInput = deleteWorkspaceSchema.parse(input);
   const authorization = await authorizeWorkspace({
     permission: 'workspace.read',

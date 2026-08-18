@@ -1,15 +1,15 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { asc, eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getWorkspacePermissions } from '@/features/permissions/PermissionPolicy';
 import { db } from '@/libs/DB';
 import { workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
 import { ACTIVE_WORKSPACE_COOKIE } from '../Workspace';
 
 export const getWorkspaceContext = cache(async () => {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const workspaces = await db
     .select({
       id: workspacesSchema.id,

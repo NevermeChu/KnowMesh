@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { notificationMutationSchema } from '@/features/notifications/NotificationSchema';
 import type { NotificationMutationInput } from '@/features/notifications/NotificationSchema';
 import { db } from '@/libs/DB';
@@ -14,7 +14,7 @@ function revalidateNotifications() {
 }
 
 export async function markNotificationRead(input: NotificationMutationInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const notificationInput = notificationMutationSchema.parse(input);
   const [notification] = await db
     .update(notificationsSchema)
@@ -36,7 +36,7 @@ export async function markNotificationRead(input: NotificationMutationInput) {
 }
 
 export async function markAllNotificationsRead() {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   await db
     .update(notificationsSchema)
     .set({ readAt: new Date() })

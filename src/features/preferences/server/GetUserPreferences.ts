@@ -1,7 +1,7 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 import { cache } from 'react';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { contentWidthPercentages, DEFAULT_CONTENT_WIDTH } from '@/features/preferences/Preferences';
 import type { UserPreferences } from '@/features/preferences/Preferences';
 import { db } from '@/libs/DB';
@@ -29,7 +29,7 @@ function resolveContentWidth(value: number | null | undefined) {
  * @returns The user's current preferences.
  */
 export const getUserPreferences = cache(async (): Promise<UserPreferences> => {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
 
   const [preferences] = await db
     .select({

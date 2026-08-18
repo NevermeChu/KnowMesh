@@ -2,7 +2,7 @@
  * Builds the sign-in URL while preserving the protected destination.
  *
  * @param returnBackUrl - Protected URL requested by the unauthenticated user.
- * @returns The local sign-in URL with Clerk's redirect parameter.
+ * @returns The local sign-in URL with the protected redirect parameter.
  */
 export function createSignInUrl(returnBackUrl: URL) {
   const signInUrl = new URL('/sign-in', returnBackUrl);
@@ -35,4 +35,33 @@ export function getSafeAuthenticationRedirect(value: string | string[] | undefin
   }
 
   return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+}
+
+/**
+ * Preserves the local destination when switching between sign-in and sign-up.
+ *
+ * @param page - Target authentication page.
+ * @param redirectUrl - Previously validated local destination.
+ * @returns Authentication URL carrying the destination.
+ */
+export function createAuthenticationPageUrl(page: '/sign-in' | '/sign-up', redirectUrl: string) {
+  const safeRedirectUrl = getSafeAuthenticationRedirect(redirectUrl) ?? '/dashboard';
+  const authenticationUrl = new URL(page, 'https://knowmesh.local');
+  authenticationUrl.searchParams.set('redirect_url', safeRedirectUrl);
+
+  return `${authenticationUrl.pathname}${authenticationUrl.search}`;
+}
+
+/**
+ * Marks a verified registration callback while preserving its local destination.
+ *
+ * @param redirectUrl - Previously validated local destination.
+ * @returns Local callback URL with a registration success marker.
+ */
+export function createRegistrationSuccessRedirect(redirectUrl: string) {
+  const safeRedirectUrl = getSafeAuthenticationRedirect(redirectUrl) ?? '/dashboard';
+  const callbackUrl = new URL(safeRedirectUrl, 'https://knowmesh.local');
+  callbackUrl.searchParams.set('registration', 'success');
+
+  return `${callbackUrl.pathname}${callbackUrl.search}${callbackUrl.hash}`;
 }

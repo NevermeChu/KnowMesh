@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { CONTENT_WIDTH_COOKIE } from '@/features/preferences/Preferences';
 import type { UpdateContentWidthInput } from '@/features/preferences/PreferencesSchema';
 import { updateContentWidthSchema } from '@/features/preferences/PreferencesSchema';
@@ -18,7 +18,7 @@ const CONTENT_WIDTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
  * @param input - Content width percentage chosen from the content toolbar.
  */
 export async function updateContentWidth(input: UpdateContentWidthInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const { width } = updateContentWidthSchema.parse(input);
 
   await db

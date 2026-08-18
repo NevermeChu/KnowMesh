@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { db } from '@/libs/DB';
 import { documentsSchema } from '@/models/Schema';
@@ -10,7 +10,7 @@ import { deleteDocumentSchema } from '../DocumentSchema';
 import type { DeleteDocumentInput } from '../DocumentSchema';
 
 export async function deleteDocument(input: DeleteDocumentInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const documentInput = deleteDocumentSchema.parse(input);
   const authorization = await authorizeDocument({
     documentId: documentInput.documentId,

@@ -1,5 +1,6 @@
 'use client';
 
+import { CircleCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { ModalDialogButton } from '@/components/ui/ModalDialog';
@@ -32,6 +33,7 @@ const invitationStatusMessages = {
 
 export function AcceptWorkspaceInvitation(props: {
   data: WorkspaceInvitationPageData;
+  registrationSucceeded: boolean;
   token: string;
 }) {
   const router = useRouter();
@@ -62,6 +64,15 @@ export function AcceptWorkspaceInvitation(props: {
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl items-center py-12">
       <section className="w-full overflow-hidden rounded-2xl border border-line bg-card shadow-card">
+        {props.registrationSucceeded && (
+          <div className="flex items-start gap-3 border-b border-accent/15 bg-accent-soft px-6 py-4 text-sm sm:px-10">
+            <CircleCheck className="mt-0.5 size-5 shrink-0 text-accent" strokeWidth={1.8} />
+            <div>
+              <p className="font-semibold text-ink">注册成功，邮箱已验证</p>
+              <p className="mt-0.5 leading-5 text-ink-muted">你已自动登录，现在可以接受邀请。</p>
+            </div>
+          </div>
+        )}
         <header className="px-6 pt-8 text-center sm:px-10">
           <div className="mx-auto grid size-11 place-items-center rounded-xl bg-ink text-lg font-semibold text-canvas">
             K

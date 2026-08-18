@@ -1,6 +1,6 @@
 import 'server-only';
-import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq } from 'drizzle-orm';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
@@ -12,7 +12,7 @@ export async function getProjectDocuments(options: {
   workspaceId: string;
   workspaceKind: WorkspaceKind;
 }) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const authorization = await getProjectAuthorization({ projectId: options.projectId, userId });
 
   if (

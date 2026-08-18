@@ -20,8 +20,8 @@ jobs:
       - name: Build standalone application
         run: npm run build-local
         env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_CLERK_PUBLISHABLE_KEY }}
 
       - name: Prepare production artifact
         run: |

@@ -1,7 +1,8 @@
 import 'server-only';
-import { clerkClient, currentUser } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
+import { getUserProfiles } from '@/features/users/server/GetUserProfiles';
 import type { WorkspaceInvitationPageData } from '@/features/workspaces/WorkspaceInvitation';
 import {
   formatWorkspaceInvitationExpiration,
@@ -20,11 +21,7 @@ import { workspaceInvitationsSchema, workspacesSchema } from '@/models/Schema';
 export async function getWorkspaceInvitation(options: {
   token: string;
 }): Promise<WorkspaceInvitationPageData> {
-  const user = await currentUser();
-
-  if (!user) {
-    return { status: 'invalid' };
-  }
+  const user = await requireUser();
 
   const [invitation] = await db
     .select({
@@ -44,13 +41,7 @@ export async function getWorkspaceInvitation(options: {
     return { status: 'invalid' };
   }
 
-  const verifiedEmails = new Set(
-    user.emailAddresses
-      .filter((emailAddress) => emailAddress.verification?.status === 'verified')
-      .map((emailAddress) => emailAddress.emailAddress.toLowerCase()),
-  );
-
-  if (!verifiedEmails.has(invitation.email)) {
+  if (user.email.toLowerCase() !== invitation.email) {
     return { status: 'email-mismatch' };
   }
 
@@ -66,15 +57,16 @@ export async function getWorkspaceInvitation(options: {
     return { status: 'expired' };
   }
 
-  const client = await clerkClient();
-  const inviters = await client.users.getUserList({ userId: [invitation.invitedById] });
-  const [inviter] = inviters.data;
+  const inviterProfiles = await getUserProfiles([invitation.invitedById]);
+  const inviter = inviterProfiles.get(invitation.invitedById);
 
   return {
     invitation: {
       expiresAtLabel: formatWorkspaceInvitationExpiration(invitation.expiresAt),
       inviteeEmail: invitation.email,
-      inviterName: inviter ? getWorkspaceInvitationInviterName(inviter) : 'KnowMesh 成员',
+      inviterName: inviter
+        ? getWorkspaceInvitationInviterName({ email: inviter.email, name: inviter.displayName })
+        : 'KnowMesh 成员',
       roleLabel: WORKSPACE_INVITATION_ROLE_LABEL,
       workspaceName: invitation.workspaceName,
     },

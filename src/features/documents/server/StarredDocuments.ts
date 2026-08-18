@@ -1,9 +1,9 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, desc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import * as z from 'zod';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { db } from '@/libs/DB';
 import {
@@ -34,7 +34,7 @@ const documentIdSchema = z.object({
  * @returns Starred documents sorted by star timestamp descending.
  */
 export async function getStarredDocuments(): Promise<StarredDocumentItem[]> {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
 
   return await db
     .select({
@@ -68,7 +68,7 @@ export async function getStarredDocuments(): Promise<StarredDocumentItem[]> {
  * @returns True if starred, false otherwise.
  */
 export async function getIsDocumentStarred(input: { documentId: string }): Promise<boolean> {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const { documentId } = documentIdSchema.parse(input);
 
   const [row] = await db
@@ -94,7 +94,7 @@ export async function getIsDocumentStarred(input: { documentId: string }): Promi
 export async function toggleStarredDocument(input: {
   documentId: string;
 }): Promise<{ isStarred: boolean }> {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const { documentId } = documentIdSchema.parse(input);
 
   await authorizeDocument({

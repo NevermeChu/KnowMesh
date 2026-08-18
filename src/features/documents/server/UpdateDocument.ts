@@ -1,7 +1,7 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { and, eq } from 'drizzle-orm';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { db } from '@/libs/DB';
 import { documentsSchema } from '@/models/Schema';
@@ -9,7 +9,7 @@ import { updateDocumentSchema } from '../DocumentSchema';
 import type { UpdateDocumentInput } from '../DocumentSchema';
 
 export async function updateDocument(input: UpdateDocumentInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const documentInput = updateDocumentSchema.parse(input);
   const authorization = await authorizeDocument({
     documentId: documentInput.documentId,

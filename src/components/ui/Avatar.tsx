@@ -29,7 +29,7 @@ export function Avatar(props: {
       className={`relative inline-grid shrink-0 place-items-center overflow-hidden rounded-full bg-surface-strong font-semibold text-ink-secondary select-none ${sizeClassName} ${props.className ?? ''}`}
     >
       {props.src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- User avatars can be dynamic third-party or Clerk URLs
+        // eslint-disable-next-line @next/next/no-img-element -- User avatars can use dynamic third-party URLs.
         <img alt={props.name} className="size-full object-cover" src={props.src} />
       ) : (
         <span aria-hidden="true">{initial}</span>

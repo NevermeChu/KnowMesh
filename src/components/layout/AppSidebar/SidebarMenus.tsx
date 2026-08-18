@@ -1,6 +1,5 @@
 'use client';
 
-import { SignOutButton } from '@clerk/nextjs';
 import {
   Bell,
   Check,
@@ -15,6 +14,7 @@ import {
 import Link from 'next/link';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
+import { SignOutButton } from '@/features/auth/components/SignOutButton';
 import { ThemeToggle } from '@/features/preferences/components/ThemeToggle';
 import type { Workspace } from '@/features/workspaces/Workspace';
 import { AppConfig } from '@/utils/AppConfig';
@@ -205,11 +205,9 @@ export function SettingsMenu(props: {
           <span>账号设置</span>
         </Link>
         <div className="my-0.5 border-t border-line" />
-        <SignOutButton>
-          <button className={popupMenuItemClassName} type="button">
-            <LogOut aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-            <span>退出登录</span>
-          </button>
+        <SignOutButton className={popupMenuItemClassName}>
+          <LogOut aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+          <span>退出登录</span>
         </SignOutButton>
       </PopupMenu>
     </div>

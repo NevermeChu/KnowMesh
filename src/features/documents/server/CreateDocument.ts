@@ -1,7 +1,7 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { db } from '@/libs/DB';
 import { documentsSchema } from '@/models/Schema';
@@ -9,7 +9,7 @@ import { createDocumentSchema } from '../DocumentSchema';
 import type { CreateDocumentInput } from '../DocumentSchema';
 
 export async function createDocument(input: CreateDocumentInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const documentInput = createDocumentSchema.parse(input);
   const authorization = await authorizeProject({
     permission: 'document.create',

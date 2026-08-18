@@ -33,23 +33,13 @@ export function formatWorkspaceInvitationExpiration(expiresAt: Date) {
 }
 
 /**
- * Resolves a stable invitation-facing name from the available Clerk profile fields.
+ * Resolves a stable invitation-facing name from the local user profile.
  *
- * @param user - Minimal Clerk profile fields needed for display.
- * @returns The preferred full name, primary email, or product fallback.
+ * @param user - Minimal Better Auth profile fields needed for display.
+ * @returns The preferred name, email, or product fallback.
  */
-export function getWorkspaceInvitationInviterName(user: {
-  firstName: string | null;
-  lastName: string | null;
-  primaryEmailAddress: { emailAddress: string } | null;
-}) {
-  const fullName = [user.firstName, user.lastName]
-    .filter((name): name is string => name !== null)
-    .join(' ');
+export function getWorkspaceInvitationInviterName(user: { email: string; name: string }) {
+  const name = user.name.trim();
 
-  if (fullName) {
-    return fullName;
-  }
-
-  return user.primaryEmailAddress?.emailAddress ?? 'KnowMesh 成员';
+  return name || user.email || 'KnowMesh 成员';
 }

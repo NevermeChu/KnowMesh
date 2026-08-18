@@ -40,8 +40,8 @@ jobs:
       - name: Build Next.js
         run: npm run build-local
         env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           NEXT_PUBLIC_APP_URL: http://localhost:3008
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
       - if: matrix.node-version == '24.x' && success()
         name: Cache Next.js build output
@@ -50,7 +50,7 @@ jobs:
           path: |
             .next
             next-env.d.ts
-          key: nextjs-build-${{ matrix.node-version }}-${{ github.sha }}-${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          key: nextjs-build-${{ matrix.node-version }}-${{ github.sha }}
 
   static:
     strategy:
@@ -110,7 +110,6 @@ jobs:
         uses: ./.github/actions/setup-project
         with:
           node-version: ${{ matrix.node-version }}
-          nextjs-build-cache-suffix: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           restore-nextjs-cache: true
 
       - name: Run E2E tests
@@ -118,8 +117,8 @@ jobs:
         with:
           args: sh -c "HOME=/root npm run test:e2e" # Set HOME to /root to avoid Playwright error with Firebox
         env:
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          NEXT_PUBLIC_APP_URL: http://localhost:3008
 
       - name: Upload test results
         uses: actions/upload-artifact@v7
@@ -166,8 +165,8 @@ jobs:
       - name: Build standalone application
         run: npm run build-local
         env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_CLERK_PUBLISHABLE_KEY }}
 
       - name: Prepare production release
         run: |

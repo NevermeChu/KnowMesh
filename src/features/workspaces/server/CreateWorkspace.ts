@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { db } from '@/libs/DB';
 import { workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
 import { ACTIVE_WORKSPACE_COOKIE } from '../Workspace';
@@ -10,7 +10,7 @@ import { createWorkspaceSchema } from '../WorkspaceSchema';
 import type { CreateWorkspaceInput } from '../WorkspaceSchema';
 
 export async function createWorkspace(input: CreateWorkspaceInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const workspaceInput = createWorkspaceSchema.parse(input);
   const workspace = await db.transaction(async (transaction) => {
     const [createdWorkspace] = await transaction

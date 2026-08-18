@@ -1,8 +1,8 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { db } from '@/libs/DB';
 import { projectsSchema } from '@/models/Schema';
@@ -10,7 +10,7 @@ import { updateProjectSchema } from '../ProjectMutationSchema';
 import type { UpdateProjectInput } from '../ProjectMutationSchema';
 
 export async function updateProject(input: UpdateProjectInput) {
-  const { userId } = await auth.protect();
+  const { id: userId } = await requireUser();
   const projectInput = updateProjectSchema.parse(input);
   const authorization = await authorizeProject({
     permission: 'project.update',

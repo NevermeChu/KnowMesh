@@ -7,8 +7,8 @@ import { workspaceInvitationsSchema, workspacesSchema } from '@/models/Schema';
  * Synchronizes pending workspace invitations for a newly registered user
  * and generates in-app notifications for active invitations matching their verified emails.
  *
- * @param userId - The Clerk user identifier of the newly registered user.
- * @param emailAddresses - The list of email addresses associated with the user.
+ * @param userId - The Better Auth user identifier whose email was verified.
+ * @param emailAddresses - The verified account email addresses.
  */
 export async function syncPendingWorkspaceInvitations(userId: string, emailAddresses: string[]) {
   if (emailAddresses.length === 0) {

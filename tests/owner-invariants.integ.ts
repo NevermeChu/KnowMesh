@@ -56,6 +56,11 @@ describe('database membership and owner invariants', () => {
     await executeMigration('0012_add-user-preferences.sql');
     await executeMigration('0013_add-content-width-preference.sql');
     await executeMigration('0014_flawless_lilandra.sql');
+    await executeMigration('0015_neat_earthquake.sql');
+    await executeMigration('0016_perpetual_korath.sql');
+    await executeMigration('0017_late_dakota_north.sql');
+    await executeMigration('0018_cloudy_the_spike.sql');
+    await executeMigration('0019_add-better-auth.sql');
   });
 
   afterAll(async () => {

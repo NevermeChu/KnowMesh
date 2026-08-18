@@ -15,6 +15,13 @@ export async function sendWorkspaceInvitationEmail(options: {
   invitation: WorkspaceInvitationDisplayData;
 }) {
   if (!Env.RESEND_API_KEY || !Env.RESEND_FROM_EMAIL) {
+    if (Env.NODE_ENV === 'development' || Env.NODE_ENV === 'test') {
+      console.info(
+        `[Workspace Invitation Email] To: ${options.invitation.inviteeEmail} | URL: ${options.acceptUrl}`,
+      );
+      return { emailId: `dev-invitation-${Date.now()}` };
+    }
+
     throw new Error('Resend 邮件配置不完整');
   }
 

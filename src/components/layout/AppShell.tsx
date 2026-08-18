@@ -72,7 +72,7 @@ export function AppShell(props: {
 
   return (
     <DocumentEditorToolbarProvider>
-      <div className="min-h-dvh bg-canvas text-ink antialiased" style={shellStyle}>
+      <div className="relative min-h-dvh bg-transparent text-ink antialiased" style={shellStyle}>
         <AppSidebar
           activeWorkspace={props.activeWorkspace}
           documents={props.documents}

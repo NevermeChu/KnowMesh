@@ -23,7 +23,7 @@ const capabilities: { icon: LucideIcon; title: string; description: string }[] =
 ];
 
 /**
- * Wraps Clerk sign-in and sign-up pages in a branded split-screen shell.
+ * Wraps authentication pages in a branded split-screen shell.
  *
  * @param props - Layout children rendered in the authentication pane.
  * @returns The authentication layout.
@@ -34,7 +34,7 @@ export default function AuthLayout(props: { children: React.ReactNode }) {
       <section className="relative isolate flex min-w-0 flex-col overflow-hidden px-5 py-4 sm:px-8 lg:h-full lg:gap-8 lg:px-10 lg:py-8 xl:px-14 xl:py-10">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-linear-to-br from-accent-soft via-canvas to-warning-soft opacity-50 blur-2xl"
+          className="pointer-events-none absolute -top-[10%] -right-[8%] -left-[8%] -z-10 h-[70%] rounded-2xl bg-linear-to-br from-[#dbeeff] via-white to-[#f1e9dc] blur-[48px] dark:from-accent-soft dark:via-canvas dark:to-warning-soft"
         />
 
         <div className="flex items-center gap-3 font-semibold tracking-tight text-ink">

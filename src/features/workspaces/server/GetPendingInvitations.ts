@@ -1,7 +1,7 @@
 import 'server-only';
-import { auth, currentUser } from '@clerk/nextjs/server';
-import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull } from 'drizzle-orm';
 import { cache } from 'react';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { db } from '@/libs/DB';
 import { workspaceInvitationsSchema, workspacesSchema } from '@/models/Schema';
 
@@ -18,20 +18,7 @@ export type PendingInvitationItem = {
  * @returns Pending invitations with their workspace names.
  */
 export const getPendingInvitations = cache(async (limit = 5): Promise<PendingInvitationItem[]> => {
-  await auth.protect();
-  const user = await currentUser();
-
-  if (!user) {
-    return [];
-  }
-
-  const verifiedEmails = user.emailAddresses
-    .filter((emailAddress) => emailAddress.verification?.status === 'verified')
-    .map((emailAddress) => emailAddress.emailAddress.toLowerCase());
-
-  if (verifiedEmails.length === 0) {
-    return [];
-  }
+  const user = await requireUser();
 
   return await db
     .select({
@@ -42,7 +29,7 @@ export const getPendingInvitations = cache(async (limit = 5): Promise<PendingInv
     .innerJoin(workspacesSchema, eq(workspacesSchema.id, workspaceInvitationsSchema.workspaceId))
     .where(
       and(
-        inArray(sql`lower(${workspaceInvitationsSchema.email})`, verifiedEmails),
+        eq(workspaceInvitationsSchema.email, user.email.toLowerCase()),
         isNull(workspaceInvitationsSchema.acceptedById),
         isNull(workspaceInvitationsSchema.revokedAt),
         gt(workspaceInvitationsSchema.expiresAt, new Date()),

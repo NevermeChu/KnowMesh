@@ -1,9 +1,6 @@
-import { zhCN } from '@clerk/localizations';
-import { ClerkProvider } from '@clerk/nextjs';
 import type { Metadata, Viewport } from 'next';
 import '@/styles/global.css';
 import { cookies } from 'next/headers';
-import { GlobalContextMenuBoundary } from '@/components/layout/GlobalContextMenuBoundary';
 import { ToastProvider } from '@/components/ui/Toast';
 import {
   CONTENT_WIDTH_COOKIE,
@@ -69,45 +66,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <ClerkProvider
-          localization={zhCN}
-          appearance={{
-            // Ensure Clerk is compatible with Tailwind CSS v4 and theme embedded
-            // auth components to match the KnowMesh palette.
-            cssLayerName: 'clerk',
-            variables: {
-              colorPrimary: 'var(--accent)',
-              colorBackground: 'var(--card)',
-              colorForeground: 'var(--ink)',
-              colorMutedForeground: 'var(--ink-muted)',
-              colorInput: 'var(--card)',
-              colorInputForeground: 'var(--ink)',
-              colorRing: 'var(--accent)',
-              colorDanger: 'var(--danger)',
-              fontFamily:
-                'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif',
-              borderRadius: '0.5rem',
-            },
-            elements: {
-              card: 'border border-line rounded-xl shadow-overlay',
-              formButtonPrimary: 'rounded-lg font-semibold hover:bg-accent-strong',
-              formFieldInput: 'rounded-lg',
-              socialButtonsButton: 'rounded-lg border-line bg-card',
-              headerTitle: 'text-ink',
-              headerSubtitle: 'text-ink-muted',
-              footerActionLink: 'text-accent hover:text-accent-strong',
-            },
-          }}
-          signInUrl="/sign-in"
-          signUpUrl="/sign-up"
-          signInFallbackRedirectUrl="/"
-          signUpFallbackRedirectUrl="/"
-          afterSignOutUrl="/"
-        >
-          <ToastProvider>
-            <GlobalContextMenuBoundary>{props.children}</GlobalContextMenuBoundary>
-          </ToastProvider>
-        </ClerkProvider>
+        <ToastProvider>{props.children}</ToastProvider>
       </body>
     </html>
   );
