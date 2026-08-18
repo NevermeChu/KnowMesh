@@ -21,9 +21,12 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { OPEN_COMMAND_PALETTE_EVENT, toggleZenMode } from '@/components/layout/ShellEvents';
+import {
+  OPEN_COMMAND_PALETTE_EVENT,
+  openShortcutsHelp,
+  toggleZenMode,
+} from '@/components/layout/ShellEvents';
 import { Kbd } from '@/components/ui/Kbd';
-import { openShortcutsHelp } from '@/components/ui/ShortcutsHelpDialog';
 import { applyThemePreference } from '@/features/preferences/components/ApplyThemePreference';
 import { isUserThemePreference } from '@/features/preferences/Preferences';
 import { updateThemePreference } from '@/features/preferences/server/UpdateThemePreference';

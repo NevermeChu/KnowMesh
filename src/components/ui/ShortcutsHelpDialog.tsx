@@ -3,16 +3,10 @@
 import { Command, Keyboard, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { OPEN_SHORTCUTS_HELP_EVENT, openShortcutsHelp } from '@/components/layout/ShellEvents';
 import { Kbd } from './Kbd';
 
-export const OPEN_SHORTCUTS_HELP_EVENT = 'knowmesh:open-shortcuts-help';
-
-/** Dispatches a custom event to open the keyboard shortcuts dialog. */
-export function openShortcutsHelp() {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS_HELP_EVENT));
-  }
-}
+export { OPEN_SHORTCUTS_HELP_EVENT, openShortcutsHelp };
 
 type ShortcutRow = {
   description: string;
