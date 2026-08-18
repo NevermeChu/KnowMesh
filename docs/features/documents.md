@@ -6,9 +6,24 @@
 
 ## 领域模型
 
-文档属于一个项目，标题与内容分别存储。`documents.content` 的权威格式是版本化的 ProseMirror JSON，当前版本为 `1`；Markdown 不是持久化格式，未来如需支持，应作为导入或导出转换。
+文档属于一个项目，标题与内容分别存储。`documents.content` 的权威格式是版本化的 ProseMirror JSON，当前版本为 `1`；Markdown 不是持久化格式。当前支持从 ProseMirror JSON 转换后导出 Markdown，尚未实现 Markdown 导入。
 
 当前内容根节点必须为 `doc`。应用在 Server Action 写入前验证递归节点、marks、attrs 和文本均为可序列化 JSON，并使用与编辑器相同的 Tiptap Starter Kit Schema 拒绝未知或嵌套关系无效的节点。
+
+## 当前编辑器 Schema
+
+`documentExtensions` 是客户端编辑器和服务端内容校验共同使用的 Schema 来源。除 Tiptap Starter Kit 节点和 marks 外，当前还持久化以下自定义节点：
+
+| 节点 | 内容与属性 |
+| --- | --- |
+| `callout` | 可包含多个 block；`attrs.type` 为 `info`、`note`、`success` 或 `warning` |
+| `details` | 内容顺序为一个 `detailsSummary`，后接零个或多个 `detailsContent` |
+| `detailsSummary` | 可包含行内内容 |
+| `detailsContent` | 可包含多个 block |
+| `taskList` | 包含一个或多个 `taskItem` |
+| `taskItem` | `attrs.checked` 保存复选状态，内容以 paragraph 开头并可继续包含 block |
+
+`DocumentSchema` 使用同一扩展集合从 JSON 构建 ProseMirror Node 并执行结构检查，因此未知节点、非法嵌套或无效属性不能通过 `updateDocument` 保存。新增、删除或改变以上节点语义时，必须同时评估旧 JSON 读取、`content_schema_version` 和 Markdown 导出兼容性。
 
 ## 访问控制
 
@@ -39,6 +54,10 @@
 
 当前是单人编辑模型，没有版本历史、冲突检测、离线队列、Yjs 状态或实时连接。多个浏览器同时编辑同一文档时仍是后写覆盖；在引入多人协作前不得把当前自动保存描述为协同编辑。
 
+## 导出
+
+编辑区提供 Markdown 文件下载、Markdown 正文复制和浏览器打印。Markdown 由当前 ProseMirror JSON 在客户端转换，不改变数据库中的权威内容。任务清单转换为 GitHub 风格复选列表；callout 转换为 Markdown alert；折叠区块保留为 `<details>`/`<summary>` HTML。其他复杂节点或 marks 的导出可能有损。当前没有 Markdown 导入流程。
+
 ## 收藏与全站搜索
 
 - **文档收藏**：用户可在文档编辑区顶部点击星标切换收藏状态。持久化于 `starred_documents`，在 `/starred` 页面列出所有当前用户已收藏且仍具有 `document.read` 权限的文档。文档被删除时外键级联清理收藏记录。
@@ -61,11 +80,16 @@
 - `src/features/documents/Document.ts`
 - `src/features/documents/DocumentSchema.ts`
 - `src/features/documents/DocumentExtensions.ts`
+- `src/features/documents/extensions/CalloutExtension.ts`
+- `src/features/documents/extensions/DetailsExtension.ts`
+- `src/features/documents/extensions/TaskListExtension.ts`
 - `src/features/documents/components/ProjectDocumentsPage.tsx`
 - `src/features/documents/components/CreateDocumentDialog.tsx`
 - `src/features/documents/components/DocumentWorkspace.tsx`
 - `src/features/documents/components/DocumentEditor.tsx`
 - `src/features/documents/components/DocumentEditorToolbar.tsx`
+- `src/features/documents/components/DocumentExportMenu.tsx`
+- `src/features/documents/DocumentMarkdown.ts`
 - `src/components/layout/GlobalContextMenuBoundary.tsx`
 - `src/components/ui/ContextMenu.tsx`
 - `src/components/ui/ModalDialog.tsx`

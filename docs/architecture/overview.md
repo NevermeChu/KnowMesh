@@ -72,7 +72,10 @@ PostgreSQL / 本地 PGlite
 - `/`：公开根页面，根据 Clerk 登录状态显示登录、退出或进入工作台入口；页面中的产品示意内容不连接文档数据。
 - `/dashboard`：工作台首页，聚合最近可打开的文档、通知摘要、待处理邀请与协作权限申请。
 - `/personal`、`/collaboration`：读取 `project` 和可选的 `document` 查询参数，呈现项目文档列表、创建入口及单人编辑器；未选择项目时显示引导状态。
-- `/search`、`/starred`：当前渲染 `AppSectionPlaceholder`，没有对应的数据读取或业务操作。
+- `/search`：按个人空间或 Team Workspace 范围搜索当前用户有权读取的文档标题和 ProseMirror 正文，并返回高亮上下文片段。
+- `/starred`：列出当前用户收藏且仍具有读取权限的文档，并允许取消收藏。
+- `/notifications`：列出站内通知，支持单条或全部标记为已读。
+- `/invitations/accept`：验证 Workspace 邀请状态与当前用户邮箱，并完成邀请接受流程。
 - `/settings/preferences`：系统偏好设置页，当前提供外观主题（浅色/深色/跟随系统）选择，更改立即保存并对全站生效。
 - `/settings/user-profile`：渲染 Clerk `UserProfile`。
 - 侧边栏可以创建和列出个人、协作项目；点击项目通过 `project` 查询参数打开对应文档工作区。
@@ -92,12 +95,15 @@ PostgreSQL / 本地 PGlite
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
 - 项目内文档创建、列表和读取。
 - 基于 Tiptap 的单人富文本编辑与 JSONB 自动保存。
+- 文档 Markdown 下载、复制以及浏览器打印。
+- 受项目正文权限约束的全站搜索与用户级文档收藏。
+- 站内通知列表、未读统计和已读操作。
 - 用户级外观主题偏好与全站亮/暗双主题（语义颜色 token 体系）。
 - Personal Workspace 项目仅 owner 授权；Team Workspace 成员可发现导航结构，Project 直接成员才能读取正文；文件继承 Project 内容权限。
 
 尚未实现：
 
-- 文档层级树、移动、版本历史和 Markdown 导入导出。
+- 文档层级树、移动、版本历史和 Markdown 导入。
 - 所有权转移、评论和实时协作。
 - 面向外部客户端的稳定 API。
 

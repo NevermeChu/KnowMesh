@@ -12,7 +12,7 @@ KnowMesh 是一个面向团队的知识工作空间，用于汇聚文档、项�
 - Ultracite、Oxlint 和 Oxfmt
 - Vitest、Playwright 和 GitHub Actions CI
 
-数据库迁移和本地运行环境已经配置完成，但当前页面尚未执行数据库业务查询。
+应用已经通过 Server Components、server-only 查询和 Server Actions 读写 Workspace、项目、文档、通知与用户偏好数据。生产环境使用 PostgreSQL，本地完整运行环境使用 PGlite Socket。
 
 ## 环境要求
 
@@ -29,7 +29,7 @@ npx playwright install chromium
 
 ## 环境变量
 
-仓库中的 `.env` 提供本地开发默认值。本地密钥应写入 `.env.local`：
+仓库中的 `.env.example` 列出所需变量和非敏感默认值。本地开发密钥应写入不会提交的 `.env.local`：
 
 ```shell
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
@@ -65,11 +65,19 @@ npm run dev
 | `/sign-in` | 登录 | 公开 |
 | `/sign-up` | 注册 | 公开 |
 | `/dashboard` | 团队知识工作台 | 需要登录 |
+| `/personal` | 个人 Workspace 的项目与文档 | 需要登录 |
+| `/collaboration` | 当前 Team Workspace 的项目与文档 | 需要登录 |
+| `/search` | 搜索有权读取的文档标题和正文 | 需要登录 |
+| `/starred` | 查看当前用户收藏的文档 | 需要登录 |
+| `/notifications` | 查看和标记站内通知 | 需要登录 |
+| `/invitations/accept` | 验证并接受 Workspace 邀请 | 需要登录 |
+| `/settings/preferences` | 外观与内容宽度偏好 | 需要登录 |
 | `/settings/user-profile` | Clerk 账户资料 | 从已登录工作台进入 |
+| `/api/webhooks/clerk` | Clerk 用户生命周期 Webhook | Clerk 签名验证 |
 | `/robots.txt` | 搜索引擎规则 | 公开 |
 | `/sitemap.xml` | 公开页面 sitemap | 公开 |
 
-当前没有生效的 API Route Handler。
+`/api/webhooks/clerk` 不使用浏览器会话鉴权。它验证 Clerk Webhook 签名，并处理 Personal Workspace 创建和账户删除后的资源清理；新增 API 路由需要独立定义认证与授权边界。
 
 ## 常用命令
 
@@ -85,8 +93,8 @@ npm run dev
 | `npm run lint` | 检查格式和 lint 规则 |
 | `npm run lint:fix` | 修复支持自动处理的格式和 lint 问题 |
 | `npm run check:types` | 执行 TypeScript 类型检查且不生成文件 |
-| `npm run test` | 运行 Vitest 单元和浏览器组件测试 |
-| `npm run test:e2e` | 运行 Playwright 集成与端到端测试 |
+| `npm run test` | 运行 Vitest 单元与数据库集成测试 |
+| `npm run test:e2e` | 运行 Playwright 端到端测试 |
 | `npm run db:generate` | 根据 Drizzle schema 生成迁移 |
 | `npm run db:migrate` | 执行数据库迁移 |
 | `npm run db:studio` | 打开 Drizzle Studio |
@@ -96,6 +104,8 @@ npm run dev
 ```text
 src/
   app/          Next.js 页面、布局和元数据路由
+  components/   跨功能复用的布局与 UI 组件
+  features/     按业务能力组织的组件、查询、Server Actions 和规则
   libs/         环境变量和数据库连接
   models/       Drizzle 数据模型
   styles/       全局样式
@@ -103,7 +113,7 @@ src/
 scripts/        本地运行环境和 CodeGraph 工具
 tests/
   e2e/          浏览器用户流程
-  integration/  API 和数据库集成测试
+  *.integ.ts    数据库集成测试
 tools/          本地开发辅助工具
 ```
 

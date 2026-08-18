@@ -14,6 +14,7 @@
 | 修改站内通知、未读状态或通知触发事件 | [`features/notifications.md`](features/notifications.md) |
 | 修改系统偏好、外观主题或全站颜色 token | [`features/preferences.md`](features/preferences.md) |
 | 修改文档模型、编辑器或文档权限 | [`features/documents.md`](features/documents.md) 和 [`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) |
+| 修改全文搜索、命令面板或搜索结果排序 | [`features/search.md`](features/search.md) 和 [`adr/0006-separate-workspace-discovery-from-project-content-access.md`](adr/0006-separate-workspace-discovery-from-project-content-access.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
 | 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |
 | 理解“为什么这样选” | [`adr/README.md`](adr/README.md) 和相关 Accepted ADR |
@@ -46,6 +47,12 @@
 ├─ 项目成员资源授权
 ├─ Tiptap 单人编辑器
 └─ Server Action 自动保存
+
+搜索业务
+├─ /search + CommandPalette
+├─ Project 直接成员正文边界
+├─ 标题与正文相关度排序
+└─ 客户端最近访问缓存
 
 通知业务
 ├─ 用户级 notifications 历史

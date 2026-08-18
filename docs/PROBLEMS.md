@@ -461,6 +461,19 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 - 将 `DocumentEditor` 的 `WorkspaceContent` 恢复为独立包裹整篇正文（保证 `mx-auto` 绝对居中对称），并将 `DocumentOutline` 调整为右侧视口固定浮层（`fixed right-6 top-20`）。
 - 在 `DocumentEditor` 与 `DocumentOutline` 间实现受控联动与自适应空间竞争避让（`transition-[padding] duration-200 xl:pr-64 2xl:pr-0`）：大纲展开时中屏正文平滑避让防遮挡、大屏自然停靠免位移，大纲收起时平滑回弹至完全对称居中。
 
+## 28. 命令面板最近文档缓存未按用户和权限隔离
+
+### 问题
+
+命令面板把最近打开的搜索结果长期保存在浏览器中。同一浏览器切换 Clerk 账户或用户失去 Project 权限后，面板仍可能显示前一个权限状态下的文档标题、Workspace、Project 和正文片段。
+
+### 根因
+
+`CommandPalette` 将完整 `SearchResultItem` 写入固定的 `localStorage` 键 `knowmesh:recent-documents`。缓存键不包含用户身份，读取缓存时只校验对象形状，不通过服务端重新验证当前用户的 `document.read` 权限。
+
+### 解决方法
+
+尚未实施。应停止持久化正文片段，只保存最小文档标识，并在命令面板打开时通过已认证的服务端查询重新解析当前用户仍可读取的最近文档；同时补充账户切换、成员移除和 Project 权限撤销后的回归测试。
 
 
 

@@ -41,6 +41,12 @@
 
 `getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。`getWorkspaceContext`、`getProjectAuthorization` 和 `getUnreadNotificationCount` 使用 React 请求级缓存（`cache()`），使 Layout、具体页面与鉴权入口在同一次 Server Component 渲染中复用结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
 
+## 工作台流式聚合
+
+`/dashboard` 的标题和快捷入口同步渲染，最近文档、通知摘要、待处理邀请与权限申请分别位于独立的 `Suspense` 边界。某一数据源变慢时只延迟对应区块，不阻塞工作台主体或其他区块；路由级 `loading.tsx` 负责客户端导航的即时过渡反馈。
+
+`getRecentDocuments`、`getPendingApprovals` 和 `getPendingInvitations` 使用 React 请求级缓存，只在同一次服务端渲染中复用结果。待处理 Workspace 邀请需要通过 Clerk `currentUser()` 取得已验证邮箱，可能访问外部 Clerk 服务，因此必须继续与其他工作台数据源保持独立流式边界。最近文档和权限申请只依赖当前用户的数据库关系。
+
 `getWorkspaceContext` 是只读查询，不再创建 Personal Workspace。Clerk 注册完成后的初始化流程为：
 
 ```text
