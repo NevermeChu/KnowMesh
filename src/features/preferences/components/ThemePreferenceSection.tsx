@@ -15,9 +15,24 @@ type ThemeOption = {
 };
 
 const themeOptions: ThemeOption[] = [
-  { description: '明亮清爽的经典配色', icon: Sun, label: '浅色', value: 'light' },
-  { description: '适合昏暗环境的深色配色', icon: Moon, label: '深色', value: 'dark' },
-  { description: '与操作系统外观设置保持一致', icon: Monitor, label: '跟随系统', value: 'system' },
+  {
+    description: '明亮清爽的经典配色，搭配蓝青弥散光晕',
+    icon: Sun,
+    label: '浅空知序 (浅色)',
+    value: 'light',
+  },
+  {
+    description: '深邃沉浸的石墨配色，搭配蓝青弥散光晕',
+    icon: Moon,
+    label: '深空知序 (深色)',
+    value: 'dark',
+  },
+  {
+    description: '与操作系统外观设置保持一致',
+    icon: Monitor,
+    label: '跟随系统',
+    value: 'system',
+  },
 ];
 
 /**

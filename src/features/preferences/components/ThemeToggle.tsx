@@ -9,9 +9,15 @@ import { updateThemePreference } from '@/features/preferences/server/UpdateTheme
 /**
  * Renders the sidebar quick toggle that flips the resolved theme between light and dark.
  *
+ * @param props - Optional presentation overrides for the shared toggle.
  * @returns The theme toggle icon button.
  */
-export function ThemeToggle() {
+export function ThemeToggle(props: {
+  className?: string;
+  iconClassName?: string;
+  strokeWidth?: number;
+  title?: string;
+}) {
   const [, startTransition] = useTransition();
 
   function toggleTheme() {
@@ -34,13 +40,24 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      aria-label="切换主题"
-      title="切换主题"
-      className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay hover:text-ink"
+      aria-label={props.title ?? '切换主题'}
+      title={props.title ?? '切换主题'}
+      className={
+        props.className ??
+        'grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-overlay hover:text-ink'
+      }
       onClick={toggleTheme}
     >
-      <Moon aria-hidden="true" className="size-4 dark:hidden" strokeWidth={1.8} />
-      <Sun aria-hidden="true" className="hidden size-4 dark:block" strokeWidth={1.8} />
+      <Moon
+        aria-hidden="true"
+        className={`${props.iconClassName ?? 'size-4'} dark:hidden`}
+        strokeWidth={props.strokeWidth ?? 1.8}
+      />
+      <Sun
+        aria-hidden="true"
+        className={`hidden ${props.iconClassName ?? 'size-4'} dark:block`}
+        strokeWidth={props.strokeWidth ?? 1.8}
+      />
     </button>
   );
 }

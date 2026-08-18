@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { escapeRegularExpression } from '@/utils/RegularExpression';
 import type { SearchFilter, SearchResultItem } from '../Search';
 
 const filterLabels: { label: string; value: SearchFilter }[] = [
@@ -30,7 +31,7 @@ function HighlightedText(props: { query: string; text: string }) {
     return <span>{props.text}</span>;
   }
 
-  const escapedQuery = normalizedQuery.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const escapedQuery = escapeRegularExpression(normalizedQuery);
   const parts = props.text.split(new RegExp(`(${escapedQuery})`, 'giu'));
 
   return (

@@ -1,11 +1,13 @@
-@layer theme, base, clerk, components, utilities; /* Ensure Clerk is compatible with Tailwind CSS v4 */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@layer theme, base, components, utilities;
 
 @import 'tailwindcss';
 
 /* Class-based dark mode: the root layout toggles `dark` on <html> from the theme preference. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Semantic color tokens shared by utilities (bg-canvas, text-ink, ...) and Clerk variables. */
+/* Semantic color tokens shared by utilities such as bg-canvas and text-ink. */
 @theme inline {
   --color-canvas: var(--canvas);
   --color-card: var(--card);
@@ -43,41 +45,55 @@
   --accent: #2383e2;
   --accent-strong: #1f74c9;
   --accent-soft: #e8f3fc;
+  --accent-glow: rgba(35, 131, 226, 0.25);
+  --teal: #0d9488;
+  --teal-soft: #f0fdfa;
   --danger: #d14343;
   --danger-strong: #b52e2e;
-  --warning-soft: #f1e9dc;
-  --line: rgb(0 0 0 / 0.1);
-  --line-soft: rgb(0 0 0 / 0.06);
-  --overlay: rgb(0 0 0 / 0.04);
-  --overlay-strong: rgb(0 0 0 / 0.07);
-  --elev-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.04);
-  --elev-overlay: 0 12px 32px rgb(15 23 42 / 0.16), 0 2px 8px rgb(15 23 42 / 0.08);
+  --warning-soft: #fbf3db;
+  --warning-border: #f59e0b;
+  --success-soft: #eaf5ee;
+  --success-border: #10b981;
+  --line: rgba(0, 0, 0, 0.08);
+  --line-soft: rgba(0, 0, 0, 0.05);
+  --overlay: rgba(0, 0, 0, 0.04);
+  --overlay-strong: rgba(0, 0, 0, 0.07);
+  --elev-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --elev-overlay: 0 24px 64px -12px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 20px 40px -15px rgba(15, 23, 42, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04);
   --content-read-width: 80%;
   color-scheme: light;
 }
 
 .dark {
-  --canvas: #191919;
-  --card: #212121;
-  --surface: #2a2a2a;
-  --surface-strong: #303030;
-  --ink: #e8e8e6;
-  --ink-secondary: #b4b4b1;
-  --ink-muted: #969693;
-  --ink-faint: #6f6f6c;
-  --ink-faint-strong: #5a5a57;
+  --canvas: #131314;
+  --card: #1c1c1e;
+  --surface: #242426;
+  --surface-strong: #2c2c2e;
+  --ink: #f2f2f0;
+  --ink-secondary: #c7c7c4;
+  --ink-muted: #9e9e9a;
+  --ink-faint: #737370;
+  --ink-faint-strong: #545451;
   --accent: #4c9cea;
   --accent-strong: #6cb0f0;
-  --accent-soft: rgb(76 156 234 / 0.16);
+  --accent-soft: rgba(76, 156, 234, 0.15);
+  --accent-glow: rgba(76, 156, 234, 0.38);
+  --teal: #14b8a6;
+  --teal-soft: rgba(20, 184, 166, 0.15);
   --danger: #e05252;
   --danger-strong: #c94444;
-  --warning-soft: rgb(255 212 59 / 0.14);
-  --line: rgb(255 255 255 / 0.1);
-  --line-soft: rgb(255 255 255 / 0.07);
-  --overlay: rgb(255 255 255 / 0.06);
-  --overlay-strong: rgb(255 255 255 / 0.09);
-  --elev-card: 0 1px 2px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3);
-  --elev-overlay: 0 12px 32px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --warning-border: #f59e0b;
+  --success-soft: rgba(16, 185, 129, 0.12);
+  --success-border: #10b981;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-soft: rgba(255, 255, 255, 0.05);
+  --overlay: rgba(255, 255, 255, 0.06);
+  --overlay-strong: rgba(255, 255, 255, 0.09);
+  --elev-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --elev-overlay: 0 24px 64px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-lg: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.08);
   color-scheme: dark;
 }
 
@@ -94,8 +110,59 @@
   }
 
   body {
+    font-family:
+      'Plus Jakarta Sans',
+      'Noto Sans SC',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+    background-color: var(--canvas);
+    color: var(--ink);
+    line-height: 1.6;
+    transition:
+      background-color 0.25s ease,
+      color 0.25s ease;
+    overflow-x: hidden;
     scrollbar-width: none;
     -ms-overflow-style: none;
+  }
+
+  /* Global ambient blue-cyan diffuse glow for application-wide Mesh Light & Mesh Dark */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -150px;
+    right: -100px;
+    width: 650px;
+    height: 650px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      rgba(35, 131, 226, 0.12) 0%,
+      rgba(13, 148, 136, 0.08) 40%,
+      transparent 75%
+    );
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .dark body::before {
+    background: radial-gradient(
+      circle,
+      rgba(76, 156, 234, 0.16) 0%,
+      rgba(20, 184, 166, 0.11) 40%,
+      transparent 75%
+    );
+    filter: blur(90px);
+  }
+
+  code,
+  pre,
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
   }
 
   /* Vertical space above the workspace content: mobile top bar + toolbar, toolbar only on lg. */
@@ -110,18 +177,233 @@
   }
 }
 
-/* Embedded Clerk UserProfile: the settings page frame already provides the heading,
-   and the active nav button should match the sidebar's selected-item styling. */
-.cl-navbar div:has(> h1) {
-  display: none;
-}
-
-.cl-navbarButton.cl-active {
-  background-color: var(--overlay-strong);
-  color: var(--ink);
-}
-
 @layer components {
+  /* Landing page layouts */
+  .landing-root .landing-container {
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .landing-root .landing-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1.05fr;
+    gap: 3.5rem;
+  }
+
+  .landing-root .landing-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.75rem;
+  }
+
+  @media (max-width: 1024px) {
+    .landing-root .landing-grid-2 {
+      grid-template-columns: 1fr;
+      gap: 2.5rem;
+    }
+    .landing-root .landing-grid-3 {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .landing-root .landing-grid-2,
+    .landing-root .landing-grid-3 {
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+    .landing-root .landing-container {
+      padding: 0 1.25rem;
+    }
+  }
+
+  /* Landing Page Components */
+  .landing-root .glass-nav {
+    background-color: rgba(251, 251, 250, 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .dark .landing-root .glass-nav {
+    background-color: rgba(19, 19, 20, 0.85);
+  }
+
+  .landing-root .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    background: var(--card);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-card);
+    color: var(--ink-secondary);
+  }
+
+  .landing-root .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    padding: 0.75rem 1.4rem;
+    border-radius: 0.625rem;
+    text-decoration: none;
+    box-shadow: 0 4px 14px var(--accent-glow);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    border: none;
+    cursor: pointer;
+  }
+  .landing-root .btn-primary:hover {
+    background: var(--accent-strong);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px var(--accent-glow);
+  }
+
+  .landing-root .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--card);
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    padding: 0.75rem 1.4rem;
+    border-radius: 0.625rem;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-card);
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .landing-root .btn-secondary:hover {
+    background: var(--surface);
+    border-color: var(--ink-faint-strong);
+    transform: translateY(-1px);
+  }
+
+  .landing-root .hero-glow {
+    position: absolute;
+    width: 860px;
+    height: 520px;
+    left: 50%;
+    top: 18%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(
+      circle,
+      rgba(35, 131, 226, 0.22) 0%,
+      rgba(13, 148, 136, 0.16) 35%,
+      rgba(35, 131, 226, 0.04) 65%,
+      transparent 80%
+    );
+    filter: blur(70px);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .dark .landing-root .hero-glow {
+    background: radial-gradient(
+      circle,
+      rgba(76, 156, 234, 0.38) 0%,
+      rgba(20, 184, 166, 0.22) 35%,
+      rgba(35, 131, 226, 0.06) 65%,
+      transparent 80%
+    );
+  }
+
+  .landing-root .card-feature {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    padding: 1.75rem;
+    box-shadow: var(--shadow-card);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .landing-root .card-feature:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--accent-strong);
+  }
+
+  .landing-root .workspace-window {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-overlay);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .landing-root .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    color: var(--ink-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+  .landing-root .sidebar-item:hover {
+    background: var(--overlay);
+    color: var(--ink);
+  }
+  .landing-root .sidebar-item.active {
+    background: var(--overlay);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .landing-root .search-mock-input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    color: var(--ink);
+    font-size: 0.875rem;
+    outline: none;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+  .landing-root .search-mock-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .landing-root .callout-box {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 0.875rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    margin: 1rem 0;
+    color: var(--ink);
+  }
+
+  .landing-root .highlight-pill {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+  }
+
   .tiptap > * + * {
     margin-top: 0.75rem;
   }
@@ -325,10 +607,6 @@
 
   @keyframes toast-in {
     from {
-      opacity: 0;
-      transform: translateY(1rem) scale(0.96);
-    }
-    to {
       opacity: 1;
       transform: translateY(0) scale(1);
     }

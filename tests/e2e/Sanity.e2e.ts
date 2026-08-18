@@ -26,6 +26,28 @@ test.describe('Sanity', () => {
       expect(sitemap).not.toContain('/counter');
       expect(sitemap).not.toContain('/sign-in');
     });
+
+    test('accepts literal search metacharacters', async ({ page }) => {
+      await page.goto('/');
+      const searchInput = page.getByRole('textbox', { name: '搜索文档关键词' });
+
+      await searchInput.fill('[');
+
+      await expect(searchInput).toHaveValue('[');
+      await expect(page.getByText('未找到与 “[” 相关的文档结果')).toBeVisible();
+    });
+
+    test('preserves native context menu', async ({ page }) => {
+      await page.goto('/');
+
+      const isPrevented = await page.evaluate(() => {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        document.body.dispatchEvent(event);
+        return event.defaultPrevented;
+      });
+
+      expect(isPrevented).toBeFalsy();
+    });
   });
 
   test.describe('Protected pages', () => {
@@ -56,6 +78,15 @@ test.describe('Sanity', () => {
       await page.goto('/sign-up');
 
       await expect(page.getByRole('heading', { name: '创建账号' })).toBeVisible();
+    });
+
+    test('preserves invitation destination when opening sign up', async ({ page }) => {
+      await page.goto('/sign-in?redirect_url=%2Finvitations%2Faccept%3Ftoken%3Dinvitation-token');
+
+      await expect(page.getByRole('link', { name: '立即注册' })).toHaveAttribute(
+        'href',
+        '/sign-up?redirect_url=%2Finvitations%2Faccept%3Ftoken%3Dinvitation-token',
+      );
     });
   });
 
