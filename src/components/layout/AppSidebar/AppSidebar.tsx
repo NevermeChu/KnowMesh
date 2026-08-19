@@ -34,7 +34,6 @@ function SidebarContent(props: {
   openMenu: SidebarMenu;
   pathname: string;
   projects: Project[];
-  unreadNotificationCount: number;
   workspaceError: string | null;
   workspaces: Workspace[];
   isSwitchingWorkspace: boolean;
@@ -84,7 +83,6 @@ function SidebarContent(props: {
         isNotificationsRoute={props.pathname.startsWith('/notifications')}
         isSettingsRoute={props.pathname.startsWith('/settings')}
         isWorkspaceAvailable={props.activeWorkspace !== null}
-        unreadNotificationCount={props.unreadNotificationCount}
         onManageWorkspace={props.onManageWorkspace}
         onNavigate={props.onNavigate}
         onToggle={() => {
@@ -106,7 +104,6 @@ export function AppSidebar(props: {
   documents: DocumentNavigationItem[];
   isHidden: boolean;
   projects: Project[];
-  unreadNotificationCount: number;
   workspaces: Workspace[];
   width: number;
   onResize: (width: number) => void;
@@ -223,7 +220,6 @@ export function AppSidebar(props: {
             openMenu={openMenu}
             pathname={pathname}
             projects={props.projects}
-            unreadNotificationCount={props.unreadNotificationCount}
             workspaceError={workspaceError}
             workspaces={props.workspaces}
             isSwitchingWorkspace={isSwitchingWorkspace}

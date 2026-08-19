@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { AppShell } from '@/components/layout/AppShell';
 import { requireUser } from '@/features/auth/server/CurrentUser';
+import { RealtimeNotificationProvider } from '@/features/notifications/context/RealtimeNotificationContext';
 import { getUnreadNotificationCount } from '@/features/notifications/server/GetNotifications';
 import { CONTENT_WIDTH_COOKIE, parseContentWidth } from '@/features/preferences/Preferences';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
@@ -33,16 +34,17 @@ export default async function WorkspaceLayout(props: { children: React.ReactNode
   const contentWidth = parseContentWidth(cookieStore.get(CONTENT_WIDTH_COOKIE)?.value);
 
   return (
-    <AppShell
-      activeWorkspace={workspaceContext.activeWorkspace}
-      contentWidth={contentWidth}
-      currentUserId={user.id}
-      documents={documents}
-      projects={projects}
-      unreadNotificationCount={unreadNotificationCount}
-      workspaces={workspaceContext.workspaces}
-    >
-      {props.children}
-    </AppShell>
+    <RealtimeNotificationProvider initialUnreadCount={unreadNotificationCount}>
+      <AppShell
+        activeWorkspace={workspaceContext.activeWorkspace}
+        contentWidth={contentWidth}
+        currentUserId={user.id}
+        documents={documents}
+        projects={projects}
+        workspaces={workspaceContext.workspaces}
+      >
+        {props.children}
+      </AppShell>
+    </RealtimeNotificationProvider>
   );
 }

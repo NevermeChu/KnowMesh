@@ -77,7 +77,7 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 
 项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。项目权限只计算一次，文档查询复用已经授权的项目 ID；当前导航查询没有分页，正文仍只由具体文档页面按需读取。
 
-共享布局还按当前 Better Auth 用户统计未读通知，并把数量传给侧边栏角标。通知是用户级数据，不按活动 Workspace 过滤；`/notifications` 在右侧内容区读取最近 50 条，读取不自动标为已读，单条和全部已读均由明确的 Server Action 完成。当前没有实时连接，数量随服务端重新渲染更新。
+共享工作区布局使用 `RealtimeNotificationProvider` 注入 SSR 初始未读通知数，并在客户端与 `/api/realtime/notifications` 建立 SSE 长连接。通知是用户级数据，不按活动 Workspace 过滤；服务端写入通知后通过 `NotificationBroadcaster` 触发广播，侧边栏 `NotificationSidebarBadge` 仅局部更新数字文本，主内容区、编辑器与导航树不重渲染。`/notifications` 在右侧内容区读取最近 50 条，读取不自动标为已读，单条和全部已读均由明确的 Server Action 完成并广播计数同步。
 
 ## 创建项目
 
@@ -145,7 +145,8 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 
 - 当前项目创建、资源重命名和删除、文档创建与更新、交互式权限总览使用 Server Action。
 - 当前存在 `/api/auth/[...all]` Better Auth Route Handler，提供认证和账户生命周期接口。
-- `src/proxy.ts` 的 matcher 排除了 `/api`；认证 Route Handler 由 Better Auth 自身处理来源、Session 和令牌校验。当前没有其他公开 API、文件传输或实时连接。
+- 当前存在 `/api/realtime/notifications` SSE Route Handler，基于 Web Streams `ReadableStream` 与进程内广播总线 `NotificationBroadcaster` 向已登录用户推送实时通知与未读数同步事件，包含 25 秒心跳保活。
+- `src/proxy.ts` 的 matcher 排除了 `/api`；Route Handler 由自身通过 `requireUser()` 执行 Session 和身份校验。当前没有双向 WebSocket 或外部推送服务。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
 
@@ -153,6 +154,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 
 - `src/app/(workspace)/layout.tsx`：服务端初始查询入口。
 - `src/app/api/auth/[...all]/route.ts`：挂载 Better Auth Route Handler。
+- `src/app/api/realtime/notifications/route.ts`：挂载 SSE 实时通知长连接 Route Handler。
 - `src/libs/Auth.ts`：配置 Better Auth、Drizzle adapter、邮件和用户生命周期 hook。
 - `src/features/auth/server/DeleteAccount.ts`：验证当前密码，并在单个事务中组合业务清理与身份删除。
 - `src/features/users/server/DeleteUserData.ts`：使用调用方事务清理用户拥有的资源并退出其他共享资源。
@@ -169,7 +171,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/features/workspaces/server/GetWorkspaceInvitation.ts`：按令牌和当前已验证邮箱读取安全邀请摘要。
 - `src/features/workspaces/components/AcceptWorkspaceInvitation.tsx`：呈现邀请状态，并在用户确认后调用接受 Action。
 - `src/features/permissions/`：能力矩阵与服务端资源授权。
-- `src/features/notifications/`：通知事件、用户级读取和已读 Action。
+- `src/features/notifications/`：通知事件、实时广播总线、用户级读取和已读 Action。
 - `src/features/preferences/server/UpdateThemePreference.ts`：主题偏好 Server Action（数据库 + cookie 双写）。
 - `src/app/layout.tsx`：根布局主题 cookie 读取与 `<html>` 主题输出。
 - `src/components/layout/AppShell.tsx`：客户端工作区外壳。
@@ -190,3 +192,5 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - [ADR 0007：通过 Clerk 注册 Webhook 创建 Personal Workspace](../adr/0007-provision-personal-workspace-from-clerk-webhook.md)（已替代）
 - [ADR 0008：统一按 owner 删除资源、按 member 退出资源](../adr/0008-delete-owned-resources-on-account-removal.md)
 - [ADR 0009：使用 Better Auth 管理本地身份](../adr/0009-use-better-auth-for-local-identity.md)
+- [ADR 0010：使用 SSE 实现实时站内通知](../adr/0010-use-sse-for-realtime-notifications.md)
+

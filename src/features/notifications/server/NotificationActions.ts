@@ -1,10 +1,11 @@
 'use server';
 
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { notificationMutationSchema } from '@/features/notifications/NotificationSchema';
 import type { NotificationMutationInput } from '@/features/notifications/NotificationSchema';
+import { notificationBroadcaster } from '@/features/notifications/server/NotificationBroadcaster';
 import { db } from '@/libs/DB';
 import { notificationsSchema } from '@/models/Schema';
 
@@ -13,6 +14,12 @@ function revalidateNotifications() {
   revalidatePath('/notifications');
 }
 
+/**
+ * Marks a single notification as read and synchronizes the updated unread count.
+ *
+ * @param input - Validated notification mutation input.
+ * @throws Error when the notification is not found or already read.
+ */
 export async function markNotificationRead(input: NotificationMutationInput) {
   const { id: userId } = await requireUser();
   const notificationInput = notificationMutationSchema.parse(input);
@@ -32,9 +39,25 @@ export async function markNotificationRead(input: NotificationMutationInput) {
     throw new Error('未读通知不存在');
   }
 
+  const [countResult] = await db
+    .select({ value: count() })
+    .from(notificationsSchema)
+    .where(
+      and(eq(notificationsSchema.recipientUserId, userId), isNull(notificationsSchema.readAt)),
+    );
+
+  const unreadCount = countResult?.value ?? 0;
+  notificationBroadcaster.publish(userId, {
+    payload: { unreadCount },
+    type: 'notification:count_sync',
+  });
+
   revalidateNotifications();
 }
 
+/**
+ * Marks all unread notifications for the current user as read and synchronizes the count.
+ */
 export async function markAllNotificationsRead() {
   const { id: userId } = await requireUser();
   await db
@@ -43,6 +66,11 @@ export async function markAllNotificationsRead() {
     .where(
       and(eq(notificationsSchema.recipientUserId, userId), isNull(notificationsSchema.readAt)),
     );
+
+  notificationBroadcaster.publish(userId, {
+    payload: { unreadCount: 0 },
+    type: 'notification:count_sync',
+  });
 
   revalidateNotifications();
 }

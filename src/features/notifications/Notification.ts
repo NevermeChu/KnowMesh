@@ -30,3 +30,29 @@ export type NotificationItem = {
   title: string;
   type: NotificationType;
 };
+
+export type RealtimeNotificationItem = {
+  body: string;
+  createdAt: string;
+  id: string;
+  readAt: string | null;
+  targetId: string | null;
+  targetKind: NotificationTargetKind | null;
+  title: string;
+  type: NotificationType;
+};
+
+export type NotificationRealtimeEvent =
+  | {
+      payload: {
+        notification: RealtimeNotificationItem;
+        unreadCount?: number;
+      };
+      type: 'notification:new';
+    }
+  | {
+      payload: {
+        unreadCount: number;
+      };
+      type: 'notification:count_sync';
+    };

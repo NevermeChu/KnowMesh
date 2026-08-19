@@ -625,3 +625,20 @@ Better Auth 内置删除入口先运行应用 `beforeDelete` 回调，再独立�
 - 在 `inviteWorkspaceMember` 中增加对同邮箱同工作区已存在活跃邀请（未接受、未撤销且未过期）的前置校验，防止重复插入待处理邀请，对已注册用户也加入未读通知去重防线。
 - 更新 `SyncPendingInvitations.test.ts`，补充幂等性与重复邀请去重测试。
 
+## 38. 站内通知被动拉取缺乏即时感知与跨标签页同步
+
+### 问题
+
+通知系统原本为服务端被动拉取（依赖页面刷新或 Server Action 触发布局失效）。跨用户协作（如被邀请、审批通过、角色调整）时，停留于工作台的用户无法即时感知红点与状态变动；同时用户在某一个标签页标记已读后，其他已打开的标签页红点无法即时消除。
+
+### 根因
+
+系统缺少服务端向客户端的主动事件通知通道，各浏览器会话的状态隔离在各自的页面生命周期中。
+
+### 解决方法
+
+- 引入 Web 标准的 Server-Sent Events (SSE) 长连接路由（`/api/realtime/notifications`），配合 Node 进程内广播总线 `NotificationBroadcaster` 实现用户级频道事件分发。
+- 在 `createNotification` 数据库写入成功后广播 `notification:new` 事件；在 `markNotificationRead` 与 `markAllNotificationsRead` 成功后广播 `notification:count_sync` 同步未读数。
+- 前端通过 `RealtimeNotificationProvider` 管理长连接与 Toast 浮窗提示，并将侧边栏角标拆分为独立轻量组件 `NotificationSidebarBadge`，实现收到通知时仅局部重绘角标文本（Zero-Interruption），不触发页面整体重载，不打断编辑器打字。
+
+

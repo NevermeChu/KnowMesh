@@ -56,9 +56,10 @@
 
 通知业务
 ├─ 用户级 notifications 历史
-├─ 权限事务内写入事件
-├─ Workspace Layout 未读统计
-└─ /notifications 已读操作
+├─ 权限事务内写入并触发 NotificationBroadcaster 广播
+├─ SSE 长连接 (/api/realtime/notifications) 与保活心跳
+├─ AppSidebar 局部角标更新与轻量 Toast 提示
+└─ /notifications 已读操作与跨页同步
 
 偏好业务
 ├─ 用户级 user_preferences 主题

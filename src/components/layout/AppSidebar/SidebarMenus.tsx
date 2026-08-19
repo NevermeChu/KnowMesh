@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { AppLogo } from '@/components/ui/AppLogo';
 import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
 import { SignOutButton } from '@/features/auth/components/SignOutButton';
+import { useRealtimeUnreadCount } from '@/features/notifications/context/RealtimeNotificationContext';
 import { ThemeToggle } from '@/features/preferences/components/ThemeToggle';
 import type { Workspace } from '@/features/workspaces/Workspace';
 import { AppConfig } from '@/utils/AppConfig';
@@ -109,6 +110,28 @@ export function WorkspaceSwitcher(props: {
 }
 
 /**
+ * Renders the live notification badge in the sidebar.
+ *
+ * @returns The unread count badge or null.
+ */
+export function NotificationSidebarBadge() {
+  const unreadCount = useRealtimeUnreadCount();
+
+  if (unreadCount <= 0) {
+    return null;
+  }
+
+  return (
+    <span
+      className="ml-auto min-w-5 rounded-full bg-danger px-1.5 py-0.5 text-center text-[10px] leading-4 font-semibold text-white"
+      aria-label={`${unreadCount} 条未读通知`}
+    >
+      {unreadCount > 99 ? '99+' : unreadCount}
+    </span>
+  );
+}
+
+/**
  * Renders notification and settings shortcuts in the sidebar footer.
  *
  * @param props - Settings state and navigation actions.
@@ -120,7 +143,6 @@ export function SettingsMenu(props: {
   isNotificationsRoute: boolean;
   isSettingsRoute: boolean;
   isWorkspaceAvailable: boolean;
-  unreadNotificationCount: number;
   onManageWorkspace: () => void;
   onNavigate: () => void;
   onToggle: () => void;
@@ -139,14 +161,7 @@ export function SettingsMenu(props: {
       >
         <Bell aria-hidden="true" className="size-4" strokeWidth={1.8} />
         <span>通知</span>
-        {props.unreadNotificationCount > 0 && (
-          <span
-            className="ml-auto min-w-5 rounded-full bg-danger px-1.5 py-0.5 text-center text-[10px] leading-4 font-semibold text-white"
-            aria-label={`${props.unreadNotificationCount} 条未读通知`}
-          >
-            {props.unreadNotificationCount > 99 ? '99+' : props.unreadNotificationCount}
-          </span>
-        )}
+        <NotificationSidebarBadge />
       </Link>
 
       <div className="flex items-center gap-1">
