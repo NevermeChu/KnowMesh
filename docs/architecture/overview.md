@@ -77,6 +77,7 @@ PostgreSQL / 本地 PGlite
 - `/invitations/accept`：验证 Workspace 邀请状态与当前用户邮箱，并完成邀请接受流程。
 - `/settings/preferences`：系统偏好设置页，当前提供外观主题（浅色/深色/跟随系统）选择，更改立即保存并对全站生效。
 - `/settings/user-profile`：管理本地用户资料、密码和账户删除。
+- `/settings/audit-logs`：工作区全局安全与操作审计中心，严格限 Team Workspace 的唯一 Owner 查看不可篡改的操作记录。
 - 侧边栏可以创建和列出个人、协作项目；点击项目通过 `project` 查询参数打开对应文档工作区。
 
 ## 已实现与未实现
@@ -99,11 +100,14 @@ PostgreSQL / 本地 PGlite
 - 站内通知列表、未读统计和已读操作。
 - 用户级外观主题偏好与全站亮/暗双主题（语义颜色 token 体系）。
 - Personal Workspace 项目仅 owner 授权；Team Workspace 成员可发现导航结构，Project 直接成员才能读取正文；文件继承 Project 内容权限。
+- 工作区与项目所有权转让。
+- 工作区全局安全与操作审计体系（`/settings/audit-logs`）。
+
 
 尚未实现：
 
 - 文档层级树、移动、版本历史和 Markdown 导入。
-- 所有权转移、评论和实时协作。
+- 评论和实时协作。
 - 面向外部客户端的稳定 API。
 
 未实现内容只表示当前边界，不构成已经批准的实现方案。

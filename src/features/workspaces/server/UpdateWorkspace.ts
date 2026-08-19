@@ -2,6 +2,7 @@
 
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import { db } from '@/libs/DB';
@@ -25,6 +26,21 @@ export async function updateWorkspace(input: UpdateWorkspaceInput) {
 
   if (!workspace) {
     throw new Error('工作区保存失败');
+  }
+
+  if (authorization.workspace.kind === 'team') {
+    await recordAuditLog(db, {
+      action: 'workspace_renamed',
+      actorUserId: userId,
+      metadata: {
+        nextName: workspaceInput.name,
+        previousName: authorization.workspace.name,
+        resourceName: workspaceInput.name,
+      },
+      targetId: authorization.workspace.id,
+      targetKind: 'workspace',
+      workspaceId: authorization.workspace.id,
+    });
   }
 
   revalidatePath('/(workspace)', 'layout');

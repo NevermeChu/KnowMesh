@@ -606,3 +606,22 @@ Better Auth 内置删除入口先运行应用 `beforeDelete` 回调，再独立�
 - 在 `removeWorkspaceForUser` 所有者删除分支中，先查询该工作区下全部项目，原子将该工作区及其下属全部项目的通知目标置空后删除工作区。
 - 在 `removeProjectMember` 事务中补充删除目标成员在当前项目中的待处理申请与邀请。
 - 更新 `ResourceRemoval.test.ts` 单元测试，覆盖工作区与项目删除时的通知目标置空逻辑。
+
+## 37. 邀请未注册用户导致登录后生成重复通知
+
+### 问题
+
+邀请未注册用户后，该用户完成注册、邮箱验证并登录时，通知中心出现多条（如 3 条）重复的“收到工作区邀请”通知。
+
+### 根因
+
+1. `syncPendingWorkspaceInvitations` 在同步待处理邀请至站内通知时未进行幂等性去重检查；当邮箱验证接口由于邮件客户端安全扫描、浏览器预取（Prefetch）或页面重定向等原因被多次触发时，每次调用均无条件向 `notifications` 表插入新行。
+2. `syncPendingWorkspaceInvitations` 未对同一工作区的多条待处理邀请进行工作区去重，存在按邀请记录逐条重复发通知的隐患。
+3. `inviteWorkspaceMember` 在向未注册邮箱发送邀请时，未检查是否已有相同邮箱和工作区的有效待处理邀请，重复邀请会导致数据库存在多条未过期邀请记录。
+
+### 解决方法
+
+- 在 `syncPendingWorkspaceInvitations` 中先查询当前用户已有的 `workspace_invited` 通知，按工作区 ID 去重，仅在不存在对应工作区通知时才调用 `createNotification`。
+- 在 `inviteWorkspaceMember` 中增加对同邮箱同工作区已存在活跃邀请（未接受、未撤销且未过期）的前置校验，防止重复插入待处理邀请，对已注册用户也加入未读通知去重防线。
+- 更新 `SyncPendingInvitations.test.ts`，补充幂等性与重复邀请去重测试。
+

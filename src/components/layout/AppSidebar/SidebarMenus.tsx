@@ -4,6 +4,7 @@ import {
   Bell,
   Check,
   ChevronsUpDown,
+  History,
   LogOut,
   Plus,
   Settings,
@@ -114,6 +115,7 @@ export function WorkspaceSwitcher(props: {
  * @returns The settings menu.
  */
 export function SettingsMenu(props: {
+  canViewAuditLogs?: boolean;
   isOpen: boolean;
   isNotificationsRoute: boolean;
   isSettingsRoute: boolean;
@@ -188,6 +190,16 @@ export function SettingsMenu(props: {
           <ShieldCheck aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
           <span>工作区管理</span>
         </button>
+        {props.canViewAuditLogs && (
+          <Link
+            href="/settings/audit-logs"
+            className={popupMenuItemClassName}
+            onClick={props.onNavigate}
+          >
+            <History aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+            <span>审计日志</span>
+          </Link>
+        )}
         <Link
           href="/settings/preferences"
           className={popupMenuItemClassName}

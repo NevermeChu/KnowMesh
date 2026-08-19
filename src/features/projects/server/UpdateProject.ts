@@ -2,6 +2,7 @@
 
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { db } from '@/libs/DB';
@@ -25,6 +26,21 @@ export async function updateProject(input: UpdateProjectInput) {
 
   if (!project) {
     throw new Error('项目保存失败');
+  }
+
+  if (authorization.project.workspaceKind === 'team') {
+    await recordAuditLog(db, {
+      action: 'project_renamed',
+      actorUserId: userId,
+      metadata: {
+        nextName: projectInput.name,
+        previousName: authorization.project.name,
+        resourceName: projectInput.name,
+      },
+      targetId: authorization.project.id,
+      targetKind: 'project',
+      workspaceId: authorization.project.workspaceId,
+    });
   }
 
   revalidatePath('/(workspace)', 'layout');

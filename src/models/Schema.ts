@@ -15,6 +15,8 @@ import {
   varchar,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { auditActions, auditTargetKinds } from '@/features/audit-logs/AuditLog';
+import type { AuditLogMetadata } from '@/features/audit-logs/AuditLog';
 import {
   DOCUMENT_CONTENT_SCHEMA_VERSION,
   EMPTY_DOCUMENT_CONTENT,
@@ -40,6 +42,8 @@ export const notificationTargetKindEnum = pgEnum(
   'notification_target_kind',
   notificationTargetKinds,
 );
+export const auditActionEnum = pgEnum('audit_action', auditActions);
+export const auditTargetKindEnum = pgEnum('audit_target_kind', auditTargetKinds);
 export const workspaceKindEnum = pgEnum('workspace_kind', workspaceKinds);
 export const userThemePreferenceEnum = pgEnum('user_theme_preference', userThemePreferences);
 
@@ -354,5 +358,27 @@ export const starredDocumentsSchema = pgTable(
   (table) => [
     primaryKey({ columns: [table.userId, table.documentId] }),
     index('starred_documents_user_created_idx').on(table.userId, table.createdAt.desc()),
+  ],
+);
+
+export const auditLogsSchema = pgTable(
+  'audit_logs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
+    actorUserId: varchar('actor_user_id', { length: 255 }).notNull(),
+    action: auditActionEnum('action').notNull(),
+    targetKind: auditTargetKindEnum('target_kind'),
+    targetId: varchar('target_id', { length: 255 }),
+    metadata: jsonb('metadata').$type<AuditLogMetadata>().default({}).notNull(),
+    ipAddress: varchar('ip_address', { length: 128 }),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('audit_logs_workspace_created_idx').on(table.workspaceId, table.createdAt.desc()),
+    index('audit_logs_actor_idx').on(table.actorUserId),
   ],
 );

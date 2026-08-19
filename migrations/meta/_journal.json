@@ -141,6 +141,13 @@
       "when": 1787034716474,
       "tag": "0019_add-better-auth",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787124344752,
+      "tag": "0020_swift_groot",
+      "breakpoints": true
     }
   ]
 }

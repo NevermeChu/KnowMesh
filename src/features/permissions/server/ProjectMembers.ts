@@ -2,6 +2,7 @@
 
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { db } from '@/libs/DB';
@@ -17,12 +18,14 @@ import {
   projectAccessReviewSchema,
   projectInvitationSchema,
   projectMemberMutationSchema,
+  transferProjectOwnershipSchema,
 } from '../MemberSchema';
 import type {
   ProjectAccessRequestInput,
   ProjectAccessReviewInput,
   ProjectInvitationInput,
   ProjectMemberMutationInput,
+  TransferProjectOwnershipInput,
 } from '../MemberSchema';
 import { authorizeProject } from './ProjectAuthorization';
 
@@ -103,6 +106,17 @@ export async function inviteProjectMember(input: ProjectInvitationInput) {
         title: '收到项目邀请',
         type: 'project_invited',
       });
+      await recordAuditLog(transaction, {
+        action: 'project_invited',
+        actorUserId: userId,
+        metadata: {
+          resourceName: authorization.project.name,
+          targetUserId: memberInput.memberUserId,
+        },
+        targetId: memberInput.memberUserId,
+        targetKind: 'invitation',
+        workspaceId: authorization.project.workspaceId,
+      });
     }
   });
 
@@ -180,6 +194,16 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
       target: { id: invitation.projectId, kind: 'project' },
       title: '项目邀请已接受',
       type: 'project_invitation_accepted',
+    });
+    await recordAuditLog(transaction, {
+      action: 'project_invitation_accepted',
+      actorUserId: userId,
+      metadata: {
+        resourceName: project.name,
+      },
+      targetId: userId,
+      targetKind: 'member',
+      workspaceId: project.workspaceId,
     });
   });
 
@@ -310,6 +334,18 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
       title: '项目权限申请已通过',
       type: 'project_access_approved',
     });
+    await recordAuditLog(transaction, {
+      action: 'project_access_approved',
+      actorUserId: userId,
+      metadata: {
+        nextRole: request.requestedRole,
+        resourceName: project.name,
+        targetUserId: reviewInput.memberUserId,
+      },
+      targetId: reviewInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: project.workspaceId,
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -325,7 +361,7 @@ export async function rejectProjectAccessRequest(input: ProjectAccessReviewInput
 
   await db.transaction(async (transaction) => {
     const [project] = await transaction
-      .select({ name: projectsSchema.name })
+      .select({ name: projectsSchema.name, workspaceId: projectsSchema.workspaceId })
       .from(projectsSchema)
       .where(eq(projectsSchema.id, reviewInput.projectId))
       .limit(1);
@@ -355,6 +391,17 @@ export async function rejectProjectAccessRequest(input: ProjectAccessReviewInput
       target: { id: reviewInput.projectId, kind: 'project' },
       title: '项目权限申请未通过',
       type: 'project_access_rejected',
+    });
+    await recordAuditLog(transaction, {
+      action: 'project_access_rejected',
+      actorUserId: userId,
+      metadata: {
+        resourceName: project.name,
+        targetUserId: reviewInput.memberUserId,
+      },
+      targetId: reviewInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: project.workspaceId,
     });
   });
 
@@ -401,6 +448,19 @@ export async function updateProjectMemberRole(input: ProjectMemberMutationInput)
         type: 'project_member_role_updated',
       });
     }
+
+    await recordAuditLog(transaction, {
+      action: 'project_member_role_updated',
+      actorUserId: userId,
+      metadata: {
+        nextRole: memberInput.role,
+        resourceName: authorization.project.name,
+        targetUserId: memberInput.memberUserId,
+      },
+      targetId: memberInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: authorization.project.workspaceId,
+    });
 
     return updatedMembership;
   });
@@ -453,6 +513,18 @@ export async function removeProjectMember(input: ProjectMemberMutationInput) {
       });
     }
 
+    await recordAuditLog(transaction, {
+      action: 'project_member_removed',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.project.name,
+        targetUserId: memberInput.memberUserId,
+      },
+      targetId: memberInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: authorization.project.workspaceId,
+    });
+
     return deletedMembership;
   });
 
@@ -462,7 +534,7 @@ export async function removeProjectMember(input: ProjectMemberMutationInput) {
 
 export async function revokeProjectInvitation(input: ProjectInvitationInput) {
   const invitationInput = projectInvitationSchema.parse(input);
-  const { memberInput } = await authorizeProjectMemberMutation({
+  const { authorization, memberInput, userId } = await authorizeProjectMemberMutation({
     ...invitationInput,
     role: 'viewer',
   });
@@ -480,6 +552,18 @@ export async function revokeProjectInvitation(input: ProjectInvitationInput) {
   if (!revoked) {
     throw new Error('邀请不存在或已处理');
   }
+
+  await recordAuditLog(db, {
+    action: 'project_invitation_revoked',
+    actorUserId: userId,
+    metadata: {
+      resourceName: authorization.project.name,
+      targetUserId: memberInput.memberUserId,
+    },
+    targetId: memberInput.memberUserId,
+    targetKind: 'invitation',
+    workspaceId: authorization.project.workspaceId,
+  });
 
   revalidatePath('/(workspace)', 'layout');
   return revoked;
@@ -499,4 +583,135 @@ export async function rejectProjectInvitation(input: { projectId: string }) {
     );
 
   revalidatePath('/(workspace)', 'layout');
+}
+
+/**
+ * Transfers project ownership to another member in the same workspace.
+ *
+ * @param input - Target member user ID and project ID.
+ * @returns The transferred project ID and new owner user ID.
+ */
+export async function transferProjectOwnership(input: TransferProjectOwnershipInput) {
+  const { id: userId } = await requireUser();
+  const transferInput = transferProjectOwnershipSchema.parse(input);
+
+  if (transferInput.targetUserId === userId) {
+    throw new Error('不能将项目所有权转让给自己');
+  }
+
+  const authorization = await authorizeProject({
+    permission: 'project.delete',
+    projectId: transferInput.projectId,
+    userId,
+  });
+
+  if (authorization.project.workspaceKind === 'personal') {
+    throw new Error('个人空间不支持所有权转让');
+  }
+
+  if (authorization.project.ownerId !== userId) {
+    throw new Error('只有项目所有者可以转让所有权');
+  }
+
+  await db.transaction(async (transaction) => {
+    const [workspaceMembership] = await transaction
+      .select({ userId: workspaceMembersSchema.userId })
+      .from(workspaceMembersSchema)
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, authorization.project.workspaceId),
+          eq(workspaceMembersSchema.userId, transferInput.targetUserId),
+        ),
+      )
+      .for('update');
+
+    if (!workspaceMembership) {
+      throw new Error('目标用户不是该工作区成员');
+    }
+
+    const [currentMembership] = await transaction
+      .select({ role: projectMembersSchema.role, userId: projectMembersSchema.userId })
+      .from(projectMembersSchema)
+      .where(
+        and(
+          eq(projectMembersSchema.projectId, transferInput.projectId),
+          eq(projectMembersSchema.userId, userId),
+        ),
+      )
+      .for('update');
+
+    if (!currentMembership || currentMembership.role !== 'owner') {
+      throw new Error('当前用户不是项目所有者');
+    }
+
+    await transaction
+      .update(projectMembersSchema)
+      .set({ role: 'editor' })
+      .where(
+        and(
+          eq(projectMembersSchema.projectId, transferInput.projectId),
+          eq(projectMembersSchema.userId, userId),
+        ),
+      );
+
+    await transaction
+      .insert(projectMembersSchema)
+      .values({
+        projectId: transferInput.projectId,
+        role: 'owner',
+        userId: transferInput.targetUserId,
+        workspaceId: authorization.project.workspaceId,
+      })
+      .onConflictDoUpdate({
+        set: { role: 'owner' },
+        target: [projectMembersSchema.projectId, projectMembersSchema.userId],
+      });
+
+    await transaction
+      .update(projectsSchema)
+      .set({ ownerId: transferInput.targetUserId })
+      .where(eq(projectsSchema.id, transferInput.projectId));
+
+    await transaction
+      .delete(projectAccessRequestsSchema)
+      .where(
+        and(
+          eq(projectAccessRequestsSchema.projectId, transferInput.projectId),
+          eq(projectAccessRequestsSchema.userId, transferInput.targetUserId),
+        ),
+      );
+
+    await transaction
+      .delete(projectInvitationsSchema)
+      .where(
+        and(
+          eq(projectInvitationsSchema.projectId, transferInput.projectId),
+          eq(projectInvitationsSchema.userId, transferInput.targetUserId),
+        ),
+      );
+
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `你已成为项目“${authorization.project.name}”的所有者。`,
+      recipientUserId: transferInput.targetUserId,
+      target: { id: transferInput.projectId, kind: 'project' },
+      title: '项目所有权转让',
+      type: 'project_member_role_updated',
+    });
+
+    await recordAuditLog(transaction, {
+      action: 'project_ownership_transferred',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.project.name,
+        targetUserId: transferInput.targetUserId,
+      },
+      targetId: transferInput.targetUserId,
+      targetKind: 'member',
+      workspaceId: authorization.project.workspaceId,
+    });
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+  return { newOwnerId: transferInput.targetUserId, projectId: transferInput.projectId };
 }

@@ -77,6 +77,9 @@ function SidebarContent(props: {
       </div>
 
       <SettingsMenu
+        canViewAuditLogs={
+          props.activeWorkspace?.kind === 'team' && props.activeWorkspace?.role === 'owner'
+        }
         isOpen={props.openMenu === 'settings'}
         isNotificationsRoute={props.pathname.startsWith('/notifications')}
         isSettingsRoute={props.pathname.startsWith('/settings')}

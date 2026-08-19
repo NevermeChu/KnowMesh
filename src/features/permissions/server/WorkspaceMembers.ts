@@ -1,8 +1,9 @@
 'use server';
 
 import { randomBytes } from 'node:crypto';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorkspaceInvitationEmail';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
@@ -14,6 +15,7 @@ import {
 } from '@/features/workspaces/WorkspaceInvitation';
 import { db } from '@/libs/DB';
 import {
+  notificationsSchema,
   projectMembersSchema,
   projectAccessRequestsSchema,
   projectInvitationsSchema,
@@ -29,6 +31,7 @@ import {
   acceptWorkspaceInvitationSchema,
   inviteWorkspaceMemberSchema,
   revokeWorkspaceInvitationSchema,
+  transferWorkspaceOwnershipSchema,
   workspaceMemberMutationSchema,
   workspaceAccessRequestSchema,
   workspaceAccessReviewSchema,
@@ -37,6 +40,7 @@ import type {
   AcceptWorkspaceInvitationInput,
   InviteWorkspaceMemberInput,
   RevokeWorkspaceInvitationInput,
+  TransferWorkspaceOwnershipInput,
   WorkspaceMemberMutationInput,
   WorkspaceAccessRequestInput,
   WorkspaceAccessReviewInput,
@@ -82,6 +86,24 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
     }
   }
 
+  const [existingPendingInvitation] = await db
+    .select({ id: workspaceInvitationsSchema.id })
+    .from(workspaceInvitationsSchema)
+    .where(
+      and(
+        eq(workspaceInvitationsSchema.workspaceId, invitationInput.workspaceId),
+        eq(sql`lower(${workspaceInvitationsSchema.email})`, invitationInput.email),
+        isNull(workspaceInvitationsSchema.acceptedAt),
+        isNull(workspaceInvitationsSchema.revokedAt),
+        gt(workspaceInvitationsSchema.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+
+  if (existingPendingInvitation) {
+    throw new Error('该邮箱已有待处理的工作区邀请');
+  }
+
   const token = randomBytes(32).toString('base64url');
   const tokenHash = hashWorkspaceInvitationToken(token);
   const expiresAt = new Date(Date.now() + INVITATION_LIFETIME_MS);
@@ -119,15 +141,43 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
   }
 
   if (existingUser) {
-    await createNotification(db, {
-      actorUserId: userId,
-      body: `${getWorkspaceInvitationInviterName(inviter)} 邀请你加入工作区“${authorization.workspace.name}”。`,
-      recipientUserId: existingUser.id,
-      target: { id: invitationInput.workspaceId, kind: 'workspace' },
-      title: '收到工作区邀请',
-      type: 'workspace_invited',
-    });
+    const [existingNotification] = await db
+      .select({ id: notificationsSchema.id })
+      .from(notificationsSchema)
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, existingUser.id),
+          eq(notificationsSchema.type, 'workspace_invited'),
+          eq(notificationsSchema.targetKind, 'workspace'),
+          eq(notificationsSchema.targetId, invitationInput.workspaceId),
+          isNull(notificationsSchema.readAt),
+        ),
+      )
+      .limit(1);
+
+    if (!existingNotification) {
+      await createNotification(db, {
+        actorUserId: userId,
+        body: `${getWorkspaceInvitationInviterName(inviter)} 邀请你加入工作区“${authorization.workspace.name}”。`,
+        recipientUserId: existingUser.id,
+        target: { id: invitationInput.workspaceId, kind: 'workspace' },
+        title: '收到工作区邀请',
+        type: 'workspace_invited',
+      });
+    }
   }
+
+  await recordAuditLog(db, {
+    action: 'workspace_invited',
+    actorUserId: userId,
+    metadata: {
+      resourceName: authorization.workspace.name,
+      targetUserEmail: invitationInput.email,
+    },
+    targetId: invitation.id,
+    targetKind: 'invitation',
+    workspaceId: invitationInput.workspaceId,
+  });
 
   return invitation;
 }
@@ -183,6 +233,16 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
       title: '工作区邀请已接受',
       type: 'workspace_invitation_accepted',
     });
+    await recordAuditLog(transaction, {
+      action: 'workspace_invitation_accepted',
+      actorUserId: userId,
+      metadata: {
+        resourceName: workspace.name,
+      },
+      targetId: userId,
+      targetKind: 'member',
+      workspaceId: invitation.workspaceId,
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -214,11 +274,23 @@ export async function revokeWorkspaceInvitation(input: RevokeWorkspaceInvitation
         isNull(workspaceInvitationsSchema.revokedAt),
       ),
     )
-    .returning({ id: workspaceInvitationsSchema.id });
+    .returning({ id: workspaceInvitationsSchema.id, email: workspaceInvitationsSchema.email });
 
   if (!revoked) {
     throw new Error('邀请不存在或已处理');
   }
+
+  await recordAuditLog(db, {
+    action: 'workspace_invitation_revoked',
+    actorUserId: userId,
+    metadata: {
+      resourceName: authorization.workspace.name,
+      targetUserEmail: revoked.email,
+    },
+    targetId: revokeInput.invitationId,
+    targetKind: 'invitation',
+    workspaceId: revokeInput.workspaceId,
+  });
 
   revalidatePath('/(workspace)', 'layout');
   return revoked;
@@ -277,6 +349,19 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
         type: 'workspace_member_role_updated',
       });
     }
+
+    await recordAuditLog(transaction, {
+      action: 'workspace_member_role_updated',
+      actorUserId: userId,
+      metadata: {
+        nextRole: memberInput.role,
+        resourceName: authorization.workspace.name,
+        targetUserId: memberInput.memberUserId,
+      },
+      targetId: memberInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: memberInput.workspaceId,
+    });
 
     return updatedMembership;
   });
@@ -367,6 +452,18 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
       title: '工作区权限申请已通过',
       type: 'workspace_access_approved',
     });
+    await recordAuditLog(transaction, {
+      action: 'workspace_access_approved',
+      actorUserId: userId,
+      metadata: {
+        nextRole: 'editor',
+        resourceName: authorization.workspace.name,
+        targetUserId: reviewInput.memberUserId,
+      },
+      targetId: reviewInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: reviewInput.workspaceId,
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -407,6 +504,17 @@ export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewI
       target: { id: reviewInput.workspaceId, kind: 'workspace' },
       title: '工作区权限申请未通过',
       type: 'workspace_access_rejected',
+    });
+    await recordAuditLog(transaction, {
+      action: 'workspace_access_rejected',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.workspace.name,
+        targetUserId: reviewInput.memberUserId,
+      },
+      targetId: reviewInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: reviewInput.workspaceId,
     });
   });
 
@@ -521,8 +629,139 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
         type: 'workspace_member_removed',
       });
     }
+
+    await recordAuditLog(transaction, {
+      action: 'workspace_member_removed',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.workspace.name,
+        targetUserId: memberInput.memberUserId,
+      },
+      targetId: memberInput.memberUserId,
+      targetKind: 'member',
+      workspaceId: memberInput.workspaceId,
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
   return { userId: memberInput.memberUserId };
+}
+
+/**
+ * Transfers team workspace ownership to another workspace member.
+ *
+ * @param input - Target member user ID and workspace ID.
+ * @returns The transferred workspace ID and new owner user ID.
+ */
+export async function transferWorkspaceOwnership(input: TransferWorkspaceOwnershipInput) {
+  const { id: userId } = await requireUser();
+  const transferInput = transferWorkspaceOwnershipSchema.parse(input);
+
+  if (transferInput.targetUserId === userId) {
+    throw new Error('不能将工作区所有权转让给自己');
+  }
+
+  const authorization = await authorizeWorkspace({
+    permission: 'workspace.delete',
+    userId,
+    workspaceId: transferInput.workspaceId,
+  });
+
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不支持所有权转让');
+  }
+
+  if (authorization.workspace.ownerId !== userId) {
+    throw new Error('只有工作区所有者可以转让所有权');
+  }
+
+  await db.transaction(async (transaction) => {
+    const [targetMembership] = await transaction
+      .select({ role: workspaceMembersSchema.role, userId: workspaceMembersSchema.userId })
+      .from(workspaceMembersSchema)
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, transferInput.workspaceId),
+          eq(workspaceMembersSchema.userId, transferInput.targetUserId),
+        ),
+      )
+      .for('update');
+
+    if (!targetMembership) {
+      throw new Error('目标用户不是该工作区成员');
+    }
+
+    const [currentMembership] = await transaction
+      .select({ role: workspaceMembersSchema.role, userId: workspaceMembersSchema.userId })
+      .from(workspaceMembersSchema)
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, transferInput.workspaceId),
+          eq(workspaceMembersSchema.userId, userId),
+        ),
+      )
+      .for('update');
+
+    if (!currentMembership || currentMembership.role !== 'owner') {
+      throw new Error('当前用户不是工作区所有者');
+    }
+
+    await transaction
+      .update(workspaceMembersSchema)
+      .set({ role: 'editor' })
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, transferInput.workspaceId),
+          eq(workspaceMembersSchema.userId, userId),
+        ),
+      );
+
+    await transaction
+      .update(workspaceMembersSchema)
+      .set({ role: 'owner' })
+      .where(
+        and(
+          eq(workspaceMembersSchema.workspaceId, transferInput.workspaceId),
+          eq(workspaceMembersSchema.userId, transferInput.targetUserId),
+        ),
+      );
+
+    await transaction
+      .update(workspacesSchema)
+      .set({ ownerId: transferInput.targetUserId })
+      .where(eq(workspacesSchema.id, transferInput.workspaceId));
+
+    await transaction
+      .delete(workspaceAccessRequestsSchema)
+      .where(
+        and(
+          eq(workspaceAccessRequestsSchema.workspaceId, transferInput.workspaceId),
+          eq(workspaceAccessRequestsSchema.userId, transferInput.targetUserId),
+        ),
+      );
+
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `你已成为工作区“${authorization.workspace.name}”的所有者。`,
+      recipientUserId: transferInput.targetUserId,
+      target: { id: transferInput.workspaceId, kind: 'workspace' },
+      title: '工作区所有权转让',
+      type: 'workspace_member_role_updated',
+    });
+
+    await recordAuditLog(transaction, {
+      action: 'workspace_ownership_transferred',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.workspace.name,
+        targetUserId: transferInput.targetUserId,
+      },
+      targetId: transferInput.targetUserId,
+      targetKind: 'member',
+      workspaceId: transferInput.workspaceId,
+    });
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+  return { newOwnerId: transferInput.targetUserId, workspaceId: transferInput.workspaceId };
 }

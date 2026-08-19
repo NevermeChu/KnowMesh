@@ -37,7 +37,7 @@ User
 - Team 项目的内容权限只由 `project_members.role` 决定，不与 Workspace 角色合并；Workspace owner 也不能绕过该边界。
 - 项目直接成员必须先属于对应 Team Workspace。
 - Workspace 成员仍拥有任意项目时不得被移除，防止 `projects.owner_id` 指向已离开的成员。
-- Workspace 和 Project 主动退出已经实现；所有权转让尚未实现。
+- Workspace 和 Project 主动退出与所有权转让已经实现。所有权只能由当前 owner 转让给同工作区内的成员，转让后原 owner 自动变更为 editor。
 
 ## 统一删除与退出
 
@@ -49,11 +49,27 @@ Workspace 和 Project 使用同一套 owner/member 规则，不区分 Personal �
 
 Project 的删除或退出入口位于侧边栏 Project 右键打开的权限弹窗；Workspace 的删除或退出入口位于“设置 → 工作区管理”。服务端分别由 `deleteOrLeaveProject` 和 `deleteOrLeaveWorkspace` 通过 `requireUser()` 重新读取身份和资源访问关系，不信任客户端传入的 owner/member 状态。
 
+## 所有权转让
+
+- Team Workspace 和 Team Project 支持所有权转让，Personal 空间及其项目不可转让。
+- 仅当前唯一 owner 可以发起转让；转让目标必须是所属 Workspace 的有效成员且不能是当前 owner 本身。
+- Workspace 转让在事务中将原 owner 角色降为 `editor`、目标成员角色提升为 `owner` 并更新 `workspaces.owner_id`。
+- Project 转让在事务中将原 owner 角色降为 `editor`、目标成员设为 `owner`（若尚未加入项目则自动插入成员记录）并更新 `projects.owner_id`。
+- 转让在事务内自动清理目标用户的待处理申请和邀请，并通过站内通知告知新 owner。
+
+## 安全与操作审计体系
+
+- Team Workspace 支持全局操作审计日志，记录成员进出、角色变更、所有权转让、资源重命名与删除等不可篡改的关键事件。
+- 审计日志严格对 **Workspace Owner** 开放（路由 `/settings/audit-logs`）；非 Owner 用户在侧边栏和设置菜单中不展示入口，直接访问页面或接口会被服务端拦截（403 权限拒绝）。
+- 审计日志在业务 Server Action 事务内同步写入 `audit_logs` 表，记录操作者 ID、事件类型、目标资源类型与 ID、结构化详情 metadata、请求 IP 及客户端环境。
+- 审计日志归属于 Team Workspace，当 Workspace 被删除或账户注销时随外键级联清理。
+
+
 ## 账户删除过渡策略
 
 KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，并在同一个数据库事务中删除 Better Auth 身份。该流程复用统一删除与退出规则遍历用户的 Workspace 成员关系：删除该用户拥有的 Personal/Team Workspace；对于其他人的 Workspace，先删除其中由该用户拥有的 Project、退出其他直接参与的 Project，再退出 Workspace。数据库级联删除自有资源的 Document 和协作状态。
 
-共享 Project 中由该用户创建、但不由该用户拥有的 Document 继续保留，并把 `created_by_id` 匿名化为 `deleted_user`。该策略可能删除其他成员参与的 Team Workspace 或 Project，是明确记录的过渡行为，不代表未来所有权转让方案。
+共享 Project 中由该用户创建、但不由该用户拥有的 Document 继续保留，并把 `created_by_id` 匿名化为 `deleted_user`。该策略可能删除其他成员参与的 Team Workspace 或 Project，是明确记录的过渡行为。
 
 ## 创建与读取
 
@@ -72,11 +88,11 @@ KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，�
 
 - Personal Workspace 只显示 owner，不提供邀请和成员管理。
 - Personal 项目只显示 owner，不提供项目成员管理或 Workspace 继承组。
-- Team Workspace 支持 Resend 邮箱邀请、待接受邀请查看与撤回、成员角色修改和移除；邮件负责静态通知和导航，受保护的接受页负责实时状态校验和用户确认，两者共享展示数据但不共享运行时 UI。
+- Team Workspace 支持 Resend 邮箱邀请、待接受邀请查看与撤回、成员角色修改、所有权转让和移除；邮件负责静态通知和导航，受保护的接受页负责实时状态校验和用户确认，两者共享展示数据但不共享运行时 UI。
 - Workspace 邀请生成七天有效的一次性原始令牌，数据库只保存其哈希。应用先写邀请记录，再调用 Resend；发送失败时会尝试删除刚创建的记录并向调用方返回失败。数据库和邮件服务不共享事务，因此该补偿不能被视为跨服务原子提交。
 - Team 项目只显示项目直接成员；Workspace 成员作为邀请候选人而不是项目权限成员。
 - Workspace 和 Project 邀请接受后默认加入为 viewer。Workspace viewer 可申请 editor；非项目成员可申请 viewer；Project viewer 可申请 editor。项目受邀人可选择接受或主动拒绝邀请。
-- 管理员可批准或拒绝权限申请，亦可在成员列表中直接调整成员的角色（editor 与 viewer）；申请被拒绝、审批通过、成员角色变更或移出成员均会在业务事务内为相关成员写入站内通知。
+- 管理员可批准或拒绝权限申请，亦可在成员列表中直接调整成员的角色（editor 与 viewer）或由 owner 转让所有权；申请被拒绝、审批通过、成员角色变更或移出成员均会在业务事务内为相关成员写入站内通知。
 - 邀请发出、邀请接受、权限申请提交、审批通过与申请未通过会在业务事务内写入用户级站内通知；通知历史不随 Workspace 切换。
 - 文件权限总览继续展示所属项目的授权来源，不增加文档级 ACL。
 
@@ -97,7 +113,7 @@ KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，�
 | Team 项目正文只允许项目直接成员 | `PermissionPolicy`、`getProjectAuthorization` 和正文查询 |
 | 删除 Workspace/Project 级联下级资源 | 数据库外键 |
 
-复合外键和事务结束时执行的延迟约束触发器共同保护成员及 owner 不变量。创建流程仍使用事务依次写入资源与 owner 成员；未来所有权转让必须在同一事务更新 `owner_id`、原 owner 角色和新 owner 角色，否则提交会被数据库拒绝。项目创建和成员移除还会锁定同一条 Workspace 成员关系，防止并发流程越过所有权检查。
+复合外键和事务结束时执行的延迟约束触发器共同保护成员及 owner 不变量。创建流程使用事务依次写入资源与 owner 成员；所有权转让在同一事务更新 `owner_id`、原 owner 角色和新 owner 角色，严格保证事务提交时满足延迟约束触发器。项目创建和成员移除还会锁定同一条 Workspace 成员关系，防止并发流程越过所有权检查。
 
 ## 相关代码
 

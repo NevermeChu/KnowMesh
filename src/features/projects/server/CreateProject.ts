@@ -2,6 +2,7 @@
 
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { AuthorizationError } from '@/features/permissions/AuthorizationError';
 import { getWorkspacePermissions } from '@/features/permissions/PermissionPolicy';
@@ -69,6 +70,19 @@ export async function createProject(input: CreateProjectInput) {
       userId,
       workspaceId: authorization.workspace.id,
     });
+
+    if (authorization.workspace.kind === 'team') {
+      await recordAuditLog(transaction, {
+        action: 'project_created',
+        actorUserId: userId,
+        metadata: {
+          resourceName: projectInput.name,
+        },
+        targetId: createdProject.id,
+        targetKind: 'project',
+        workspaceId: authorization.workspace.id,
+      });
+    }
   });
 
   revalidatePath('/(workspace)', 'layout');
