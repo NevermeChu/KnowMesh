@@ -1,6 +1,7 @@
 'use server';
 
 import { and, eq } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { db } from '@/libs/DB';
@@ -34,5 +35,9 @@ export async function updateDocument(input: UpdateDocumentInput) {
 
   if (!document) {
     throw new Error('文档保存失败');
+  }
+
+  if (documentInput.title !== undefined) {
+    revalidatePath('/(workspace)', 'layout');
   }
 }

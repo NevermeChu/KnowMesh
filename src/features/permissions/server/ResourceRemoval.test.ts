@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/libs/DB';
 import {
+  notificationsSchema,
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
@@ -20,37 +21,62 @@ const state = vi.hoisted(() => {
   const remove = vi.fn<(table: unknown) => { where: typeof deleteWhere }>(() => ({
     where: deleteWhere,
   }));
+  const updateWhere = vi.fn<(condition: unknown) => Promise<unknown[]>>();
+  const updateSet = vi.fn<(values: unknown) => { where: typeof updateWhere }>(() => ({
+    where: updateWhere,
+  }));
+  const update = vi.fn<(table: unknown) => { set: typeof updateSet }>(() => ({
+    set: updateSet,
+  }));
   const selectWhere = vi.fn<(condition: unknown) => Promise<unknown[]>>();
   const selectJoin = vi.fn<(table: unknown, condition: unknown) => { where: typeof selectWhere }>(
     () => ({ where: selectWhere }),
   );
-  const selectFrom = vi.fn<(table: unknown) => { innerJoin: typeof selectJoin }>(() => ({
+  const selectFrom = vi.fn<
+    (table: unknown) => { innerJoin: typeof selectJoin; where: typeof selectWhere }
+  >(() => ({
     innerJoin: selectJoin,
+    where: selectWhere,
   }));
   const select = vi.fn<(fields: unknown) => { from: typeof selectFrom }>(() => ({
     from: selectFrom,
   }));
 
-  return { remove, returning, select, selectFrom, selectWhere };
+  return {
+    deleteWhere,
+    remove,
+    returning,
+    select,
+    selectFrom,
+    selectWhere,
+    update,
+    updateSet,
+    updateWhere,
+  };
 });
 
 vi.mock(import('server-only'), () => ({}));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Fluent query builders isolate removal ordering and branching.
-vi.mock('@/libs/DB', () => ({ db: { delete: state.remove, select: state.select } }));
+vi.mock('@/libs/DB', () => ({
+  db: { delete: state.remove, select: state.select, update: state.update },
+}));
 
 describe('resource removal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.selectWhere.mockResolvedValue([]);
+    state.updateWhere.mockResolvedValue([]);
   });
 
-  it('deletes project for owner', async () => {
+  it('deletes project for owner and nullifies notification targets', async () => {
     state.returning.mockResolvedValueOnce([{ id: 'project_1' }]);
 
     await expect(
       removeProjectForUser(db, { isOwner: true, projectId: 'project_1', userId: 'user_1' }),
     ).resolves.toBe('deleted');
 
+    expect(state.update).toHaveBeenCalledWith(notificationsSchema);
+    expect(state.updateSet).toHaveBeenCalledWith({ targetId: null, targetKind: null });
     expect(state.remove.mock.calls.map(([table]) => table)).toStrictEqual([projectsSchema]);
   });
 
@@ -68,7 +94,8 @@ describe('resource removal', () => {
     ]);
   });
 
-  it('deletes workspace for owner', async () => {
+  it('deletes workspace for owner and nullifies notification targets', async () => {
+    state.selectWhere.mockResolvedValueOnce([{ id: 'project_1' }]);
     state.returning.mockResolvedValueOnce([{ id: 'workspace_1' }]);
 
     await expect(
@@ -79,6 +106,8 @@ describe('resource removal', () => {
       }),
     ).resolves.toBe('deleted');
 
+    expect(state.update).toHaveBeenCalledWith(notificationsSchema);
+    expect(state.updateSet).toHaveBeenCalledWith({ targetId: null, targetKind: null });
     expect(state.remove.mock.calls.map(([table]) => table)).toStrictEqual([workspacesSchema]);
   });
 

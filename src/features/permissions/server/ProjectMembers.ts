@@ -412,6 +412,22 @@ export async function updateProjectMemberRole(input: ProjectMemberMutationInput)
 export async function removeProjectMember(input: ProjectMemberMutationInput) {
   const { authorization, memberInput, userId } = await authorizeProjectMemberMutation(input);
   const membership = await db.transaction(async (transaction) => {
+    await transaction
+      .delete(projectAccessRequestsSchema)
+      .where(
+        and(
+          eq(projectAccessRequestsSchema.projectId, memberInput.projectId),
+          eq(projectAccessRequestsSchema.userId, memberInput.memberUserId),
+        ),
+      );
+    await transaction
+      .delete(projectInvitationsSchema)
+      .where(
+        and(
+          eq(projectInvitationsSchema.projectId, memberInput.projectId),
+          eq(projectInvitationsSchema.userId, memberInput.memberUserId),
+        ),
+      );
     const [deletedMembership] = await transaction
       .delete(projectMembersSchema)
       .where(

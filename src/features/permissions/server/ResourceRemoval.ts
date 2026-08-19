@@ -1,7 +1,8 @@
 import 'server-only';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import type { db } from '@/libs/DB';
 import {
+  notificationsSchema,
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
@@ -12,7 +13,7 @@ import {
   workspacesSchema,
 } from '@/models/Schema';
 
-type ResourceRemovalDatabase = Pick<typeof db, 'delete' | 'select'>;
+type ResourceRemovalDatabase = Pick<typeof db, 'delete' | 'select' | 'update'>;
 
 /**
  * Deletes an owned project or removes one member from a project owned by someone else.
@@ -26,6 +27,16 @@ export async function removeProjectForUser(
   options: { isOwner: boolean; projectId: string; userId: string },
 ) {
   if (options.isOwner) {
+    await database
+      .update(notificationsSchema)
+      .set({ targetId: null, targetKind: null })
+      .where(
+        and(
+          eq(notificationsSchema.targetKind, 'project'),
+          eq(notificationsSchema.targetId, options.projectId),
+        ),
+      );
+
     const [project] = await database
       .delete(projectsSchema)
       .where(
@@ -85,6 +96,34 @@ export async function removeWorkspaceForUser(
   options: { isOwner: boolean; userId: string; workspaceId: string },
 ) {
   if (options.isOwner) {
+    const projects = await database
+      .select({ id: projectsSchema.id })
+      .from(projectsSchema)
+      .where(eq(projectsSchema.workspaceId, options.workspaceId));
+    const projectIds = projects.map((project) => project.id);
+
+    if (projectIds.length > 0) {
+      await database
+        .update(notificationsSchema)
+        .set({ targetId: null, targetKind: null })
+        .where(
+          and(
+            eq(notificationsSchema.targetKind, 'project'),
+            inArray(notificationsSchema.targetId, projectIds),
+          ),
+        );
+    }
+
+    await database
+      .update(notificationsSchema)
+      .set({ targetId: null, targetKind: null })
+      .where(
+        and(
+          eq(notificationsSchema.targetKind, 'workspace'),
+          eq(notificationsSchema.targetId, options.workspaceId),
+        ),
+      );
+
     const [workspace] = await database
       .delete(workspacesSchema)
       .where(

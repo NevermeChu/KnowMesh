@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { AppShell } from '@/components/layout/AppShell';
+import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getUnreadNotificationCount } from '@/features/notifications/server/GetNotifications';
 import { CONTENT_WIDTH_COOKIE, parseContentWidth } from '@/features/preferences/Preferences';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function WorkspaceLayout(props: { children: React.ReactNode }) {
-  const workspaceContext = await getWorkspaceContext();
+  const [workspaceContext, user] = await Promise.all([getWorkspaceContext(), requireUser()]);
   const workspaceIds = [
     workspaceContext.personalWorkspace?.id,
     workspaceContext.activeWorkspace?.kind === 'team'
@@ -35,6 +36,7 @@ export default async function WorkspaceLayout(props: { children: React.ReactNode
     <AppShell
       activeWorkspace={workspaceContext.activeWorkspace}
       contentWidth={contentWidth}
+      currentUserId={user.id}
       documents={documents}
       projects={projects}
       unreadNotificationCount={unreadNotificationCount}

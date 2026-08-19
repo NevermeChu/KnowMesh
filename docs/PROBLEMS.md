@@ -473,7 +473,9 @@ Team Workspace 成员原本会自动继承其中所有项目和文档能力，�
 
 ### 解决方法
 
-尚未实施。应停止持久化正文片段，只保存最小文档标识，并在命令面板打开时通过已认证的服务端查询重新解析当前用户仍可读取的最近文档；同时补充账户切换、成员移除和 Project 权限撤销后的回归测试。
+- `CommandPalette` 停止在客户端持久化正文片段与完整对象，仅将最近访问的文档 ID 保存至用户隔离的 `knowmesh:recent-document-ids:${userId}` 键中。
+- 新增 `getRecentPaletteDocuments` Server Action，在命令面板唤起时传入待验证文档 ID 列表，关联 `project_members` 重新验证当前用户对文档的直接项目权限，并在服务端过滤已删除或无权访问的文档。
+- 补充 `GetRecentPaletteDocuments.test.ts` 单元测试，覆盖按传入顺序返回已授权文档并过滤失效文档的业务边界。
 
 ## 29. 邀请与权限变更通知链路缺失及管理操作闭环不完整
 
@@ -539,3 +541,68 @@ Better Auth 内置删除入口先运行应用 `beforeDelete` 回调，再独立�
 - 关闭 Better Auth 内置账户删除入口，仅允许 KnowMesh 账号设置调用应用自有 Server Action。
 - Server Action 先通过 Better Auth 服务端 API 验证当前密码，再在同一个 Drizzle 事务中执行 `deleteUserData` 和 Better Auth `user` 行删除。
 - 身份外键在同一事务内级联删除 Account 与 Session；任一步失败时整体回滚，并以必要测试固定事务边界。
+
+## 33. 账户删除遗漏清理收藏文档关联记录
+
+### 问题
+
+用户在设置页面注销或删除账户后，其在 `starred_documents` 表中的收藏文档记录未被清除，产生与已删除用户关联的孤立数据。
+
+### 根因
+
+`starred_documents` 表的 `user_id` 仅保存用户标识字符串，未设置针对用户表的外键级联删除；而在业务清理函数 `deleteUserData` 中虽然显式清理了通知、邀请、申请、成员和偏好设置，但遗漏了对 `starred_documents` 表的删除调用。
+
+### 解决方法
+
+- 在 `deleteUserData` 事务中引入 `starredDocumentsSchema` 并按 `userId` 显式执行删除。
+- 新增 `DeleteUserData.test.ts` 单元测试，验证账户清理包含收藏文档关联记录。
+
+## 34. 全局搜索通配符未转义与 JSON 文本结构误判
+
+### 问题
+
+当用户搜索包含 `%`、`_` 等特殊字符的内容时，数据库将其作为 SQL 通配符解析；同时直接对 `documents.content` 的 JSON 字符串执行 ILIKE 会误命中 ProseMirror 结构保留字（如 `paragraph`、`bulletList`、`doc` 等），导致未包含该正文的文档被作为匹配结果返回。
+
+### 根因
+
+1. `searchWorkspaceContent` 在构建 SQL 模式时未转义 SQL LIKE 特殊字符。
+2. 检索条件使用 `documents.content::text ilike searchPattern` 针对整棵 ProseMirror 序列化 JSON 执行匹配，JSON 节点类型和属性键名被当作正文参与了匹配。
+
+### 解决方法
+
+- 新增 `escapeSqlLikePattern` 工具函数，对查询关键词中的 `%`、`_`、`\` 等 SQL 通配符进行转义。
+- 在 `searchWorkspaceContent` 返回结果前，结合 `extractPlainText` 校验文档实际标题或纯文本正文是否确实包含搜索词，过滤仅匹配到 JSON 节点结构的假阳性记录。
+- 编写 `SqlPattern.test.ts` 与 `SearchWorkspaceContent.test.ts` 单元测试，覆盖通配符转义与结构假阳性过滤。
+
+## 35. 文档标题更新未触发服务端布局缓存失效
+
+### 问题
+
+用户在编辑器中重命名文档标题后，虽然客户端触发了 `router.refresh()`，但侧边栏树状导航、收藏文档列表及概览页仍可能展示旧标题，需手动强刷浏览器才能同步。
+
+### 根因
+
+创建与删除文档（`createDocument` / `deleteDocument`）均调用了 `revalidatePath('/(workspace)', 'layout')` 失效 Next.js 服务端工作区导航缓存，而 `updateDocument` 为避免正文频繁防抖保存导致过载未配置无条件失效，同时遗漏了在 `title` 字段发生变更时定向触发 `revalidatePath`。
+
+### 解决方法
+
+- 在 `updateDocument` 服务端函数中，判断当且仅当包含 `title` 属性时调用 `revalidatePath('/(workspace)', 'layout')`，实现标题变更即时同步且不影响正文防抖保存性能。
+- 补充 `UpdateDocument.test.ts` 单元测试，验证正文更新不触发失效、标题更新定向触发工作区布局缓存失效。
+
+## 36. 资源删除与成员移出遗留多态通知死链及待处理申请
+
+### 问题
+
+当工作区或项目所有者删除资源时，受影响成员的站内通知列表中仍残留指向已删除资源的跳转操作，点击后落入无效路由；同时管理员移出项目成员时，该成员在目标项目中的待处理申请与邀请未被清理。
+
+### 根因
+
+1. `notifications` 表采用 `target_kind` 与 `target_id` 多态关联设计，未建立物理外键约束；在 `removeProjectForUser` 与 `removeWorkspaceForUser` 的所有者删除流程中，仅级联清理了直接成员、邀请与申请关系，未同步处理多态通知目标。
+2. `removeProjectMember` 在事务中仅删除了 `project_members` 成员行，遗漏了对该成员在当前项目中的 `project_access_requests` 和 `project_invitations` 进行关联清理。
+
+### 解决方法
+
+- 在 `removeProjectForUser` 所有者删除分支中，原子更新 `notifications` 表，将对应 `target_kind = 'project'` 且 `target_id = projectId` 的记录更新为 `target_kind = null, target_id = null`，保留通知历史快照同时满足 `notifications_target_pair_check` 约束并安全移除死链。
+- 在 `removeWorkspaceForUser` 所有者删除分支中，先查询该工作区下全部项目，原子将该工作区及其下属全部项目的通知目标置空后删除工作区。
+- 在 `removeProjectMember` 事务中补充删除目标成员在当前项目中的待处理申请与邀请。
+- 更新 `ResourceRemoval.test.ts` 单元测试，覆盖工作区与项目删除时的通知目标置空逻辑。

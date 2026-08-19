@@ -8,6 +8,7 @@ import {
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
+  starredDocumentsSchema,
   userPreferencesSchema,
   workspaceAccessRequestsSchema,
   workspaceInvitationsSchema,
@@ -71,6 +72,7 @@ export async function deleteUserData(database: UserDataDeletionDatabase, userId:
   await database.delete(projectMembersSchema).where(eq(projectMembersSchema.userId, userId));
   await database.delete(workspaceMembersSchema).where(eq(workspaceMembersSchema.userId, userId));
   await database.delete(userPreferencesSchema).where(eq(userPreferencesSchema.userId, userId));
+  await database.delete(starredDocumentsSchema).where(eq(starredDocumentsSchema.userId, userId));
 
   await database
     .update(documentsSchema)

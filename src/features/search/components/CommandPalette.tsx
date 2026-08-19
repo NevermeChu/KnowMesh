@@ -31,38 +31,32 @@ import { applyThemePreference } from '@/features/preferences/components/ApplyThe
 import { isUserThemePreference } from '@/features/preferences/Preferences';
 import { updateThemePreference } from '@/features/preferences/server/UpdateThemePreference';
 import type { SearchFilter, SearchResultItem } from '../Search';
+import { getRecentPaletteDocuments } from '../server/GetRecentPaletteDocuments';
 import { searchWorkspaceContent } from '../server/SearchWorkspaceContent';
 
-const RECENT_DOCS_KEY = 'knowmesh:recent-documents';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function getRecentDocsStorageKey(userId?: string): string {
+  return userId ? `knowmesh:recent-document-ids:${userId}` : 'knowmesh:recent-document-ids';
 }
 
-function isSearchResultItem(item: unknown): item is SearchResultItem {
-  if (!isRecord(item)) {
-    return false;
-  }
+function isUuidString(value: unknown): value is string {
   return (
-    typeof item.documentId === 'string' &&
-    typeof item.projectId === 'string' &&
-    typeof item.projectName === 'string' &&
-    typeof item.title === 'string'
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)
   );
 }
 
-function getStoredRecentDocs(): SearchResultItem[] {
+function getStoredRecentDocIds(userId?: string): string[] {
   if (typeof window === 'undefined') {
     return [];
   }
   try {
-    const raw = localStorage.getItem(RECENT_DOCS_KEY);
+    const raw = localStorage.getItem(getRecentDocsStorageKey(userId));
     if (!raw) {
       return [];
     }
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed.filter(isSearchResultItem);
+      return parsed.filter(isUuidString).slice(0, 6);
     }
     return [];
   } catch {
@@ -70,14 +64,15 @@ function getStoredRecentDocs(): SearchResultItem[] {
   }
 }
 
-function persistRecentDoc(item: SearchResultItem) {
-  if (typeof window === 'undefined') {
+function persistRecentDocId(documentId: string, userId?: string) {
+  if (typeof window === 'undefined' || !isUuidString(documentId)) {
     return;
   }
   try {
-    const existing = getStoredRecentDocs().filter((doc) => doc.documentId !== item.documentId);
-    const updated = [item, ...existing].slice(0, 4);
-    localStorage.setItem(RECENT_DOCS_KEY, JSON.stringify(updated));
+    const key = getRecentDocsStorageKey(userId);
+    const existing = getStoredRecentDocIds(userId).filter((id) => id !== documentId);
+    const updated = [documentId, ...existing].slice(0, 6);
+    localStorage.setItem(key, JSON.stringify(updated));
   } catch {
     // Ignore storage quota errors
   }
@@ -323,11 +318,12 @@ function PaletteSuggestions(props: {
 
 /**
  * Global command palette dialog supporting keyboard shortcuts (Cmd+K / Ctrl+K),
- * debounced document search, quick navigation, recent history, and shortcuts help.
+ * debounced document search, quick navigation, user-isolated recent history, and shortcuts help.
  *
+ * @param props - Current user identifier for isolating recent document history.
  * @returns The command palette modal portal.
  */
-export function CommandPalette() {
+export function CommandPalette(props?: { currentUserId?: string }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -464,18 +460,33 @@ export function CommandPalette() {
     };
   }, []);
 
-  // Reset query, load stored recents and focus input upon opening
+  // Reset query, load authenticated recent docs from server and focus input upon opening
   useEffect(() => {
     if (isOpen) {
       setQuery('');
       setResults([]);
-      setRecentDocs(getStoredRecentDocs());
       setSelectedIndex(0);
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
+
+      const storedIds = getStoredRecentDocIds(props?.currentUserId);
+      if (storedIds.length > 0) {
+        const loadRecentDocuments = async () => {
+          try {
+            const items = await getRecentPaletteDocuments({ documentIds: storedIds });
+            setRecentDocs(items);
+          } catch {
+            setRecentDocs([]);
+          }
+        };
+
+        void loadRecentDocuments();
+      } else {
+        setRecentDocs([]);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, props?.currentUserId]);
 
   // Debounced search when query or filter changes
   useEffect(() => {
@@ -529,7 +540,7 @@ export function CommandPalette() {
     : recentDocs.length + quickNavigations.length + quickActions.length;
 
   const handleSelectResult = (result: SearchResultItem) => {
-    persistRecentDoc(result);
+    persistRecentDocId(result.documentId, props?.currentUserId);
     setIsOpen(false);
     const targetHref = `/${result.workspaceKind === 'personal' ? 'personal' : 'collaboration'}?project=${result.projectId}&document=${result.documentId}`;
     router.push(targetHref);

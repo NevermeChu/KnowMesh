@@ -30,6 +30,7 @@ export function AppShell(props: {
   activeWorkspace: Workspace | null;
   children: React.ReactNode;
   contentWidth: ContentWidthPercentage;
+  currentUserId?: string;
   documents: DocumentNavigationItem[];
   projects: Project[];
   unreadNotificationCount: number;
@@ -99,7 +100,7 @@ export function AppShell(props: {
           />
           <div className="px-5 sm:px-8 lg:px-12">{props.children}</div>
         </main>
-        <CommandPalette />
+        <CommandPalette currentUserId={props.currentUserId} />
         <ShortcutsHelpDialog />
       </div>
     </DocumentEditorToolbarProvider>

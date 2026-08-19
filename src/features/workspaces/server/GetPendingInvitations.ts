@@ -30,7 +30,7 @@ export const getPendingInvitations = cache(async (limit = 5): Promise<PendingInv
     .where(
       and(
         eq(workspaceInvitationsSchema.email, user.email.toLowerCase()),
-        isNull(workspaceInvitationsSchema.acceptedById),
+        isNull(workspaceInvitationsSchema.acceptedAt),
         isNull(workspaceInvitationsSchema.revokedAt),
         gt(workspaceInvitationsSchema.expiresAt, new Date()),
       ),

@@ -9,6 +9,7 @@ import {
   projectsSchema,
   workspacesSchema,
 } from '@/models/Schema';
+import { escapeSqlLikePattern } from '@/utils/SqlPattern';
 import { extractPlainText, extractSnippet } from '../Search';
 import type { SearchFilter, SearchResultItem } from '../Search';
 
@@ -34,7 +35,8 @@ export async function searchWorkspaceContent(
     return [];
   }
 
-  const searchPattern = `%${trimmedQuery}%`;
+  const escapedQuery = escapeSqlLikePattern(trimmedQuery);
+  const searchPattern = `%${escapedQuery}%`;
 
   const whereConditions = [
     eq(projectMembersSchema.userId, userId),
@@ -52,7 +54,7 @@ export async function searchWorkspaceContent(
 
   const scoreSql = sql<number>`
     CASE
-      WHEN ${documentsSchema.title} ilike ${trimmedQuery} THEN 100
+      WHEN ${documentsSchema.title} ilike ${escapedQuery} THEN 100
       WHEN ${documentsSchema.title} ilike ${searchPattern} THEN 50
       ELSE 10
     END
@@ -84,11 +86,21 @@ export async function searchWorkspaceContent(
     .orderBy(desc(scoreSql), desc(documentsSchema.updatedAt))
     .limit(30);
 
-  return rows.map((row) => {
+  const normalizedQuery = trimmedQuery.toLowerCase();
+  const results: SearchResultItem[] = [];
+
+  for (const row of rows) {
     const plainText = extractPlainText(row.content);
+    const titleMatches = row.title.toLowerCase().includes(normalizedQuery);
+    const contentMatches = plainText.toLowerCase().includes(normalizedQuery);
+
+    if (!titleMatches && !contentMatches) {
+      continue;
+    }
+
     const snippet = extractSnippet(plainText, trimmedQuery);
 
-    return {
+    results.push({
       documentId: row.documentId,
       projectId: row.projectId,
       projectName: row.projectName,
@@ -98,6 +110,8 @@ export async function searchWorkspaceContent(
       workspaceId: row.workspaceId,
       workspaceKind: row.workspaceKind,
       workspaceName: row.workspaceName,
-    };
-  });
+    });
+  }
+
+  return results;
 }
