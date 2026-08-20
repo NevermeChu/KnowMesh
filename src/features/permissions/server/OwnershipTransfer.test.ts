@@ -95,6 +95,7 @@ vi.mock(import('server-only'), () => ({}));
 vi.mock(import('@/features/emails/server/SendWorkspaceInvitationEmail'), () => ({
   sendWorkspaceInvitationEmail: state.sendWorkspaceInvitationEmail,
 }));
+vi.mock(import('@/utils/Helpers'), () => ({ getBaseUrl: () => 'http://localhost:3008' }));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial cache mock isolates revalidation.
 vi.mock('next/cache', () => ({ revalidatePath: state.revalidatePath }));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial auth mock isolates identity.
