@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -7,53 +5,17 @@ import type { authorizeDocument as authorizeDocumentFunction } from '@/features/
 import type { authorizeProject as authorizeProjectFunction } from '@/features/permissions/server/ProjectAuthorization';
 import type { authorizeWorkspace as authorizeWorkspaceFunction } from '@/features/permissions/server/WorkspaceAuthorization';
 import * as schema from '@/models/Schema';
+import { executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
 
-const statementBreakpoint = '--> statement-breakpoint';
 let database: PGlite;
 let authorizeDocument: typeof authorizeDocumentFunction;
 let authorizeProject: typeof authorizeProjectFunction;
 let authorizeWorkspace: typeof authorizeWorkspaceFunction;
 
-async function executeMigration(fileName: string) {
-  const sql = await readFile(resolve('migrations', fileName), 'utf-8');
-
-  for (const statement of sql.split(statementBreakpoint)) {
-    if (statement.trim()) {
-      await database.exec(statement);
-    }
-  }
-}
-
 describe('authorization queries', () => {
   beforeAll(async () => {
     database = new PGlite();
-
-    for (const fileName of [
-      '0000_deep_the_anarchist.sql',
-      '0001_add-project-members.sql',
-      '0002_add-documents.sql',
-      '0003_add-workspaces.sql',
-      '0004_tricky_scarlet_spider.sql',
-      '0005_add-workspace-kind.sql',
-      '0006_remove-project-kind.sql',
-      '0007_remove-redundant-indexes.sql',
-      '0008_dashing_vivisector.sql',
-      '0009_cheerful_mockingbird.sql',
-      '0010_silly_nomad.sql',
-      '0011_add-notifications.sql',
-      '0012_add-user-preferences.sql',
-      '0013_add-content-width-preference.sql',
-      '0014_flawless_lilandra.sql',
-      '0015_neat_earthquake.sql',
-      '0016_perpetual_korath.sql',
-      '0017_late_dakota_north.sql',
-      '0018_cloudy_the_spike.sql',
-      '0019_add-better-auth.sql',
-      '0020_swift_groot.sql',
-      '0021_notification_realtime_delivery.sql',
-    ]) {
-      await executeMigration(fileName);
-    }
+    await executeMigrations(database, migrationFiles);
 
     await database.transaction(async (transaction) => {
       await transaction.query(`

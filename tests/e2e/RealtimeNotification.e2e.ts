@@ -5,12 +5,4 @@ test.describe('Real-time Notifications E2E', () => {
     const response = await request.get('/api/realtime/notifications');
     expect(response.status()).toBe(401);
   });
-
-  test('handles client-side EventSource subscription and events', async ({ page }) => {
-    await page.goto('/sign-in');
-
-    // Verify browser has native EventSource support
-    const hasEventSource = await page.evaluate(() => window.EventSource !== undefined);
-    expect(hasEventSource).toBeTruthy();
-  });
 });

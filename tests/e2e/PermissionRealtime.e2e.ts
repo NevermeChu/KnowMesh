@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createHmac } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Browser, Page } from '@playwright/test';
 import { Pool } from 'pg';
 import { Env } from '@/libs/Env';
 
@@ -19,6 +19,33 @@ const pool = new Pool({ connectionString: Env.DATABASE_URL });
 function getSignedSessionCookie(token: string) {
   const signature = createHmac('sha256', Env.BETTER_AUTH_SECRET).update(token).digest('base64');
   return encodeURIComponent(`${token}.${signature}`);
+}
+
+async function createAuthenticatedContext(options: {
+  baseURL: string;
+  browser: Browser;
+  sessionToken: string;
+}) {
+  const context = await options.browser.newContext();
+  await context.addCookies([
+    {
+      domain: new URL(options.baseURL).hostname,
+      httpOnly: true,
+      name: 'better-auth.session_token',
+      path: '/',
+      sameSite: 'Lax',
+      value: getSignedSessionCookie(options.sessionToken),
+    },
+    {
+      domain: new URL(options.baseURL).hostname,
+      httpOnly: true,
+      name: 'knowmesh-active-workspace',
+      path: '/',
+      sameSite: 'Lax',
+      value: workspaceId,
+    },
+  ]);
+  return context;
 }
 
 async function readSseCountSync(page: Page) {
@@ -132,44 +159,9 @@ test.describe('permission changes with realtime sessions', () => {
       throw new Error('Playwright base URL is unavailable');
     }
 
-    const cookieDomain = new URL(baseURL).hostname;
-    const ownerContext = await browser.newContext();
-    const targetContext = await browser.newContext();
-    await ownerContext.addCookies([
-      {
-        domain: cookieDomain,
-        httpOnly: true,
-        name: 'better-auth.session_token',
-        path: '/',
-        sameSite: 'Lax',
-        value: getSignedSessionCookie(ownerSessionToken),
-      },
-      {
-        domain: cookieDomain,
-        httpOnly: true,
-        name: 'knowmesh-active-workspace',
-        path: '/',
-        sameSite: 'Lax',
-        value: workspaceId,
-      },
-    ]);
-    await targetContext.addCookies([
-      {
-        domain: cookieDomain,
-        httpOnly: true,
-        name: 'better-auth.session_token',
-        path: '/',
-        sameSite: 'Lax',
-        value: getSignedSessionCookie(targetSessionToken),
-      },
-      {
-        domain: cookieDomain,
-        httpOnly: true,
-        name: 'knowmesh-active-workspace',
-        path: '/',
-        sameSite: 'Lax',
-        value: workspaceId,
-      },
+    const [ownerContext, targetContext] = await Promise.all([
+      createAuthenticatedContext({ baseURL, browser, sessionToken: ownerSessionToken }),
+      createAuthenticatedContext({ baseURL, browser, sessionToken: targetSessionToken }),
     ]);
 
     try {

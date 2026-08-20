@@ -10,6 +10,14 @@ const state = vi.hoisted(() => {
   return { getUnreadNotificationCountForUser, requireUser, start };
 });
 
+const authenticatedUser: AuthenticatedUser = {
+  email: 'user@example.com',
+  emailVerified: true,
+  id: 'user-1',
+  image: null,
+  name: 'User',
+};
+
 vi.mock(import('server-only'), () => ({}));
 vi.mock(import('@/features/auth/server/CurrentUser'), () => ({ requireUser: state.requireUser }));
 vi.mock(import('@/features/notifications/server/GetNotifications'), () => ({
@@ -32,13 +40,7 @@ describe(GET, () => {
   it('returns 200 OK text/event-stream response for authenticated user', async () => {
     state.start.mockResolvedValueOnce();
     state.getUnreadNotificationCountForUser.mockResolvedValueOnce(3);
-    state.requireUser.mockResolvedValueOnce({
-      email: 'user@example.com',
-      emailVerified: true,
-      id: 'user-1',
-      image: null,
-      name: 'User',
-    });
+    state.requireUser.mockResolvedValueOnce(authenticatedUser);
 
     const response = await GET();
 
@@ -70,11 +72,8 @@ describe(GET, () => {
     state.start.mockResolvedValueOnce();
     state.getUnreadNotificationCountForUser.mockResolvedValueOnce(0);
     state.requireUser.mockResolvedValueOnce({
-      email: 'stream@example.com',
-      emailVerified: true,
+      ...authenticatedUser,
       id: 'user-stream-test',
-      image: null,
-      name: 'StreamUser',
     });
 
     const response = await GET();

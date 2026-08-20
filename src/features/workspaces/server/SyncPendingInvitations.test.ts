@@ -56,6 +56,19 @@ vi.mock('@/features/notifications/server/CreateNotification', () => ({
   createNotification: state.createNotification,
 }));
 
+function expectWorkspaceInviteNotification() {
+  expect(state.createNotification).toHaveBeenCalledExactlyOnceWith(
+    expect.anything(),
+    expect.objectContaining({
+      body: '你收到了加入工作区“Team Alpha”的邀请。',
+      recipientUserId: 'user_new',
+      target: { id: 'workspace_1', kind: 'workspace' },
+      title: '收到工作区邀请',
+      type: 'workspace_invited',
+    }),
+  );
+}
+
 describe(syncPendingWorkspaceInvitations, () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -80,16 +93,7 @@ describe(syncPendingWorkspaceInvitations, () => {
   it('creates workspace_invited notification for active pending invitations', async () => {
     await syncPendingWorkspaceInvitations('user_new', ['new@example.com']);
 
-    expect(state.createNotification).toHaveBeenCalledExactlyOnceWith(
-      expect.anything(),
-      expect.objectContaining({
-        body: '你收到了加入工作区“Team Alpha”的邀请。',
-        recipientUserId: 'user_new',
-        target: { id: 'workspace_1', kind: 'workspace' },
-        title: '收到工作区邀请',
-        type: 'workspace_invited',
-      }),
-    );
+    expectWorkspaceInviteNotification();
   });
 
   it('skips notification creation if workspace_invited notification already exists', async () => {
@@ -124,15 +128,6 @@ describe(syncPendingWorkspaceInvitations, () => {
 
     await syncPendingWorkspaceInvitations('user_new', ['new@example.com']);
 
-    expect(state.createNotification).toHaveBeenCalledExactlyOnceWith(
-      expect.anything(),
-      expect.objectContaining({
-        body: '你收到了加入工作区“Team Alpha”的邀请。',
-        recipientUserId: 'user_new',
-        target: { id: 'workspace_1', kind: 'workspace' },
-        title: '收到工作区邀请',
-        type: 'workspace_invited',
-      }),
-    );
+    expectWorkspaceInviteNotification();
   });
 });

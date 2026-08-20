@@ -1,26 +1,16 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { executeMigrations } from './helpers/PGliteMigrations';
 
-const statementBreakpoint = '--> statement-breakpoint';
 let database: PGlite;
-
-async function executeMigration(fileName: string) {
-  const sql = await readFile(resolve('migrations', fileName), 'utf-8');
-
-  for (const statement of sql.split(statementBreakpoint)) {
-    if (statement.trim()) {
-      await database.exec(statement);
-    }
-  }
-}
 
 describe('notification realtime database delivery', () => {
   beforeAll(async () => {
     database = new PGlite();
-    await executeMigration('0011_add-notifications.sql');
-    await executeMigration('0021_notification_realtime_delivery.sql');
+    await executeMigrations(database, [
+      '0011_add-notifications.sql',
+      '0021_notification_realtime_delivery.sql',
+    ]);
   }, 30_000);
 
   afterAll(async () => {

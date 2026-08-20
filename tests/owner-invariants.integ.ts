@@ -1,39 +1,14 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
 
-const statementBreakpoint = '--> statement-breakpoint';
 let database: PGlite;
-
-async function executeMigration(fileName: string) {
-  const sql = await readFile(resolve('migrations', fileName), 'utf-8');
-
-  for (const statement of sql.split(statementBreakpoint)) {
-    if (statement.trim()) {
-      await database.exec(statement);
-    }
-  }
-}
 
 describe('database membership and owner invariants', () => {
   beforeAll(async () => {
     database = new PGlite();
 
-    for (const fileName of [
-      '0000_deep_the_anarchist.sql',
-      '0001_add-project-members.sql',
-      '0002_add-documents.sql',
-      '0003_add-workspaces.sql',
-      '0004_tricky_scarlet_spider.sql',
-      '0005_add-workspace-kind.sql',
-      '0006_remove-project-kind.sql',
-      '0007_remove-redundant-indexes.sql',
-      '0008_dashing_vivisector.sql',
-      '0009_cheerful_mockingbird.sql',
-    ]) {
-      await executeMigration(fileName);
-    }
+    await executeMigrations(database, migrationFiles.slice(0, 10));
 
     await database.exec(`
       INSERT INTO workspaces (id, kind, name, owner_id)
@@ -51,18 +26,7 @@ describe('database membership and owner invariants', () => {
       VALUES ('20000000-0000-4000-8000-000000000010', 'legacy_owner', 'owner');
     `);
 
-    await executeMigration('0010_silly_nomad.sql');
-    await executeMigration('0011_add-notifications.sql');
-    await executeMigration('0012_add-user-preferences.sql');
-    await executeMigration('0013_add-content-width-preference.sql');
-    await executeMigration('0014_flawless_lilandra.sql');
-    await executeMigration('0015_neat_earthquake.sql');
-    await executeMigration('0016_perpetual_korath.sql');
-    await executeMigration('0017_late_dakota_north.sql');
-    await executeMigration('0018_cloudy_the_spike.sql');
-    await executeMigration('0019_add-better-auth.sql');
-    await executeMigration('0020_swift_groot.sql');
-    await executeMigration('0021_notification_realtime_delivery.sql');
+    await executeMigrations(database, migrationFiles.slice(10));
   }, 30_000);
 
   afterAll(async () => {
