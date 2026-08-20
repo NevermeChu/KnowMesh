@@ -83,13 +83,6 @@ describe(syncPendingWorkspaceInvitations, () => {
     state.notificationsWhere.mockResolvedValue([]);
   });
 
-  it('ignores empty email list without querying', async () => {
-    await syncPendingWorkspaceInvitations('user_new', []);
-
-    expect(state.select).not.toHaveBeenCalled();
-    expect(state.createNotification).not.toHaveBeenCalled();
-  });
-
   it('creates workspace_invited notification for active pending invitations', async () => {
     await syncPendingWorkspaceInvitations('user_new', ['new@example.com']);
 

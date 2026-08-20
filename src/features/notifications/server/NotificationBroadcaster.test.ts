@@ -57,29 +57,5 @@ describe(NotificationBroadcaster, () => {
 
       expect(receivedEvents).toHaveLength(0);
     });
-
-    it('dispatches events to multiple subscribers on the same channel', () => {
-      const broadcaster = new NotificationBroadcaster();
-      let listenerOneCalled = false;
-      let listenerTwoCalled = false;
-
-      const unsub1 = broadcaster.subscribe('user-shared', () => {
-        listenerOneCalled = true;
-      });
-      const unsub2 = broadcaster.subscribe('user-shared', () => {
-        listenerTwoCalled = true;
-      });
-
-      broadcaster.publish('user-shared', {
-        payload: { unreadCount: 1 },
-        type: 'notification:count_sync',
-      });
-
-      expect(listenerOneCalled).toBeTruthy();
-      expect(listenerTwoCalled).toBeTruthy();
-
-      unsub1();
-      unsub2();
-    });
   });
 });

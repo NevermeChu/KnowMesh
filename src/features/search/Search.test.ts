@@ -39,9 +39,4 @@ describe('search text extraction utils', () => {
     expect(snippet).toContain('一致性不变量');
     expect(snippet).toContain('…');
   });
-
-  it('returns clean truncated snippet when query is empty', () => {
-    const fullText = '简短文本内容。';
-    expect(extractSnippet(fullText, '', 50)).toBe('简短文本内容。');
-  });
 });

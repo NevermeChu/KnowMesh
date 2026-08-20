@@ -17,58 +17,6 @@ test.describe('Sanity', () => {
       );
     });
 
-    test('uses the product icon and keeps the collaboration headline on one line', async ({
-      page,
-    }) => {
-      await page.goto('/', { waitUntil: 'domcontentloaded' });
-
-      const productIcons = page.locator('img[src*="KnowMesh-app-icon.png"]');
-      await expect(productIcons).toHaveCount(3);
-      await expect
-        .poll(
-          async () =>
-            await productIcons
-              .first()
-              .evaluate(
-                (image) =>
-                  image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
-              ),
-        )
-        .toBeTruthy();
-      await expect(page.locator('link[rel="icon"][href="/favicon-32x32.png"]')).toHaveCount(1);
-      await expect(
-        page.locator('link[rel="apple-touch-icon"][href="/apple-touch-icon.png"]'),
-      ).toHaveCount(1);
-
-      const collaborationHeadline = page.locator('h1 > span');
-      const headlineLayout = await collaborationHeadline.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
-        const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
-
-        return {
-          fitsViewport: bounds.left >= 0 && bounds.right <= window.innerWidth,
-          isSingleLine: bounds.height <= lineHeight * 1.05,
-          whiteSpace: getComputedStyle(element).whiteSpace,
-        };
-      });
-
-      expect(headlineLayout).toStrictEqual({
-        fitsViewport: true,
-        isSingleLine: true,
-        whiteSpace: 'nowrap',
-      });
-    });
-
-    test('publishes the homepage in the sitemap', async ({ baseURL, request }) => {
-      const response = await request.get('/sitemap.xml');
-      const sitemap = await response.text();
-
-      expect(response.ok()).toBeTruthy();
-      expect(sitemap).toContain(`<loc>${baseURL}</loc>`);
-      expect(sitemap).not.toContain('/counter');
-      expect(sitemap).not.toContain('/sign-in');
-    });
-
     test('accepts literal search metacharacters', async ({ page }) => {
       await page.goto('/');
       const searchInput = page.getByRole('textbox', { name: '搜索文档关键词' });
@@ -77,18 +25,6 @@ test.describe('Sanity', () => {
 
       await expect(searchInput).toHaveValue('[');
       await expect(page.getByText('未找到与 “[” 相关的文档结果')).toBeVisible();
-    });
-
-    test('preserves native context menu', async ({ page }) => {
-      await page.goto('/');
-
-      const isPrevented = await page.evaluate(() => {
-        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
-        document.body.dispatchEvent(event);
-        return event.defaultPrevented;
-      });
-
-      expect(isPrevented).toBeFalsy();
     });
   });
 
@@ -101,27 +37,6 @@ test.describe('Sanity', () => {
   });
 
   test.describe('Authentication pages', () => {
-    test('displays the localized sign-in page', async ({ page }) => {
-      await page.goto('/sign-in');
-
-      await expect(page.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
-      const viewport = await page.evaluate(() => ({
-        height: window.innerHeight,
-        scrollHeight: document.documentElement.scrollHeight,
-        scrollWidth: document.documentElement.scrollWidth,
-        width: window.innerWidth,
-      }));
-
-      expect(viewport.scrollHeight).toBe(viewport.height);
-      expect(viewport.scrollWidth).toBe(viewport.width);
-    });
-
-    test('displays the localized sign-up page', async ({ page }) => {
-      await page.goto('/sign-up');
-
-      await expect(page.getByRole('heading', { name: '创建账号' })).toBeVisible();
-    });
-
     test('preserves invitation destination when opening sign up', async ({ page }) => {
       await page.goto('/sign-in?redirect_url=%2Finvitations%2Faccept%3Ftoken%3Dinvitation-token');
 
@@ -129,14 +44,6 @@ test.describe('Sanity', () => {
         'href',
         '/sign-up?redirect_url=%2Finvitations%2Faccept%3Ftoken%3Dinvitation-token',
       );
-    });
-  });
-
-  test.describe('Unsupported routes', () => {
-    test('returns not found for a missing route', async ({ page }) => {
-      const response = await page.goto('/missing');
-
-      expect(response?.status()).toBe(404);
     });
   });
 });

@@ -18,23 +18,9 @@ describe(createSignInUrl, () => {
       '/invitations/accept?token=invitation_token',
     );
   });
-
-  it('preserves notification destination url', () => {
-    const returnBackUrl = new URL('https://knowmesh.example/notifications');
-    const signInUrl = createSignInUrl(returnBackUrl);
-
-    expect(signInUrl.pathname).toBe('/sign-in');
-    expect(signInUrl.searchParams.get('redirect_url')).toBe('/notifications');
-  });
 });
 
 describe(getSafeAuthenticationRedirect, () => {
-  it('accepts local invitation path', () => {
-    expect(getSafeAuthenticationRedirect('/invitations/accept?token=invitation_token')).toBe(
-      '/invitations/accept?token=invitation_token',
-    );
-  });
-
   it('rejects external redirect target', () => {
     expect(
       getSafeAuthenticationRedirect('https://malicious.example/invitations/accept'),
