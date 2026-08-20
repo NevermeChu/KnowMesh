@@ -13,7 +13,7 @@ export function AppLogo(props: { className: string }) {
       aria-hidden="true"
       className={props.className}
       height={180}
-      src="/apple-touch-icon.png"
+      src="/KnowMesh-app-icon.png"
       width={180}
     />
   );

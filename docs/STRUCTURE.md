@@ -91,7 +91,7 @@
 
 - 输出 `<html>` 和 `<body>`。
 - 导入 `global.css`。
-- 声明 favicon 和 viewport。
+- 声明产品图标和 viewport。
 - 从主题 cookie 输出首屏主题，并挂载全站 Toast 容器。
 
 只属于某一类页面的 Header、Sidebar 或导航不应放入根布局。
@@ -329,12 +329,12 @@ tests/
 
 ## `public`：静态资源
 
-存放浏览器可直接请求的文件。目前主要是 favicon 和 Apple Touch Icon。
+存放浏览器可直接请求的文件。`KnowMesh.jpeg` 是产品图标源图；页面品牌组件使用透明背景的 `KnowMesh-app-icon.png`，浏览器标签和 Apple Touch Icon 使用对应尺寸的派生资源。
 
 例如：
 
 ```text
-public/favicon.ico → /favicon.ico
+public/KnowMesh-app-icon.png → /KnowMesh-app-icon.png
 ```
 
 ## 工具和仓库配置

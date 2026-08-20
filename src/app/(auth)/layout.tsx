@@ -38,7 +38,7 @@ export default function AuthLayout(props: { children: React.ReactNode }) {
         />
 
         <div className="flex items-center gap-3 font-semibold tracking-tight text-ink">
-          <AppLogo className="size-8" />
+          <AppLogo className="size-10" />
           <span>{AppConfig.name}</span>
         </div>
 

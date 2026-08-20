@@ -25,7 +25,7 @@ export function LandingFooter() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <AppLogo className="size-7 rounded-[0.4rem]" />
+          <AppLogo className="size-9 rounded-lg" />
           <span style={{ fontWeight: 700, color: 'var(--ink)' }}>KnowMesh 知序</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--ink-faint)' }}>
             · 让知识持续创造价值

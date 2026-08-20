@@ -207,7 +207,7 @@ export function InteractiveWorkspacePreview() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <AppLogo className="size-6 rounded-md" />
+                <AppLogo className="size-8 rounded-lg" />
                 <div>
                   <div
                     style={{

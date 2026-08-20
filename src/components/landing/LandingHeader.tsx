@@ -32,7 +32,7 @@ export function LandingHeader(props: { isAuthenticated: boolean }) {
             color: 'var(--ink)',
           }}
         >
-          <AppLogo className="size-9 rounded-[0.625rem] shadow-card" />
+          <AppLogo className="size-11 rounded-xl shadow-card" />
           <div>
             <span
               style={{

@@ -20,9 +20,25 @@ test.describe('Sanity', () => {
     test('uses the product icon and keeps the collaboration headline on one line', async ({
       page,
     }) => {
-      await page.goto('/');
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-      await expect(page.locator('img[src*="apple-touch-icon.png"]')).toHaveCount(3);
+      const productIcons = page.locator('img[src*="KnowMesh-app-icon.png"]');
+      await expect(productIcons).toHaveCount(3);
+      await expect
+        .poll(
+          async () =>
+            await productIcons
+              .first()
+              .evaluate(
+                (image) =>
+                  image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+              ),
+        )
+        .toBeTruthy();
+      await expect(page.locator('link[rel="icon"][href="/favicon-32x32.png"]')).toHaveCount(1);
+      await expect(
+        page.locator('link[rel="apple-touch-icon"][href="/apple-touch-icon.png"]'),
+      ).toHaveCount(1);
 
       const collaborationHeadline = page.locator('h1 > span');
       const headlineLayout = await collaborationHeadline.evaluate((element) => {
