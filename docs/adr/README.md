@@ -22,7 +22,8 @@ ADR 记录具有真实替代方案和长期影响的架构决定。它回答“�
 | [0007](0007-provision-personal-workspace-from-clerk-webhook.md) | Superseded | 通过 Clerk 注册 Webhook 创建 Personal Workspace |
 | [0008](0008-delete-owned-resources-on-account-removal.md) | Accepted | 统一按 owner 删除资源、按 member 退出资源 |
 | [0009](0009-use-better-auth-for-local-identity.md) | Accepted | 使用 Better Auth 管理本地身份并保持业务授权独立 |
-| [0010](0010-use-sse-for-realtime-notifications.md) | Accepted | 使用 SSE 实现实时站内通知 |
+| [0010](0010-use-sse-for-realtime-notifications.md) | Superseded | 使用进程内总线配合 SSE 实现实时站内通知 |
+| [0011](0011-use-postgresql-notify-for-realtime-delivery.md) | Accepted | 使用事务性 PostgreSQL 通知驱动跨进程 SSE |
 
 ## 新 ADR 模板
 

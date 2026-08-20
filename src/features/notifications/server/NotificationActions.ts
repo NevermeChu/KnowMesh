@@ -1,11 +1,10 @@
 'use server';
 
-import { and, count, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { notificationMutationSchema } from '@/features/notifications/NotificationSchema';
 import type { NotificationMutationInput } from '@/features/notifications/NotificationSchema';
-import { notificationBroadcaster } from '@/features/notifications/server/NotificationBroadcaster';
 import { db } from '@/libs/DB';
 import { notificationsSchema } from '@/models/Schema';
 
@@ -39,19 +38,6 @@ export async function markNotificationRead(input: NotificationMutationInput) {
     throw new Error('未读通知不存在');
   }
 
-  const [countResult] = await db
-    .select({ value: count() })
-    .from(notificationsSchema)
-    .where(
-      and(eq(notificationsSchema.recipientUserId, userId), isNull(notificationsSchema.readAt)),
-    );
-
-  const unreadCount = countResult?.value ?? 0;
-  notificationBroadcaster.publish(userId, {
-    payload: { unreadCount },
-    type: 'notification:count_sync',
-  });
-
   revalidateNotifications();
 }
 
@@ -66,11 +52,6 @@ export async function markAllNotificationsRead() {
     .where(
       and(eq(notificationsSchema.recipientUserId, userId), isNull(notificationsSchema.readAt)),
     );
-
-  notificationBroadcaster.publish(userId, {
-    payload: { unreadCount: 0 },
-    type: 'notification:count_sync',
-  });
 
   revalidateNotifications();
 }

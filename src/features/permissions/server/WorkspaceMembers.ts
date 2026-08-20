@@ -49,6 +49,59 @@ import { authorizeWorkspace } from './WorkspaceAuthorization';
 
 const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
+async function notifyExistingWorkspaceInvitee(options: {
+  actorUserId: string;
+  invitationId: string;
+  inviterName: string;
+  recipientUserId: string;
+  workspaceId: string;
+  workspaceName: string;
+}) {
+  await db.transaction(async (transaction) => {
+    const [activeInvitation] = await transaction
+      .select({ id: workspaceInvitationsSchema.id })
+      .from(workspaceInvitationsSchema)
+      .where(
+        and(
+          eq(workspaceInvitationsSchema.id, options.invitationId),
+          isNull(workspaceInvitationsSchema.acceptedAt),
+          isNull(workspaceInvitationsSchema.revokedAt),
+          gt(workspaceInvitationsSchema.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+
+    if (!activeInvitation) {
+      return;
+    }
+
+    const [existingNotification] = await transaction
+      .select({ id: notificationsSchema.id })
+      .from(notificationsSchema)
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, options.recipientUserId),
+          eq(notificationsSchema.type, 'workspace_invited'),
+          eq(notificationsSchema.targetKind, 'workspace'),
+          eq(notificationsSchema.targetId, options.workspaceId),
+          isNull(notificationsSchema.readAt),
+        ),
+      )
+      .limit(1);
+
+    if (!existingNotification) {
+      await createNotification(transaction, {
+        actorUserId: options.actorUserId,
+        body: `${options.inviterName} 邀请你加入工作区“${options.workspaceName}”。`,
+        recipientUserId: options.recipientUserId,
+        target: { id: options.workspaceId, kind: 'workspace' },
+        title: '收到工作区邀请',
+        type: 'workspace_invited',
+      });
+    }
+  });
+}
+
 export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
   const inviter = await requireUser();
   const userId = inviter.id;
@@ -107,20 +160,36 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
   const token = randomBytes(32).toString('base64url');
   const tokenHash = hashWorkspaceInvitationToken(token);
   const expiresAt = new Date(Date.now() + INVITATION_LIFETIME_MS);
-  const [invitation] = await db
-    .insert(workspaceInvitationsSchema)
-    .values({
-      email: invitationInput.email,
-      expiresAt,
-      invitedById: userId,
-      tokenHash,
-      workspaceId: invitationInput.workspaceId,
-    })
-    .returning({ id: workspaceInvitationsSchema.id });
+  const invitation = await db.transaction(async (transaction) => {
+    const [createdInvitation] = await transaction
+      .insert(workspaceInvitationsSchema)
+      .values({
+        email: invitationInput.email,
+        expiresAt,
+        invitedById: userId,
+        tokenHash,
+        workspaceId: invitationInput.workspaceId,
+      })
+      .returning({ id: workspaceInvitationsSchema.id });
 
-  if (!invitation) {
-    throw new Error('工作区邀请创建失败');
-  }
+    if (!createdInvitation) {
+      throw new Error('工作区邀请创建失败');
+    }
+
+    await recordAuditLog(transaction, {
+      action: 'workspace_invited',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.workspace.name,
+        targetUserEmail: invitationInput.email,
+      },
+      targetId: createdInvitation.id,
+      targetKind: 'invitation',
+      workspaceId: invitationInput.workspaceId,
+    });
+
+    return createdInvitation;
+  });
 
   try {
     await sendWorkspaceInvitationEmail({
@@ -134,50 +203,47 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
       },
     });
   } catch (error) {
-    await db
-      .delete(workspaceInvitationsSchema)
-      .where(eq(workspaceInvitationsSchema.id, invitation.id));
+    await db.transaction(async (transaction) => {
+      const [revokedInvitation] = await transaction
+        .update(workspaceInvitationsSchema)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(workspaceInvitationsSchema.id, invitation.id),
+            isNull(workspaceInvitationsSchema.acceptedAt),
+            isNull(workspaceInvitationsSchema.revokedAt),
+          ),
+        )
+        .returning({ id: workspaceInvitationsSchema.id });
+
+      if (revokedInvitation) {
+        await recordAuditLog(transaction, {
+          action: 'workspace_invitation_revoked',
+          actorUserId: userId,
+          metadata: {
+            description: '邀请邮件发送失败，系统自动撤销',
+            resourceName: authorization.workspace.name,
+            targetUserEmail: invitationInput.email,
+          },
+          targetId: invitation.id,
+          targetKind: 'invitation',
+          workspaceId: invitationInput.workspaceId,
+        });
+      }
+    });
     throw error;
   }
 
   if (existingUser) {
-    const [existingNotification] = await db
-      .select({ id: notificationsSchema.id })
-      .from(notificationsSchema)
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, existingUser.id),
-          eq(notificationsSchema.type, 'workspace_invited'),
-          eq(notificationsSchema.targetKind, 'workspace'),
-          eq(notificationsSchema.targetId, invitationInput.workspaceId),
-          isNull(notificationsSchema.readAt),
-        ),
-      )
-      .limit(1);
-
-    if (!existingNotification) {
-      await createNotification(db, {
-        actorUserId: userId,
-        body: `${getWorkspaceInvitationInviterName(inviter)} 邀请你加入工作区“${authorization.workspace.name}”。`,
-        recipientUserId: existingUser.id,
-        target: { id: invitationInput.workspaceId, kind: 'workspace' },
-        title: '收到工作区邀请',
-        type: 'workspace_invited',
-      });
-    }
+    await notifyExistingWorkspaceInvitee({
+      actorUserId: userId,
+      invitationId: invitation.id,
+      inviterName: getWorkspaceInvitationInviterName(inviter),
+      recipientUserId: existingUser.id,
+      workspaceId: invitationInput.workspaceId,
+      workspaceName: authorization.workspace.name,
+    });
   }
-
-  await recordAuditLog(db, {
-    action: 'workspace_invited',
-    actorUserId: userId,
-    metadata: {
-      resourceName: authorization.workspace.name,
-      targetUserEmail: invitationInput.email,
-    },
-    targetId: invitation.id,
-    targetKind: 'invitation',
-    workspaceId: invitationInput.workspaceId,
-  });
 
   return invitation;
 }
@@ -262,34 +328,37 @@ export async function revokeWorkspaceInvitation(input: RevokeWorkspaceInvitation
     throw new Error('个人空间不支持撤销邀请');
   }
 
-  const now = new Date();
-  const [revoked] = await db
-    .update(workspaceInvitationsSchema)
-    .set({ revokedAt: now })
-    .where(
-      and(
-        eq(workspaceInvitationsSchema.id, revokeInput.invitationId),
-        eq(workspaceInvitationsSchema.workspaceId, revokeInput.workspaceId),
-        isNull(workspaceInvitationsSchema.acceptedAt),
-        isNull(workspaceInvitationsSchema.revokedAt),
-      ),
-    )
-    .returning({ id: workspaceInvitationsSchema.id, email: workspaceInvitationsSchema.email });
+  const revoked = await db.transaction(async (transaction) => {
+    const [revokedInvitation] = await transaction
+      .update(workspaceInvitationsSchema)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceInvitationsSchema.id, revokeInput.invitationId),
+          eq(workspaceInvitationsSchema.workspaceId, revokeInput.workspaceId),
+          isNull(workspaceInvitationsSchema.acceptedAt),
+          isNull(workspaceInvitationsSchema.revokedAt),
+        ),
+      )
+      .returning({ id: workspaceInvitationsSchema.id, email: workspaceInvitationsSchema.email });
 
-  if (!revoked) {
-    throw new Error('邀请不存在或已处理');
-  }
+    if (!revokedInvitation) {
+      throw new Error('邀请不存在或已处理');
+    }
 
-  await recordAuditLog(db, {
-    action: 'workspace_invitation_revoked',
-    actorUserId: userId,
-    metadata: {
-      resourceName: authorization.workspace.name,
-      targetUserEmail: revoked.email,
-    },
-    targetId: revokeInput.invitationId,
-    targetKind: 'invitation',
-    workspaceId: revokeInput.workspaceId,
+    await recordAuditLog(transaction, {
+      action: 'workspace_invitation_revoked',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.workspace.name,
+        targetUserEmail: revokedInvitation.email,
+      },
+      targetId: revokeInput.invitationId,
+      targetKind: 'invitation',
+      workspaceId: revokeInput.workspaceId,
+    });
+
+    return revokedInvitation;
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -314,6 +383,20 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
   }
 
   const membership = await db.transaction(async (transaction) => {
+    const [workspace] = await transaction
+      .select({ ownerId: workspacesSchema.ownerId })
+      .from(workspacesSchema)
+      .where(eq(workspacesSchema.id, memberInput.workspaceId))
+      .for('update');
+
+    if (!workspace || workspace.ownerId !== authorization.workspace.ownerId) {
+      throw new Error('工作区所有权已发生变化，请刷新后重试');
+    }
+
+    if (memberInput.memberUserId === workspace.ownerId) {
+      throw new Error('工作区所有者角色不可修改');
+    }
+
     const [updatedMembership] = await transaction
       .update(workspaceMembersSchema)
       .set({ role: memberInput.role })
@@ -539,6 +622,20 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
   }
 
   await db.transaction(async (transaction) => {
+    const [workspace] = await transaction
+      .select({ ownerId: workspacesSchema.ownerId })
+      .from(workspacesSchema)
+      .where(eq(workspacesSchema.id, memberInput.workspaceId))
+      .for('update');
+
+    if (!workspace || workspace.ownerId !== authorization.workspace.ownerId) {
+      throw new Error('工作区所有权已发生变化，请刷新后重试');
+    }
+
+    if (memberInput.memberUserId === workspace.ownerId) {
+      throw new Error('工作区所有者不可移除');
+    }
+
     const [membership] = await transaction
       .select({ userId: workspaceMembersSchema.userId })
       .from(workspaceMembersSchema)
@@ -676,6 +773,16 @@ export async function transferWorkspaceOwnership(input: TransferWorkspaceOwnersh
   }
 
   await db.transaction(async (transaction) => {
+    const [workspace] = await transaction
+      .select({ kind: workspacesSchema.kind, ownerId: workspacesSchema.ownerId })
+      .from(workspacesSchema)
+      .where(eq(workspacesSchema.id, transferInput.workspaceId))
+      .for('update');
+
+    if (!workspace || workspace.kind !== 'team' || workspace.ownerId !== userId) {
+      throw new Error('工作区所有权已发生变化，请刷新后重试');
+    }
+
     const [targetMembership] = await transaction
       .select({ role: workspaceMembersSchema.role, userId: workspaceMembersSchema.userId })
       .from(workspaceMembersSchema)

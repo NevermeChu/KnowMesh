@@ -1,5 +1,3 @@
-'use client';
-
 import {
   FileCode,
   Globe,
@@ -10,10 +8,10 @@ import {
   UserCheck,
   UserPlus,
 } from 'lucide-react';
+import Link from 'next/link';
 import type * as React from 'react';
-import { useState } from 'react';
 import type { AuditAction, AuditLogCategory, AuditLogItem, AuditLogMetadata } from '../AuditLog';
-import { auditActionCategories, auditActionLabels } from '../AuditLog';
+import { auditActionLabels } from '../AuditLog';
 
 const categoryTabs: { key: AuditLogCategory; label: string }[] = [
   { key: 'all', label: '全部' },
@@ -259,48 +257,41 @@ function formatDate(date: Date | string) {
  * @param props - List of audit log items.
  * @returns Filterable audit log stream.
  */
-export function AuditLogTimeline(props: { items: AuditLogItem[] }) {
-  const [selectedCategory, setSelectedCategory] = useState<AuditLogCategory>('all');
-
-  const filteredItems = props.items.filter((item) => {
-    if (selectedCategory === 'all') {
-      return true;
-    }
-    return auditActionCategories[item.action] === selectedCategory;
-  });
-
+export function AuditLogTimeline(props: {
+  hasNextPage: boolean;
+  items: AuditLogItem[];
+  page: number;
+  selectedCategory: AuditLogCategory;
+}) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2 border-b border-line-soft pb-4">
         {categoryTabs.map((tab) => {
-          const isActive = selectedCategory === tab.key;
+          const isActive = props.selectedCategory === tab.key;
           return (
-            <button
-              type="button"
+            <Link
               key={tab.key}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 isActive
                   ? 'bg-accent-soft text-accent'
                   : 'text-ink-muted hover:bg-overlay hover:text-ink'
               }`}
-              onClick={() => {
-                setSelectedCategory(tab.key);
-              }}
+              href={`/settings/audit-logs?category=${tab.key}`}
             >
               {tab.label}
-            </button>
+            </Link>
           );
         })}
       </div>
 
-      {filteredItems.length === 0 ? (
+      {props.items.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line py-16 text-center">
           <History className="size-8 text-ink-faint" strokeWidth={1.5} />
           <p className="mt-3 text-sm font-medium text-ink-muted">暂无符合条件的审计日志记录</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredItems.map((item) => {
+          {props.items.map((item) => {
             const badge = getActionBadgeStyle(item.action);
             const BadgeIcon = badge.icon;
             const descriptionRenderer = actionDescriptions[item.action];
@@ -355,6 +346,27 @@ export function AuditLogTimeline(props: { items: AuditLogItem[] }) {
             );
           })}
         </div>
+      )}
+
+      {(props.page > 1 || props.hasNextPage) && (
+        <nav aria-label="审计日志分页" className="flex items-center justify-end gap-2">
+          {props.page > 1 && (
+            <Link
+              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-overlay hover:text-ink"
+              href={`/settings/audit-logs?category=${props.selectedCategory}&page=${props.page - 1}`}
+            >
+              上一页
+            </Link>
+          )}
+          {props.hasNextPage && (
+            <Link
+              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-overlay hover:text-ink"
+              href={`/settings/audit-logs?category=${props.selectedCategory}&page=${props.page + 1}`}
+            >
+              下一页
+            </Link>
+          )}
+        </nav>
       )}
     </div>
   );

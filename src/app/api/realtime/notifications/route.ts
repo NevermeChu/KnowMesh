@@ -1,6 +1,8 @@
 import 'server-only';
 import { requireUser } from '@/features/auth/server/CurrentUser';
+import { getUnreadNotificationCountForUser } from '@/features/notifications/server/GetNotifications';
 import { notificationBroadcaster } from '@/features/notifications/server/NotificationBroadcaster';
+import { notificationDatabaseSubscriber } from '@/features/notifications/server/NotificationDatabaseSubscriber';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,11 +25,12 @@ export async function GET() {
   let heartbeatTimer: NodeJS.Timeout | undefined;
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       // 1. Initial connection confirmation
       controller.enqueue(encoder.encode(': connected\n\n'));
 
-      // 2. Subscribe to current user's real-time events
+      // 2. Start the cross-process database listener before subscribing locally.
+      await notificationDatabaseSubscriber.start();
       unsubscribe = notificationBroadcaster.subscribe(user.id, (event) => {
         try {
           const payloadString = JSON.stringify(event.payload);
@@ -37,7 +40,15 @@ export async function GET() {
         }
       });
 
-      // 3. Keep-alive heartbeat every 25 seconds
+      // 3. Reconcile persistent state on every initial connection and browser reconnect.
+      const unreadCount = await getUnreadNotificationCountForUser(user.id);
+      controller.enqueue(
+        encoder.encode(
+          `event: notification:count_sync\ndata: ${JSON.stringify({ unreadCount })}\n\n`,
+        ),
+      );
+
+      // 4. Keep-alive heartbeat every 25 seconds
       heartbeatTimer = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`event: ping\ndata: "${Date.now()}"\n\n`));

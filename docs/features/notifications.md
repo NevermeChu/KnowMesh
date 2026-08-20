@@ -8,7 +8,7 @@
 
 通知属于 Better Auth 用户，而不属于当前选中的 Workspace。用户切换 Workspace 后仍能查看自己的全部通知；服务端读取和已读写入始终使用 `requireUser()` 返回的当前用户 ID 限制收件人，客户端不能指定收件人身份。
 
-侧边栏在“设置”上方显示通知入口。通过 Web 标准的 Server-Sent Events (SSE) 长连接（`/api/realtime/notifications`），客户端在服务端写入通知后毫秒级收到事件。侧边栏通过独立的 `NotificationSidebarBadge` 局部更新未读角标数字（最多呈现为 `99+`），同时弹出无打扰轻量 Toast 微浮窗，绝不触发页面整体重载或打断编辑器输入焦点。
+侧边栏在“设置”上方显示通知入口。通过 Web 标准的 Server-Sent Events (SSE) 长连接（`/api/realtime/notifications`），客户端在通知事务提交后收到由 PostgreSQL `LISTEN / NOTIFY` 驱动的事件。侧边栏通过独立的 `NotificationSidebarBadge` 局部更新未读角标数字（最多呈现为 `99+`），同时弹出无打扰轻量 Toast 微浮窗，不触发页面整体重载或打断编辑器输入焦点。
 
 点击后由共享 Workspace Layout 在右侧内容区打开 `/notifications`，页面展示最近 50 条通知，并支持单条或全部标为已读。已读变更通过 SSE 广播 `notification:count_sync`，跨标签页即时同步消除角标。页面读取本身不会自动改变已读状态，避免路由预取或普通刷新误消费通知。
 
@@ -39,6 +39,7 @@ Better Auth 删除账户前的业务清理会删除该用户收到的全部通�
 | Workspace Editor 申请通过 | 申请人 |
 | Workspace Editor 申请未通过 | 申请人 |
 | Workspace 成员角色变更 | 被修改成员 |
+| Workspace 所有权转让 | 新 owner |
 | 被移出 Workspace | 被移除成员 |
 | 收到 Project 邀请 | 被邀请人 |
 | Project 邀请被接受 | 邀请人 |
@@ -46,9 +47,10 @@ Better Auth 删除账户前的业务清理会删除该用户收到的全部通�
 | Project viewer/editor 申请通过 | 申请人 |
 | Project viewer/editor 申请未通过 | 申请人 |
 | Project 成员角色变更 | 被修改成员 |
+| Project 所有权转让 | 新 owner |
 | 被移出 Project | 被移除成员 |
 
-业务状态变化和对应通知在同一数据库事务写入。通知写入失败会回滚邀请接受、申请提交或审批，避免界面状态与通知历史互相矛盾。重复提交已存在的 Workspace 申请不会新增通知；Project 申请的 upsert 仍视为一次新的提交并新增通知。
+业务状态变化和对应通知在同一数据库事务写入。通知写入失败会回滚邀请接受、申请提交或审批，避免界面状态与通知历史互相矛盾。数据库触发器仅在事务提交后投递实时信号，回滚不会产生 Toast。重复提交已存在的 Workspace 申请不会新增通知；Project 申请的 upsert 仍视为一次新的提交并新增通知。
 
 ## 实时通信与数据流
 
@@ -56,12 +58,18 @@ Better Auth 删除账户前的业务清理会删除该用户收到的全部通�
 业务 / 权限 Server Action
 → 服务端重新鉴权和校验输入
 → 同一事务写业务状态与 notifications 表
-→ createNotification 向 NotificationBroadcaster 广播 notification:new 事件
+→ notifications 触发器在事务提交后调用 pg_notify
 → 使共享 Workspace Layout 失效
+
+每个 Node.js 进程的 NotificationDatabaseSubscriber
+→ 使用专用 PostgreSQL 连接 LISTEN knowmesh_notifications
+→ 按通知 ID 读取已提交的通知快照与准确未读数
+→ 将事件交给进程内 NotificationBroadcaster 做用户频道扇出
 
 SSE 路由处理程序 (/api/realtime/notifications)
 → requireUser() 验证 Session 身份
 → 订阅当前用户的 NotificationBroadcaster 频道
+→ 初始连接和浏览器重连时从数据库校准未读数
 → 持续推送 event: notification:new / event: notification:count_sync
 → 每 25 秒推送 event: ping 保活心跳
 
@@ -73,15 +81,18 @@ SSE 路由处理程序 (/api/realtime/notifications)
 
 /notifications 已读操作
 → markNotificationRead / markAllNotificationsRead Action 标记已读
-→ Action 向 NotificationBroadcaster 广播 notification:count_sync
+→ read_at 数据库触发器在提交后发出 count 信号
 → 其他打开的标签页即时同步清除未读角标
 ```
+
+默认本地运行时使用的 PGlite 可以执行 `0021` 触发器并验证事务提交、回滚和重连未读数校准，但当前 `pglite-socket` 不能模拟真实 PostgreSQL 多 backend 之间的异步通知投递。跨浏览器会话的即时 Toast 验证必须连接真实 PostgreSQL，并以 `E2E_REAL_POSTGRES=true npm run test:e2e -- PermissionRealtime.e2e.ts` 运行。
 
 ## 相关代码
 
 - `src/models/Schema.ts`
 - `src/features/notifications/Notification.ts`
 - `src/features/notifications/server/NotificationBroadcaster.ts`
+- `src/features/notifications/server/NotificationDatabaseSubscriber.ts`
 - `src/features/notifications/server/CreateNotification.ts`
 - `src/features/notifications/server/GetNotifications.ts`
 - `src/features/notifications/server/NotificationActions.ts`
@@ -96,4 +107,3 @@ SSE 路由处理程序 (/api/realtime/notifications)
 - [数据库 Schema 与迁移](../database/schema-and-migrations.md)
 - [项目业务](projects.md)
 - [ADR 0010：使用 SSE 实现实时站内通知](../adr/0010-use-sse-for-realtime-notifications.md)
-

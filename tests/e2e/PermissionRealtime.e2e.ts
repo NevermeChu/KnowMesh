@@ -1,0 +1,242 @@
+import 'dotenv/config';
+import { createHmac } from 'node:crypto';
+import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { Pool } from 'pg';
+import { Env } from '@/libs/Env';
+
+const ownerUserId = 'e2e_permission_owner';
+const targetUserId = 'e2e_permission_target';
+const ownerSessionToken = 'e2e-permission-owner-session-token';
+const targetSessionToken = 'e2e-permission-target-session-token';
+const workspaceId = '10000000-0000-4000-8000-000000000900';
+const ownerPersonalWorkspaceId = '10000000-0000-4000-8000-000000000901';
+const targetPersonalWorkspaceId = '10000000-0000-4000-8000-000000000902';
+const projectId = '20000000-0000-4000-8000-000000000900';
+const documentId = '30000000-0000-4000-8000-000000000900';
+const pool = new Pool({ connectionString: Env.DATABASE_URL });
+
+function getSignedSessionCookie(token: string) {
+  const signature = createHmac('sha256', Env.BETTER_AUTH_SECRET).update(token).digest('base64');
+  return encodeURIComponent(`${token}.${signature}`);
+}
+
+async function readSseCountSync(page: Page) {
+  return await page.evaluate(async () => {
+    const { promise, reject, resolve } = Promise.withResolvers<number>();
+    const source = new EventSource('/api/realtime/notifications');
+    const timeout = window.setTimeout(() => {
+      source.close();
+      reject(new Error('SSE count sync timed out'));
+    }, 10_000);
+
+    source.addEventListener('notification:count_sync', (event) => {
+      window.clearTimeout(timeout);
+      source.close();
+      if (!(event instanceof MessageEvent) || typeof event.data !== 'string') {
+        reject(new Error('SSE count sync event is invalid'));
+        return;
+      }
+      const payload: unknown = JSON.parse(event.data);
+
+      if (
+        typeof payload === 'object' &&
+        payload !== null &&
+        'unreadCount' in payload &&
+        typeof payload.unreadCount === 'number'
+      ) {
+        resolve(payload.unreadCount);
+      } else {
+        reject(new Error('SSE count sync payload is invalid'));
+      }
+    });
+    source.addEventListener('error', () => {
+      window.clearTimeout(timeout);
+      source.close();
+      reject(new Error('SSE connection failed'));
+    });
+
+    return await promise;
+  });
+}
+
+test.describe('permission changes with realtime sessions', () => {
+  test.skip(
+    Env.E2E_REAL_POSTGRES !== 'true',
+    'Cross-connection LISTEN/NOTIFY requires a real PostgreSQL test server',
+  );
+
+  test.beforeAll(async () => {
+    await pool.query(`
+      INSERT INTO "user" (id, name, email, email_verified)
+      VALUES
+        ('${ownerUserId}', 'Permission Owner', 'permission-owner@example.test', true),
+        ('${targetUserId}', 'Permission Target', 'permission-target@example.test', true)
+    `);
+    await pool.query(`
+      INSERT INTO "session" (id, expires_at, token, user_id)
+      VALUES
+        ('e2e_permission_owner_session', now() + interval '1 day', '${ownerSessionToken}', '${ownerUserId}'),
+        ('e2e_permission_target_session', now() + interval '1 day', '${targetSessionToken}', '${targetUserId}')
+    `);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`
+        INSERT INTO workspaces (id, kind, name, owner_id)
+        VALUES
+          ('${ownerPersonalWorkspaceId}', 'personal', 'Owner Personal', '${ownerUserId}'),
+          ('${targetPersonalWorkspaceId}', 'personal', 'Target Personal', '${targetUserId}'),
+          ('${workspaceId}', 'team', 'Permission Realtime Team', '${ownerUserId}')
+      `);
+      await client.query(`
+        INSERT INTO workspace_members (workspace_id, user_id, role)
+        VALUES
+          ('${ownerPersonalWorkspaceId}', '${ownerUserId}', 'owner'),
+          ('${targetPersonalWorkspaceId}', '${targetUserId}', 'owner'),
+          ('${workspaceId}', '${ownerUserId}', 'owner'),
+          ('${workspaceId}', '${targetUserId}', 'editor')
+      `);
+      await client.query(`
+        INSERT INTO projects (id, workspace_id, name, owner_id)
+        VALUES ('${projectId}', '${workspaceId}', 'Permission Realtime Project', '${ownerUserId}')
+      `);
+      await client.query(`
+        INSERT INTO project_members (project_id, user_id, role)
+        VALUES
+          ('${projectId}', '${ownerUserId}', 'owner'),
+          ('${projectId}', '${targetUserId}', 'editor')
+      `);
+      await client.query(`
+        INSERT INTO documents (id, project_id, title, created_by_id)
+        VALUES ('${documentId}', '${projectId}', 'Permission Realtime Document', '${ownerUserId}')
+      `);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  test.afterAll(async () => {
+    await pool.end();
+  });
+
+  test('transfers ownership, downgrades a member and resynchronizes SSE after reconnect', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const cookieDomain = new URL(baseURL).hostname;
+    const ownerContext = await browser.newContext();
+    const targetContext = await browser.newContext();
+    await ownerContext.addCookies([
+      {
+        domain: cookieDomain,
+        httpOnly: true,
+        name: 'better-auth.session_token',
+        path: '/',
+        sameSite: 'Lax',
+        value: getSignedSessionCookie(ownerSessionToken),
+      },
+      {
+        domain: cookieDomain,
+        httpOnly: true,
+        name: 'knowmesh-active-workspace',
+        path: '/',
+        sameSite: 'Lax',
+        value: workspaceId,
+      },
+    ]);
+    await targetContext.addCookies([
+      {
+        domain: cookieDomain,
+        httpOnly: true,
+        name: 'better-auth.session_token',
+        path: '/',
+        sameSite: 'Lax',
+        value: getSignedSessionCookie(targetSessionToken),
+      },
+      {
+        domain: cookieDomain,
+        httpOnly: true,
+        name: 'knowmesh-active-workspace',
+        path: '/',
+        sameSite: 'Lax',
+        value: workspaceId,
+      },
+    ]);
+
+    try {
+      const ownerPage = await ownerContext.newPage();
+      const targetPage = await targetContext.newPage();
+      const route = `/collaboration?project=${projectId}&document=${documentId}`;
+      await Promise.all([ownerPage.goto(route), targetPage.goto(route)]);
+      await expect(ownerPage).toHaveURL(new RegExp(`/collaboration\\?project=${projectId}`, 'u'));
+      await expect(targetPage).toHaveURL(new RegExp(`/collaboration\\?project=${projectId}`, 'u'));
+
+      expect(await readSseCountSync(ownerPage)).toBe(0);
+      expect(await readSseCountSync(targetPage)).toBe(0);
+
+      await ownerPage.getByRole('button', { name: '设置' }).click();
+      await ownerPage.getByRole('button', { name: '工作区管理' }).click();
+      await ownerPage.getByLabel('Permission Target的角色').selectOption('__transfer__');
+      await ownerPage.getByRole('button', { name: '确认转让' }).click();
+
+      await expect(
+        targetPage.locator('[aria-live="polite"]').getByText(/工作区所有权转让/u),
+      ).toBeVisible();
+      await expect
+        .poll(async () => {
+          const result = await pool.query<{ owner_id: string }>(
+            `SELECT owner_id FROM workspaces WHERE id = '${workspaceId}'`,
+          );
+          return result.rows[0]?.owner_id;
+        })
+        .toBe(targetUserId);
+
+      await targetPage.reload();
+      await targetPage.getByRole('button', { name: '设置' }).click();
+      await targetPage.getByRole('button', { name: '工作区管理' }).click();
+      await targetPage.getByLabel('Permission Owner的角色').selectOption('viewer');
+
+      await expect(
+        ownerPage.locator('[aria-live="polite"]').getByText(/工作区角色变更/u),
+      ).toBeVisible();
+      await expect
+        .poll(async () => {
+          const result = await pool.query<{ role: string }>(
+            `SELECT role FROM workspace_members WHERE workspace_id = '${workspaceId}' AND user_id = '${ownerUserId}'`,
+          );
+          return result.rows[0]?.role;
+        })
+        .toBe('viewer');
+
+      const countBeforeReconnect = await readSseCountSync(targetPage);
+      await pool.query(`
+        INSERT INTO notifications (recipient_user_id, type, title, body)
+        VALUES ('${targetUserId}', 'workspace_access_approved', 'Reconnect Probe', 'Created between SSE connections')
+      `);
+      expect(await readSseCountSync(targetPage)).toBe(countBeforeReconnect + 1);
+
+      const auditResult = await pool.query<{ action: string }>(`
+        SELECT action
+        FROM audit_logs
+        WHERE workspace_id = '${workspaceId}'
+          AND action IN ('workspace_ownership_transferred', 'workspace_member_role_updated')
+        ORDER BY created_at
+      `);
+      expect(auditResult.rows).toStrictEqual([
+        { action: 'workspace_ownership_transferred' },
+        { action: 'workspace_member_role_updated' },
+      ]);
+    } finally {
+      await Promise.all([ownerContext.close(), targetContext.close()]);
+    }
+  });
+});

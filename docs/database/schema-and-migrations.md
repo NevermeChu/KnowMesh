@@ -119,6 +119,8 @@
 
 Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFERRED` 约束触发器共同维护。触发器在事务结束时检查，因此创建或转让可以在同一事务中依次写资源表与成员表；如果最终 `owner_id`、owner 成员身份或 owner 角色不一致，事务提交会失败。Drizzle Schema 能声明索引和外键，但不能表达这些跨表延迟触发器，其权威实现位于 `0010_silly_nomad.sql`。
 
+通知实时信号由 `0021_notification_realtime_delivery.sql` 中的数据库触发器维护。`notifications` 插入及 `read_at` 更新会调用事务性 `pg_notify`；PostgreSQL 仅在事务提交后投递信号，载荷只包含收件人、事件种类和通知 ID，应用收到信号后重新读取持久化内容与未读数。
+
 文档内容结构和版本一致性由文档 Server Action 维护。数据库只保证值是合法 JSON，不理解 ProseMirror 节点语义；绕过应用直接写入可能产生编辑器无法解释的内容。
 
 ## Schema 和迁移的区别
@@ -171,6 +173,8 @@ npm run db:studio
 `npm run dev` 启动 PGlite、应用迁移，再启动 Next.js。`npm run dev:next` 只启动 Next.js，不负责启动本地数据库编排。
 
 `npm run db:migrate` 和 `npm run db:studio` 都不会自行启动 PGlite。操作本地持久化数据库时，应先在一个终端保持 `npm run dev` 运行，再在另一个终端执行相应命令；也可以连接已经可用的 PostgreSQL。`npm run build-local` 使用临时 PGlite 实例，不写入 `local.db/`，不用于查看或维护本地持久化数据。
+
+PGlite 原生通知 API 可以验证 `0021` 的触发器与事务提交/回滚语义，但当前 `pglite-socket` 不模拟真实 PostgreSQL 多 backend 的异步通知路由。需要验证专用 `LISTEN` 连接、跨会话 Toast 或多进程扇出时，必须连接真实 PostgreSQL，并为对应 Playwright 用例设置 `E2E_REAL_POSTGRES=true`。
 
 生产迁移由 CI 构建的自包含迁移程序从新 release 执行，不依赖服务器源码工作树。迁移必须先于应用软链接切换，并遵守 [`../operations/deployment.md`](../operations/deployment.md) 中的向后兼容与应用回滚边界。
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useEffectEvent, useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import type { NotificationItem, NotificationType } from '@/features/notifications/Notification';
 
@@ -53,6 +53,9 @@ export function RealtimeNotificationProvider(props: {
   const [unreadCount, setUnreadCount] = useState(props.initialUnreadCount);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
   const toast = useToast();
+  const showNotificationToast = useEffectEvent((item: NotificationItem) => {
+    toast.info(`${item.title}：${item.body}`);
+  });
 
   useEffect(() => {
     setUnreadCount(props.initialUnreadCount);
@@ -85,7 +88,7 @@ export function RealtimeNotificationProvider(props: {
           type: parsed.notification.type,
         };
         setLatestNotification(item);
-        toast.info(`${item.title}：${item.body}`);
+        showNotificationToast(item);
       }
     };
 
@@ -111,7 +114,7 @@ export function RealtimeNotificationProvider(props: {
         eventSource = null;
       }
     };
-  }, [toast]);
+  }, []);
 
   const contextValue: RealtimeNotificationContextValue = {
     clearUnread: () => {

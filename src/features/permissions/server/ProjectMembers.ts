@@ -413,6 +413,20 @@ export async function updateProjectMemberRole(input: ProjectMemberMutationInput)
   const { authorization, userId } = await authorizeProjectMemberMutation(memberInput);
 
   const membership = await db.transaction(async (transaction) => {
+    const [project] = await transaction
+      .select({ ownerId: projectsSchema.ownerId })
+      .from(projectsSchema)
+      .where(eq(projectsSchema.id, memberInput.projectId))
+      .for('update');
+
+    if (!project || project.ownerId !== authorization.project.ownerId) {
+      throw new Error('项目所有权已发生变化，请刷新后重试');
+    }
+
+    if (memberInput.memberUserId === project.ownerId) {
+      throw new Error('项目所有者角色不可修改或移除');
+    }
+
     const [updatedMembership] = await transaction
       .update(projectMembersSchema)
       .set({ role: memberInput.role })
@@ -472,6 +486,20 @@ export async function updateProjectMemberRole(input: ProjectMemberMutationInput)
 export async function removeProjectMember(input: ProjectMemberMutationInput) {
   const { authorization, memberInput, userId } = await authorizeProjectMemberMutation(input);
   const membership = await db.transaction(async (transaction) => {
+    const [project] = await transaction
+      .select({ ownerId: projectsSchema.ownerId })
+      .from(projectsSchema)
+      .where(eq(projectsSchema.id, memberInput.projectId))
+      .for('update');
+
+    if (!project || project.ownerId !== authorization.project.ownerId) {
+      throw new Error('项目所有权已发生变化，请刷新后重试');
+    }
+
+    if (memberInput.memberUserId === project.ownerId) {
+      throw new Error('项目所有者角色不可修改或移除');
+    }
+
     await transaction
       .delete(projectAccessRequestsSchema)
       .where(
@@ -539,30 +567,34 @@ export async function revokeProjectInvitation(input: ProjectInvitationInput) {
     role: 'viewer',
   });
 
-  const [revoked] = await db
-    .delete(projectInvitationsSchema)
-    .where(
-      and(
-        eq(projectInvitationsSchema.projectId, memberInput.projectId),
-        eq(projectInvitationsSchema.userId, memberInput.memberUserId),
-      ),
-    )
-    .returning({ userId: projectInvitationsSchema.userId });
+  const revoked = await db.transaction(async (transaction) => {
+    const [revokedInvitation] = await transaction
+      .delete(projectInvitationsSchema)
+      .where(
+        and(
+          eq(projectInvitationsSchema.projectId, memberInput.projectId),
+          eq(projectInvitationsSchema.userId, memberInput.memberUserId),
+        ),
+      )
+      .returning({ userId: projectInvitationsSchema.userId });
 
-  if (!revoked) {
-    throw new Error('邀请不存在或已处理');
-  }
+    if (!revokedInvitation) {
+      throw new Error('邀请不存在或已处理');
+    }
 
-  await recordAuditLog(db, {
-    action: 'project_invitation_revoked',
-    actorUserId: userId,
-    metadata: {
-      resourceName: authorization.project.name,
-      targetUserId: memberInput.memberUserId,
-    },
-    targetId: memberInput.memberUserId,
-    targetKind: 'invitation',
-    workspaceId: authorization.project.workspaceId,
+    await recordAuditLog(transaction, {
+      action: 'project_invitation_revoked',
+      actorUserId: userId,
+      metadata: {
+        resourceName: authorization.project.name,
+        targetUserId: memberInput.memberUserId,
+      },
+      targetId: memberInput.memberUserId,
+      targetKind: 'invitation',
+      workspaceId: authorization.project.workspaceId,
+    });
+
+    return revokedInvitation;
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -614,6 +646,20 @@ export async function transferProjectOwnership(input: TransferProjectOwnershipIn
   }
 
   await db.transaction(async (transaction) => {
+    const [project] = await transaction
+      .select({ ownerId: projectsSchema.ownerId, workspaceId: projectsSchema.workspaceId })
+      .from(projectsSchema)
+      .where(eq(projectsSchema.id, transferInput.projectId))
+      .for('update');
+
+    if (
+      !project ||
+      project.ownerId !== userId ||
+      project.workspaceId !== authorization.project.workspaceId
+    ) {
+      throw new Error('项目所有权已发生变化，请刷新后重试');
+    }
+
     const [workspaceMembership] = await transaction
       .select({ userId: workspaceMembersSchema.userId })
       .from(workspaceMembersSchema)

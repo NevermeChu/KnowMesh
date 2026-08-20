@@ -1,6 +1,6 @@
 # ADR 0010：使用 SSE 实现实时站内通知
 
-- 状态：Accepted
+- 状态：Superseded by [ADR 0011](0011-use-postgresql-notify-for-realtime-delivery.md)
 - 日期：2026-08-19
 
 ## 背景

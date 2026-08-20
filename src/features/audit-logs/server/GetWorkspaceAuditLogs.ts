@@ -55,7 +55,7 @@ export async function getWorkspaceAuditLogs(input: GetAuditLogsInput): Promise<A
     .select()
     .from(auditLogsSchema)
     .where(and(...whereConditions))
-    .orderBy(desc(auditLogsSchema.createdAt))
+    .orderBy(desc(auditLogsSchema.createdAt), desc(auditLogsSchema.id))
     .limit(parsedInput.limit ?? 50)
     .offset(parsedInput.offset ?? 0);
 

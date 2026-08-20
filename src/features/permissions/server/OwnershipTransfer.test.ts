@@ -180,7 +180,14 @@ describe('ownership transfer', () => {
           ownerId: 'user_owner',
         },
       });
-      state.selectFor.mockResolvedValueOnce([]);
+      state.selectFor
+        .mockResolvedValueOnce([
+          {
+            kind: 'team',
+            ownerId: 'user_owner',
+          },
+        ])
+        .mockResolvedValueOnce([]);
 
       await expect(
         transferWorkspaceOwnership({
@@ -188,6 +195,25 @@ describe('ownership transfer', () => {
           workspaceId: '11111111-1111-4111-8111-111111111111',
         }),
       ).rejects.toThrow('目标用户不是该工作区成员');
+    });
+
+    it('rejects transfer when workspace owner changes before transaction lock', async () => {
+      state.authorizeWorkspace.mockResolvedValueOnce({
+        workspace: {
+          id: '11111111-1111-4111-8111-111111111111',
+          kind: 'team',
+          name: 'Team',
+          ownerId: 'user_owner',
+        },
+      });
+      state.selectFor.mockResolvedValueOnce([{ kind: 'team', ownerId: 'user_other' }]);
+
+      await expect(
+        transferWorkspaceOwnership({
+          targetUserId: 'user_target',
+          workspaceId: '11111111-1111-4111-8111-111111111111',
+        }),
+      ).rejects.toThrow('工作区所有权已发生变化，请刷新后重试');
     });
 
     it('successfully transfers workspace ownership and notifies new owner', async () => {
@@ -200,6 +226,7 @@ describe('ownership transfer', () => {
         },
       });
       state.selectFor
+        .mockResolvedValueOnce([{ kind: 'team', ownerId: 'user_owner' }])
         .mockResolvedValueOnce([{ role: 'editor', userId: 'user_target' }])
         .mockResolvedValueOnce([{ role: 'owner', userId: 'user_owner' }]);
 
@@ -288,7 +315,14 @@ describe('ownership transfer', () => {
           workspaceKind: 'team',
         },
       });
-      state.selectFor.mockResolvedValueOnce([]);
+      state.selectFor
+        .mockResolvedValueOnce([
+          {
+            ownerId: 'user_owner',
+            workspaceId: '11111111-1111-4111-8111-111111111111',
+          },
+        ])
+        .mockResolvedValueOnce([]);
 
       await expect(
         transferProjectOwnership({
@@ -296,6 +330,31 @@ describe('ownership transfer', () => {
           targetUserId: 'user_target',
         }),
       ).rejects.toThrow('目标用户不是该工作区成员');
+    });
+
+    it('rejects transfer when project owner changes before transaction lock', async () => {
+      state.authorizeProject.mockResolvedValueOnce({
+        project: {
+          id: '22222222-2222-4222-8222-222222222222',
+          name: 'Team Project',
+          ownerId: 'user_owner',
+          workspaceId: '11111111-1111-4111-8111-111111111111',
+          workspaceKind: 'team',
+        },
+      });
+      state.selectFor.mockResolvedValueOnce([
+        {
+          ownerId: 'user_other',
+          workspaceId: '11111111-1111-4111-8111-111111111111',
+        },
+      ]);
+
+      await expect(
+        transferProjectOwnership({
+          projectId: '22222222-2222-4222-8222-222222222222',
+          targetUserId: 'user_target',
+        }),
+      ).rejects.toThrow('项目所有权已发生变化，请刷新后重试');
     });
 
     it('successfully transfers project ownership and notifies new owner', async () => {
@@ -309,6 +368,12 @@ describe('ownership transfer', () => {
         },
       });
       state.selectFor
+        .mockResolvedValueOnce([
+          {
+            ownerId: 'user_owner',
+            workspaceId: '11111111-1111-4111-8111-111111111111',
+          },
+        ])
         .mockResolvedValueOnce([{ userId: 'user_target' }])
         .mockResolvedValueOnce([{ role: 'owner', userId: 'user_owner' }]);
 

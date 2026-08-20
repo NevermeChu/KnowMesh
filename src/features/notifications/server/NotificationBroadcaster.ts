@@ -9,7 +9,7 @@ declare global {
 }
 
 /**
- * In-memory real-time event bus for user notifications.
+ * Process-local fan-out bus for database-backed user notification signals.
  */
 export class NotificationBroadcaster {
   // oxlint-disable-next-line unicorn/prefer-event-target -- Server-only Node event emitter for channel-based notification routing.

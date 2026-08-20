@@ -18,30 +18,32 @@ export async function updateProject(input: UpdateProjectInput) {
     projectId: projectInput.projectId,
     userId,
   });
-  const [project] = await db
-    .update(projectsSchema)
-    .set({ name: projectInput.name, updatedAt: new Date() })
-    .where(eq(projectsSchema.id, authorization.project.id))
-    .returning({ id: projectsSchema.id });
+  await db.transaction(async (transaction) => {
+    const [project] = await transaction
+      .update(projectsSchema)
+      .set({ name: projectInput.name, updatedAt: new Date() })
+      .where(eq(projectsSchema.id, authorization.project.id))
+      .returning({ id: projectsSchema.id });
 
-  if (!project) {
-    throw new Error('项目保存失败');
-  }
+    if (!project) {
+      throw new Error('项目保存失败');
+    }
 
-  if (authorization.project.workspaceKind === 'team') {
-    await recordAuditLog(db, {
-      action: 'project_renamed',
-      actorUserId: userId,
-      metadata: {
-        nextName: projectInput.name,
-        previousName: authorization.project.name,
-        resourceName: projectInput.name,
-      },
-      targetId: authorization.project.id,
-      targetKind: 'project',
-      workspaceId: authorization.project.workspaceId,
-    });
-  }
+    if (authorization.project.workspaceKind === 'team') {
+      await recordAuditLog(transaction, {
+        action: 'project_renamed',
+        actorUserId: userId,
+        metadata: {
+          nextName: projectInput.name,
+          previousName: authorization.project.name,
+          resourceName: projectInput.name,
+        },
+        targetId: authorization.project.id,
+        targetKind: 'project',
+        workspaceId: authorization.project.workspaceId,
+      });
+    }
+  });
 
   revalidatePath('/(workspace)', 'layout');
 }

@@ -28,8 +28,13 @@ export const getNotifications = cache(async (): Promise<NotificationItem[]> => {
     .limit(NOTIFICATION_PAGE_SIZE);
 });
 
-export const getUnreadNotificationCount = cache(async () => {
-  const { id: userId } = await requireUser();
+/**
+ * Counts unread notifications for a trusted server-side user identifier.
+ *
+ * @param userId - Authenticated notification recipient.
+ * @returns Current unread notification count.
+ */
+export async function getUnreadNotificationCountForUser(userId: string) {
   const [result] = await db
     .select({ value: count() })
     .from(notificationsSchema)
@@ -38,4 +43,9 @@ export const getUnreadNotificationCount = cache(async () => {
     );
 
   return result?.value ?? 0;
+}
+
+export const getUnreadNotificationCount = cache(async () => {
+  const { id: userId } = await requireUser();
+  return await getUnreadNotificationCountForUser(userId);
 });

@@ -5,11 +5,20 @@ import { GET } from './route';
 
 const state = vi.hoisted(() => {
   const requireUser = vi.fn<() => Promise<AuthenticatedUser>>();
-  return { requireUser };
+  const getUnreadNotificationCountForUser = vi.fn<() => Promise<number>>();
+  const start = vi.fn<() => Promise<void>>();
+  return { getUnreadNotificationCountForUser, requireUser, start };
 });
 
 vi.mock(import('server-only'), () => ({}));
 vi.mock(import('@/features/auth/server/CurrentUser'), () => ({ requireUser: state.requireUser }));
+vi.mock(import('@/features/notifications/server/GetNotifications'), () => ({
+  getUnreadNotificationCountForUser: state.getUnreadNotificationCountForUser,
+}));
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial subscriber mock avoids opening a database listener.
+vi.mock('@/features/notifications/server/NotificationDatabaseSubscriber', () => ({
+  notificationDatabaseSubscriber: { start: state.start },
+}));
 
 describe(GET, () => {
   it('returns 401 Unauthorized when user is not authenticated', async () => {
@@ -21,6 +30,8 @@ describe(GET, () => {
   });
 
   it('returns 200 OK text/event-stream response for authenticated user', async () => {
+    state.start.mockResolvedValueOnce();
+    state.getUnreadNotificationCountForUser.mockResolvedValueOnce(3);
     state.requireUser.mockResolvedValueOnce({
       email: 'user@example.com',
       emailVerified: true,
@@ -32,9 +43,15 @@ describe(GET, () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toBe('text/event-stream; charset=utf-8');
-    expect(response.headers.get('Cache-Control')).toBe('no-cache, no-transform');
-    expect(response.headers.get('X-Accel-Buffering')).toBe('no');
+    expect({
+      cacheControl: response.headers.get('Cache-Control'),
+      contentType: response.headers.get('Content-Type'),
+      proxyBuffering: response.headers.get('X-Accel-Buffering'),
+    }).toStrictEqual({
+      cacheControl: 'no-cache, no-transform',
+      contentType: 'text/event-stream; charset=utf-8',
+      proxyBuffering: 'no',
+    });
 
     const reader = response.body?.getReader();
     if (!reader) {
@@ -44,10 +61,14 @@ describe(GET, () => {
     const { value } = await reader.read();
     const decoded = new TextDecoder().decode(value);
     expect(decoded).toContain(': connected');
+    const countChunk = await reader.read();
+    expect(new TextDecoder().decode(countChunk.value)).toContain('"unreadCount":3');
     await reader.cancel();
   });
 
   it('receives published events through the stream', async () => {
+    state.start.mockResolvedValueOnce();
+    state.getUnreadNotificationCountForUser.mockResolvedValueOnce(0);
     state.requireUser.mockResolvedValueOnce({
       email: 'stream@example.com',
       emailVerified: true,
@@ -63,6 +84,8 @@ describe(GET, () => {
     }
 
     // Consume initial ': connected' chunk
+    await reader.read();
+    // Consume initial persisted count synchronization
     await reader.read();
 
     // Publish an event

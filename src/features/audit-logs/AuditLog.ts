@@ -57,7 +57,8 @@ export type AuditLogItem = {
   workspaceId: string;
 };
 
-export type AuditLogCategory = 'all' | 'membership' | 'permissions' | 'resources';
+export const auditLogCategories = ['all', 'membership', 'permissions', 'resources'] as const;
+export type AuditLogCategory = (typeof auditLogCategories)[number];
 
 export const auditActionCategories: Record<AuditAction, AuditLogCategory> = {
   project_access_approved: 'permissions',

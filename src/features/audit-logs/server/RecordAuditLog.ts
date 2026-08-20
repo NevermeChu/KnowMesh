@@ -21,7 +21,7 @@ export type RecordAuditLogOptions = {
 };
 
 /**
- * Inserts an immutable audit log record within the provided database/transaction context.
+ * Inserts an audit log record within the provided database/transaction context.
  *
  * @param database - Database client or active transaction.
  * @param options - Audit action details, actor, target and metadata.

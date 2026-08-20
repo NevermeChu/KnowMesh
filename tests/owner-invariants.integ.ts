@@ -61,7 +61,9 @@ describe('database membership and owner invariants', () => {
     await executeMigration('0017_late_dakota_north.sql');
     await executeMigration('0018_cloudy_the_spike.sql');
     await executeMigration('0019_add-better-auth.sql');
-  });
+    await executeMigration('0020_swift_groot.sql');
+    await executeMigration('0021_notification_realtime_delivery.sql');
+  }, 30_000);
 
   afterAll(async () => {
     await database.close();
