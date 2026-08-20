@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { sendWorkspaceInvitationEmail as sendWorkspaceInvitationEmailFunction } from '@/features/emails/server/SendWorkspaceInvitationEmail';
 import {
   projectAccessRequestsSchema,
   projectInvitationsSchema,
@@ -62,6 +63,7 @@ const state = vi.hoisted(() => {
 
   const createNotification = vi.fn<() => Promise<void>>();
   const revalidatePath = vi.fn<(url: string, type: 'layout' | 'page') => void>();
+  const sendWorkspaceInvitationEmail = vi.fn<typeof sendWorkspaceInvitationEmailFunction>();
 
   const authorizeWorkspace = vi.fn<() => Promise<unknown>>();
   const authorizeProject = vi.fn<() => Promise<unknown>>();
@@ -77,6 +79,7 @@ const state = vi.hoisted(() => {
     remove,
     requireUser,
     revalidatePath,
+    sendWorkspaceInvitationEmail,
     select,
     selectFor,
     selectFrom,
@@ -89,6 +92,9 @@ const state = vi.hoisted(() => {
 });
 
 vi.mock(import('server-only'), () => ({}));
+vi.mock(import('@/features/emails/server/SendWorkspaceInvitationEmail'), () => ({
+  sendWorkspaceInvitationEmail: state.sendWorkspaceInvitationEmail,
+}));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial cache mock isolates revalidation.
 vi.mock('next/cache', () => ({ revalidatePath: state.revalidatePath }));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial auth mock isolates identity.
