@@ -2,66 +2,42 @@
 
 import { Check, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { popupMenuItemClassName, PopupMenu, PopupMenuLabel } from '@/components/ui/PopupMenu';
 import { DocumentEditorToolbar } from '@/features/documents/components/DocumentEditorToolbar';
+import type { DocumentNavigationItem } from '@/features/documents/Document';
 import { contentWidthPercentages } from '@/features/preferences/Preferences';
 import type { ContentWidthPercentage } from '@/features/preferences/Preferences';
 import { updateContentWidth } from '@/features/preferences/server/UpdateContentWidth';
-
-type BreadcrumbItem = {
-  href?: string;
-  label: string;
-};
-
-const routeLabels: Record<string, string> = {
-  accept: '接受邀请',
-  collaboration: '协作区域',
-  dashboard: '首页',
-  invitations: '邀请',
-  notifications: '通知',
-  personal: '个人区域',
-  preferences: '系统偏好设置',
-  search: '搜索',
-  settings: '设置',
-  starred: '收藏',
-  'user-profile': '账号设置',
-};
-
-const navigableBreadcrumbs = new Set(['/collaboration', '/dashboard', '/personal']);
-
-const createBreadcrumbs = (pathname: string): BreadcrumbItem[] => {
-  const segments = pathname.split('/').filter(Boolean);
-  let currentPath = '';
-
-  return segments.map((segment, index) => {
-    currentPath += `/${segment}`;
-    const isLast = index === segments.length - 1;
-
-    return {
-      href: !isLast && navigableBreadcrumbs.has(currentPath) ? currentPath : undefined,
-      label: routeLabels[segment] ?? segment.replaceAll('-', ' '),
-    };
-  });
-};
+import type { Project } from '@/features/projects/Project';
+import { createContentBreadcrumbs } from './ContentBreadcrumbs';
 
 /**
  * Renders shared content navigation and view actions.
  *
- * @param props - Persisted content width and content fullscreen state and toggle behavior.
+ * @param props - Navigation metadata, persisted width, and content fullscreen behavior.
  * @returns The shared content toolbar.
  */
 export function ContentToolbar(props: {
   contentWidth: ContentWidthPercentage;
+  documents: DocumentNavigationItem[];
   isContentFullscreen: boolean;
+  projects: Project[];
   onToggleContentFullscreen: () => void;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [width, setWidth] = useState(props.contentWidth);
   const [isWidthMenuOpen, setIsWidthMenuOpen] = useState(false);
   const [, startTransition] = useTransition();
-  const breadcrumbs = createBreadcrumbs(pathname);
+  const breadcrumbs = createContentBreadcrumbs({
+    documentId: searchParams.get('document') ?? undefined,
+    documents: props.documents,
+    pathname,
+    projectId: searchParams.get('project') ?? undefined,
+    projects: props.projects,
+  });
   const FullscreenIcon = props.isContentFullscreen ? Minimize2 : Maximize2;
   const fullscreenLabel = props.isContentFullscreen ? '退出内容全屏' : '内容全屏';
 

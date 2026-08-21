@@ -91,7 +91,9 @@ export function AppShell(props: {
         >
           <ContentToolbar
             contentWidth={props.contentWidth}
+            documents={props.documents}
             isContentFullscreen={isContentFullscreen}
+            projects={props.projects}
             onToggleContentFullscreen={() => {
               setIsContentFullscreen((isFullscreen) => !isFullscreen);
             }}
