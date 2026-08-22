@@ -1,5 +1,7 @@
 export const DOCUMENT_CONTENT_SCHEMA_VERSION = 1;
 
+export type DocumentEditorMode = 'collaborative' | 'collaborative-readonly' | 'single-user';
+
 export type JsonValue = boolean | number | string | null | JsonValue[] | JsonObject;
 
 export type JsonObject = {

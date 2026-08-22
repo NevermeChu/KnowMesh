@@ -1,13 +1,13 @@
 import { FileText } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ProjectAccessActions } from '@/features/projects/components/ProjectAccessActions';
-import type { Document } from '../Document';
+import type { Document, DocumentEditorMode } from '../Document';
 import { DocumentEditorSkeleton } from './DocumentEditorSkeleton';
 
 const DynamicDocumentEditor = dynamic(
   async () => {
-    const mod = await import('./DocumentEditor');
-    return { default: mod.DocumentEditor };
+    const mod = await import('./DocumentEditorDispatcher');
+    return { default: mod.DocumentEditorDispatcher };
   },
   {
     loading: () => <DocumentEditorSkeleton />,
@@ -54,6 +54,7 @@ export function DocumentWorkspace(props: {
   canRead: boolean;
   documentCount: number;
   selectedDocument: Document | null;
+  selectedDocumentEditorMode: DocumentEditorMode | null;
   selectedDocumentTitle: string | null;
 }) {
   let content = (
@@ -78,11 +79,16 @@ export function DocumentWorkspace(props: {
   }
 
   if (props.selectedDocument) {
+    if (!props.selectedDocumentEditorMode) {
+      throw new Error('Document editor mode is missing');
+    }
+
     content = (
       <DynamicDocumentEditor
         key={props.selectedDocument.id}
         canEdit={props.canEdit}
         document={props.selectedDocument}
+        editorMode={props.selectedDocumentEditorMode}
       />
     );
   }

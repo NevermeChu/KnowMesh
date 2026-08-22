@@ -68,6 +68,7 @@ export async function ProjectDocumentsPage(props: {
       accessState={{ ...accessState, projectId }}
       documentCount={result.documents.length}
       selectedDocument={result.selectedDocument}
+      selectedDocumentEditorMode={result.selectedDocumentEditorMode}
       selectedDocumentTitle={result.selectedDocumentTitle}
     />
   );

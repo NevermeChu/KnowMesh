@@ -48,10 +48,14 @@ function countCharacters(content: DocumentContent | null | undefined): number {
 /**
  * Main rich text document editor with auto-save, outline, slash commands, and bubble toolbar.
  *
- * @param props - Document details and permission flag.
+ * @param props - Document details and separate title and body write capabilities.
  * @returns The document editor layout.
  */
-export function DocumentEditor(props: { canEdit: boolean; document: Document }) {
+export function DocumentEditor(props: {
+  canEditContent: boolean;
+  canEditTitle: boolean;
+  document: Document;
+}) {
   const router = useRouter();
   const toolbarRegistration = useDocumentEditorToolbarRegistration();
   const editorCommands = useDocumentEditorCommands();
@@ -69,6 +73,10 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
   const registeredEditor = useRef<Editor | null>(null);
 
   async function flushContent() {
+    if (!props.canEditContent) {
+      return;
+    }
+
     const currentEditor = registeredEditor.current;
 
     if (!currentEditor || currentEditor.isDestroyed || isSavingContent.current) {
@@ -116,7 +124,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
 
   const editor = useEditor({
     content: props.document.content,
-    editable: props.canEdit,
+    editable: props.canEditContent,
     editorProps: {
       attributes: {
         class: 'min-h-[32rem] px-1 pb-32 pt-4 text-[15px] leading-7 text-ink outline-none',
@@ -191,7 +199,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
       >
         <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-ink-faint">
           <div className="flex items-center gap-2.5">
-            <DocumentSaveStatus canEdit={props.canEdit} state={saveState} />
+            <DocumentSaveStatus canEdit={props.canEditContent} state={saveState} />
             <span aria-hidden="true" className="text-line">
               ·
             </span>
@@ -215,7 +223,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
         <input
           aria-label="文档标题"
           className="mt-5 w-full bg-transparent text-4xl font-bold tracking-tight text-ink outline-none placeholder:text-ink-faint-strong disabled:opacity-100"
-          disabled={!props.canEdit}
+          disabled={!props.canEditTitle}
           maxLength={200}
           placeholder="无标题"
           value={title}
@@ -254,7 +262,7 @@ export function DocumentEditor(props: { canEdit: boolean; document: Document }) 
           <EditorContent editor={editor} />
         </div>
 
-        {props.canEdit && (
+        {props.canEditContent && (
           <>
             <DocumentBubbleMenu
               editor={editor}

@@ -4,7 +4,13 @@ import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
-import { documentsSchema, starredDocumentsSchema } from '@/models/Schema';
+import { Env } from '@/libs/Env';
+import {
+  documentCollaborationStatesSchema,
+  documentsSchema,
+  starredDocumentsSchema,
+} from '@/models/Schema';
+import { getDocumentEditorMode } from '../DocumentEditorMode';
 
 export async function getProjectDocuments(options: {
   documentId?: string;
@@ -46,6 +52,7 @@ export async function getProjectDocuments(options: {
     return {
       access: authorization.decision,
       documents,
+      selectedDocumentEditorMode: null,
       selectedDocument: null,
       selectedDocumentTitle: null,
     };
@@ -55,6 +62,7 @@ export async function getProjectDocuments(options: {
     return {
       access: authorization.decision,
       documents,
+      selectedDocumentEditorMode: null,
       selectedDocument: null,
       selectedDocumentTitle: selectedMetadata.title,
     };
@@ -64,10 +72,15 @@ export async function getProjectDocuments(options: {
     db
       .select({
         content: documentsSchema.content,
+        collaborationDocumentId: documentCollaborationStatesSchema.documentId,
         contentSchemaVersion: documentsSchema.contentSchemaVersion,
         projectId: documentsSchema.projectId,
       })
       .from(documentsSchema)
+      .leftJoin(
+        documentCollaborationStatesSchema,
+        eq(documentCollaborationStatesSchema.documentId, documentsSchema.id),
+      )
       .where(
         and(
           eq(documentsSchema.id, selectedMetadata.id),
@@ -90,10 +103,19 @@ export async function getProjectDocuments(options: {
   return {
     access: authorization.decision,
     documents,
+    selectedDocumentEditorMode: selectedContent
+      ? getDocumentEditorMode({
+          collaborationEnabled: Env.COLLABORATION_ENABLED === 'true',
+          hasCollaborationState: selectedContent.collaborationDocumentId !== null,
+          workspaceKind: options.workspaceKind,
+        })
+      : null,
     selectedDocument: selectedContent
       ? {
+          content: selectedContent.content,
+          contentSchemaVersion: selectedContent.contentSchemaVersion,
+          projectId: selectedContent.projectId,
           ...selectedMetadata,
-          ...selectedContent,
           isStarred: Boolean(starredRecord),
         }
       : null,
