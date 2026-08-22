@@ -27,6 +27,8 @@ export const migrationFiles = [
   '0019_add-better-auth.sql',
   '0020_swift_groot.sql',
   '0021_notification_realtime_delivery.sql',
+  '0022_giant_annihilus.sql',
+  '0023_document_collaboration_invalidation.sql',
 ] as const;
 
 export async function executeMigrations(database: PGlite, fileNames: readonly string[]) {

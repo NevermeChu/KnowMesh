@@ -7,6 +7,8 @@
     "build:next": "next build",
     "build-local": "node scripts/local-runtime.ts build-local",
     "build": "run-s db:migrate build:next",
+    "collaboration": "tsx --env-file=.env scripts/collaboration-server.ts",
+    "collaboration:prepare": "tsx --env-file=.env scripts/collaboration-server.ts --prepare",
     "start": "next start",
     "clean": "rimraf .next out coverage",
     "codegraph:watch": "node scripts/codegraph-watch.ts",
@@ -20,12 +22,20 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@hocuspocus/extension-database": "^4.6.0",
+    "@hocuspocus/provider": "^4.6.0",
+    "@hocuspocus/provider-react": "^4.6.0",
+    "@hocuspocus/server": "^4.6.0",
+    "@hocuspocus/transformer": "^4.6.0",
     "@react-email/components": "^1.0.11",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@tiptap/core": "^3.29.2",
+    "@tiptap/extension-collaboration": "^3.29.2",
+    "@tiptap/extension-collaboration-caret": "^3.29.2",
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
+    "@tiptap/y-tiptap": "^3.0.9",
     "better-auth": "^1.7.0",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.28.0",
@@ -34,6 +44,8 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "resend": "^6.19.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -57,6 +69,7 @@
     "oxlint-tsgolint": "^0.23.0",
     "rimraf": "^6.1.3",
     "tailwindcss": "^4.3.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "ultracite": "^7.7.0",
     "vitest": "^4.1.7"

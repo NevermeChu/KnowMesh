@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  customType,
   index,
   integer,
   jsonb,
@@ -38,6 +39,12 @@ import { workspaceKinds } from '@/features/workspaces/Workspace';
 
 export const projectMemberRoleEnum = pgEnum('project_member_role', memberRoles);
 export const notificationTypeEnum = pgEnum('notification_type', notificationTypes);
+
+const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
+  dataType: () => 'bytea',
+  fromDriver: (value) => new Uint8Array(value),
+  toDriver: (value) => Buffer.from(value),
+});
 export const notificationTargetKindEnum = pgEnum(
   'notification_target_kind',
   notificationTargetKinds,
@@ -345,6 +352,19 @@ export const documentsSchema = pgTable(
   },
   (table) => [index('documents_project_updated_idx').on(table.projectId, table.updatedAt)],
 );
+
+export const documentCollaborationStatesSchema = pgTable('document_collaboration_states', {
+  documentId: uuid('document_id')
+    .primaryKey()
+    .references(() => documentsSchema.id, { onDelete: 'cascade' }),
+  state: bytea('state').notNull(),
+  documentSchemaVersion: integer('document_schema_version').notNull(),
+  initializedAt: timestamp('initialized_at', { mode: 'date' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date' })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
 
 export const starredDocumentsSchema = pgTable(
   'starred_documents',

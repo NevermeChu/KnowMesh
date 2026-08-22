@@ -3,8 +3,7 @@ import { Callout } from './extensions/CalloutExtension';
 import { Details, DetailsContent, DetailsSummary } from './extensions/DetailsExtension';
 import { TaskItem, TaskList } from './extensions/TaskListExtension';
 
-export const documentExtensions = [
-  StarterKit,
+export const documentNodeExtensions = [
   Callout,
   Details,
   DetailsSummary,
@@ -12,3 +11,5 @@ export const documentExtensions = [
   TaskList,
   TaskItem,
 ];
+
+export const documentExtensions = [StarterKit, ...documentNodeExtensions];

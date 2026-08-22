@@ -155,6 +155,20 @@
       "when": 1787189555882,
       "tag": "0021_notification_realtime_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787280525589,
+      "tag": "0022_giant_annihilus",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787285655873,
+      "tag": "0023_document_collaboration_invalidation",
+      "breakpoints": true
     }
   ]
 }

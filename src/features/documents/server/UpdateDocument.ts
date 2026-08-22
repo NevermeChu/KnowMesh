@@ -5,7 +5,13 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { db } from '@/libs/DB';
-import { documentsSchema } from '@/models/Schema';
+import { Env } from '@/libs/Env';
+import {
+  documentCollaborationStatesSchema,
+  documentsSchema,
+  projectsSchema,
+  workspacesSchema,
+} from '@/models/Schema';
 import { updateDocumentSchema } from '../DocumentSchema';
 import type { UpdateDocumentInput } from '../DocumentSchema';
 
@@ -18,24 +24,63 @@ export async function updateDocument(input: UpdateDocumentInput) {
     userId,
   });
 
-  const [document] = await db
-    .update(documentsSchema)
-    .set({
-      ...(documentInput.content === undefined ? {} : { content: documentInput.content }),
-      ...(documentInput.title === undefined ? {} : { title: documentInput.title }),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(documentsSchema.id, documentInput.documentId),
-        eq(documentsSchema.projectId, authorization.document.projectId),
-      ),
-    )
-    .returning({ id: documentsSchema.id });
+  await db.transaction(async (transaction) => {
+    const [documentMode] = await transaction
+      .select({
+        workspaceKind: workspacesSchema.kind,
+      })
+      .from(documentsSchema)
+      .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
+      .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
+      .where(
+        and(
+          eq(documentsSchema.id, documentInput.documentId),
+          eq(documentsSchema.projectId, authorization.document.projectId),
+        ),
+      )
+      .limit(1)
+      .for('update', { of: documentsSchema });
 
-  if (!document) {
-    throw new Error('文档保存失败');
-  }
+    if (!documentMode) {
+      throw new Error('文档保存失败');
+    }
+
+    const [collaborationState] =
+      documentInput.content !== undefined && documentMode.workspaceKind === 'team'
+        ? await transaction
+            .select({ documentId: documentCollaborationStatesSchema.documentId })
+            .from(documentCollaborationStatesSchema)
+            .where(eq(documentCollaborationStatesSchema.documentId, documentInput.documentId))
+            .limit(1)
+        : [];
+
+    if (
+      documentInput.content !== undefined &&
+      documentMode.workspaceKind === 'team' &&
+      (Env.COLLABORATION_ENABLED === 'true' || collaborationState !== undefined)
+    ) {
+      throw new Error('团队文档正文必须通过协作服务保存');
+    }
+
+    const [document] = await transaction
+      .update(documentsSchema)
+      .set({
+        ...(documentInput.content === undefined ? {} : { content: documentInput.content }),
+        ...(documentInput.title === undefined ? {} : { title: documentInput.title }),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentsSchema.id, documentInput.documentId),
+          eq(documentsSchema.projectId, authorization.document.projectId),
+        ),
+      )
+      .returning({ id: documentsSchema.id });
+
+    if (!document) {
+      throw new Error('文档保存失败');
+    }
+  });
 
   if (documentInput.title !== undefined) {
     revalidatePath('/(workspace)', 'layout');
