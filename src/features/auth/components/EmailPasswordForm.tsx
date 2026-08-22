@@ -98,7 +98,7 @@ export function EmailPasswordForm(props: { mode: 'sign-in' | 'sign-up'; redirect
   }
 
   return (
-    <form className="space-y-4" onSubmit={submit}>
+    <form className="space-y-4" method="post" onSubmit={submit}>
       {props.mode === 'sign-up' && (
         <FormField htmlFor="name" label="姓名" reserveErrorSpace={false} required>
           <div className="relative">

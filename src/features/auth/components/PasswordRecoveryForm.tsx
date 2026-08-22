@@ -66,7 +66,7 @@ export function PasswordRecoveryForm(props: { token?: string }) {
   }
 
   return (
-    <form className="space-y-4" onSubmit={submit}>
+    <form className="space-y-4" method="post" onSubmit={submit}>
       {props.token ? (
         <FormField htmlFor="password" label="新密码" hint="至少 8 个字符" required>
           <div className="relative">
