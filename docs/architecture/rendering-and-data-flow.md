@@ -13,14 +13,15 @@
 交互式权限读取：Client Component → Server Action → 资源授权 → 数据库与本地用户表
 写入后同步：Server Action 使工作区布局数据失效 → 重新执行服务端读取
 权限通知：权限 Server Action → 同一数据库事务写业务状态与用户通知
-文档编辑：Client Component → 防抖/失焦保存 → Server Action → JSONB
+Personal 正文：Client Component → 防抖/失焦保存 → Server Action → JSONB
+Team 正文：Client Component → Yjs Provider → Hocuspocus → Yjs 状态 + JSONB 派生快照
 ```
 
 `async` 不决定函数是否为 Server Action。决定因素是调用发生在哪个运行边界，以及导出函数是否使用 `'use server'` 暴露为 Action。
 
 ## 受保护页面的认证回跳
 
-`src/proxy.ts` 保护工作区与邀请页面。未检测到 Better Auth Session cookie 时，代理将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
+`src/proxy.ts` 保护工作区与邀请页面。未检测到 Better Auth Session cookie 时，代理将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
 
 这会保留 Workspace 邀请链接的 token，但不自动接受邀请；用户仍必须在接受页明确确认，服务端 Action 再次校验 token 和已验证邮箱。`/dashboard` 只是没有安全动态目标时的 fallback。
 
@@ -110,12 +111,17 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 → getProjectAuthorization 用 Workspace 成员关系授予结构发现，再用 Project 直接角色授予内容权限
 → 验证项目属于当前 Workspace
 → 查询项目文档元数据和所选文档内容
-→ DocumentWorkspace 与 DocumentEditor 接收所选文档数据
+→ 服务端根据 Workspace 类型、功能开关和既有协作状态推导编辑模式
+→ DocumentWorkspace 与 DocumentEditorDispatcher 接收所选文档数据和编辑模式
 ```
 
 创建、更新和删除均使用 Server Action。客户端的 `projectId`、`documentId` 或能力只用于定位候选资源和界面呈现，服务端仍会重新计算授权。`viewer` 可以读取，不能创建、修改或删除文件；`owner` 和 `editor` 可以管理文件。
 
-Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`。服务端再次验证 ProseMirror JSON 结构后写入 `documents.content`。当前没有实时通道或冲突合并，多客户端编辑采用数据库最后写入结果。
+Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`；服务端再次验证 ProseMirror JSON 结构后写入 `documents.content`。Team 文档在功能开关开启或已经存在协作状态时改用 `CollaborativeDocumentEditor`：Provider 按 `document:<uuid>` 隔离 Y.Doc，客户端 Collaboration 扩展与服务端 transformer 统一使用 `content` XmlFragment，首次同步完成后才挂载 Tiptap，正文变更不调用 Server Action。服务端加载旧二进制状态时把早期 `default` XmlFragment 转换为 canonical `content` 状态。协作编辑器持有文档级 WebSocket 生命周期；路由卸载时房间 Provider 先从共享传输分离，外层 WebSocket 随后销毁，防止旧 Awareness 和连接残留。Provider 文档连接关闭、底层断线、认证失败或重新认证为 `readonly` 时，客户端立即以只读编辑器替换可写实例；只有页面授权与服务端 `read-write` scope 同时成立才允许正文写入。该状态变化不会回退到 JSON 写入；Personal 编辑器也不会因协作服务故障改变保存行为。
+
+模式分流把“Yjs 仍是权威来源”和“协作服务当前允许写入”分开表达。已有协作状态但功能开关关闭时，页面选择 `collaborative-readonly`，直接显示最新 JSON 派生快照且不建立 Provider；正文编辑和 `updateDocument(content)` 保持关闭，标题继续按独立业务授权保存。重新启用开关后恢复协作连接和既有 Yjs 状态。
+
+独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影；运行指标记录正文变化、store 成功与失败及最近成功时间。它使用独立本地 HTTP 端口区分进程 liveness、数据库和存储 readiness，并在关闭前显式等待内存文档持久化。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence。本地运行脚本在功能开关开启时于迁移完成后启动协作进程并等待 `/ready`，任一受管进程异常退出都会结束整组服务；Windows 下长生命周期子进程使用独立进程组，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。CI 与生产 WSS 部署仍未实现，因此生产功能开关必须保持关闭。
 
 `DocumentEditor` 在创建和销毁时通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例。共享 `ContentToolbar` 从该上下文取得编辑器，仅在可编辑文档打开时显示格式命令；编辑器内容仍由文档页面持有，工具栏上下文不保存正文副本。
 
@@ -146,7 +152,8 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - 当前项目创建、资源重命名和删除、文档创建与更新、交互式权限总览使用 Server Action。
 - 当前存在 `/api/auth/[...all]` Better Auth Route Handler，提供认证和账户生命周期接口。
 - 当前存在 `/api/realtime/notifications` SSE Route Handler，基于 Web Streams `ReadableStream` 向已登录用户推送实时通知与未读数同步事件，包含 25 秒心跳保活。跨进程信号由 PostgreSQL `LISTEN / NOTIFY` 传递，进程内 `NotificationBroadcaster` 只负责向本进程连接扇出。
-- `src/proxy.ts` 的 matcher 排除了 `/api`；Route Handler 由自身通过 `requireUser()` 执行 Session 和身份校验。当前没有双向 WebSocket 或外部推送服务。
+- `src/proxy.ts` 的 matcher 排除了 `/api`；Route Handler 由自身通过 `requireUser()` 执行 Session 和身份校验。
+- 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地普通启动已按功能开关完成编排，但 CI、Nginx 和 systemd 尚未接入，生产功能开关必须保持关闭。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
 
@@ -180,6 +187,8 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/features/documents/server/CreateDocument.ts`：文档创建 Server Action。
 - `src/features/documents/server/UpdateDocument.ts`：文档更新 Server Action。
 - `src/features/documents/server/DeleteDocument.ts`：文档删除 Server Action。
+- `scripts/collaboration-server.ts`：由本地运行脚本按功能开关管理的独立 Hocuspocus 服务入口。
+- `src/features/documents/collaboration/DocumentCollaborationServer.ts`：协作文档加载、存储、健康检查与关闭生命周期。
 - `src/features/projects/server/UpdateProject.ts` 和 `DeleteProject.ts`：项目管理 Server Action。
 - `src/features/workspaces/server/UpdateWorkspace.ts` 和 `DeleteWorkspace.ts`：Workspace 管理 Server Action。
 

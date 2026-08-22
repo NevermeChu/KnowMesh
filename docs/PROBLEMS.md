@@ -720,3 +720,293 @@ PGlite 原生 API 支持 `LISTEN / NOTIFY`，但当前 `pglite-socket` 将多个
 - 首个事务只创建邀请并记录审计，不提前创建站内通知。
 - 邮件成功后重新确认邀请未接受、未撤销且未过期，再为已注册收件人写入去重后的站内通知。
 - 邮件失败继续通过补偿事务撤销邀请并记录自动撤销审计，因此不会产生对应数据库通知与 Toast。
+
+## 44. Tiptap 协作包不能按统一补丁版本机械锁定
+
+### 问题
+
+协作依赖首次按现有 Tiptap `3.29.2` 统一安装时，npm 无法解析 `@tiptap/y-tiptap@3.29.2`，导致整个协作依赖集合安装失败。
+
+### 根因
+
+`@tiptap/core`、编辑器扩展和 `@tiptap/y-tiptap` 虽属于同一生态，但不共享相同发布版本序列。`@tiptap/extension-collaboration@3.29.2` 接受 `@tiptap/y-tiptap@^3.0.7`，而后者当时实际发布版本为 `3.0.9`，不存在 `3.29.2`。
+
+### 解决方法
+
+- 继续让核心和编辑器扩展保持 `3.29.2`，单独锁定兼容的 `@tiptap/y-tiptap@3.0.9`。
+- Hocuspocus 的 server、provider、React bindings、database extension 和 transformer 统一保持 v4 同一版本线。
+- 升级协作依赖时同时检查 npm peer dependency 和 lockfile，不能只根据包名前缀假设版本一致。
+
+## 45. ProseMirror JSON 与 Y.Doc 往返会补齐默认属性
+
+### 问题
+
+合法 ProseMirror JSON 转换为 Y.Doc 后再生成 JSON 时，正文语义和节点结构没有变化，但测试的严格对象比较仍失败。例如 bold mark 会补出空 `attrs`，link mark 会补出默认 `rel`、`target`、`title` 和 `class`。
+
+### 根因
+
+Tiptap transformer 通过完整 ProseMirror Schema 解析并重新序列化节点。Schema 默认属性会在该过程中被规范化，因此“等价有效快照”不等于“与客户端输入逐字段完全相同”。如果把原始 JSON 字节相等当作协作初始化不变量，会把正常的 Schema 规范化误判为内容损坏。
+
+### 解决方法
+
+- 转换入口和输出都继续使用完整 `documentExtensions`，输出再经过 `isDocumentContent` 验证。
+- round-trip 测试先取得 Schema 规范化后的快照，再验证二进制编码、加载和二次投影保持该快照稳定。
+- 业务正确性以有效节点结构和规范化后的稳定语义为准，不依赖输入 JSON 的属性省略形式。
+
+## 46. Next.js 的 `server-only` 标记不能直接复用于独立协作进程
+
+### 问题
+
+独立 Hocuspocus 服务首次通过 tsx 启动时，在导入协作持久化模块阶段报 `ERR_MODULE_NOT_FOUND: Cannot find package 'server-only'`，服务尚未监听端口便退出。
+
+### 根因
+
+`server-only` 是 Next.js 构建链识别的服务端边界标记，不是独立 Node.js 运行时可以可靠加载的普通依赖。协作持久化代码同时供 Hocuspocus 独立进程执行，如果沿用 Next.js Server Action 模块的标记，会把框架专用的模块解析假设泄漏到新运行边界。
+
+### 解决方法
+
+- 协作状态和持久化模块不导入 `server-only`，只依赖数据库、Schema 和不含浏览器 API 的转换代码。
+- 独立入口使用 tsx 解析仓库 TypeScript 与 `@/` 路径别名，避免复制数据库和文档 Schema 实现。
+- Next.js 客户端不得直接导入协作持久化模块；后续客户端只通过 Hocuspocus Provider 和受保护的服务端令牌入口连接。
+- 独立服务必须执行真实进程启动、健康检查和关闭测试，不能仅以 Next.js 构建或 Vitest mock 通过作为可运行证据。
+
+## 47. 独立服务不会自动加载 Next.js 的 `.env`
+
+### 问题
+
+解决模块解析后再次启动 Hocuspocus，`Env.ts` 报告 `BETTER_AUTH_SECRET`、`DATABASE_URL` 和 `NEXT_PUBLIC_APP_URL` 未定义，而同一工作区的 Next.js 与迁移命令能够读取这些配置。
+
+### 根因
+
+Next.js 和 `dotenv-cli` 各自在自己的启动链路中加载 `.env`，普通 tsx 进程不会自动继承这项框架行为。共享 `Env.ts` 的校验是正确的，但独立服务入口此前没有建立等价的环境加载边界。
+
+### 解决方法
+
+- `collaboration` 脚本显式使用 tsx 的 `--env-file=.env` 启动参数，再由共享 `Env.ts` 完成统一校验。
+- 生产 systemd 仍应使用受控的 `EnvironmentFile`，而不是依赖工作目录中的开发 `.env`。
+- 每个新增独立进程都必须单独验证环境来源，不能因为 Next.js 能启动就假设其他进程获得相同变量。
+
+## 48. Hocuspocus `onRequest` 不能接管内置 HTTP 响应
+
+### 问题
+
+协作服务的 `/health` 首次请求成功返回 JSON 后，进程立即因 `ERR_HTTP_HEADERS_SENT` 退出，后续 `/metrics` 无法连接。
+
+### 根因
+
+Hocuspocus v4 的 `Server.requestHandler` 在执行 `onRequest` hooks 后仍会写入内置 `Welcome to Hocuspocus!` 响应。hook 内提前调用 `response.end()` 不会阻止默认处理，导致同一响应被写入两次。类型签名允许访问 `response`，但不代表 hook 可以替代内置响应生命周期。
+
+### 解决方法
+
+- WebSocket 端口只运行 Hocuspocus，不在 `onRequest` 中实现业务 HTTP 路由。
+- 使用绑定到本地地址的独立轻量 HTTP server 提供 `/live`、`/ready`、`/health` 和 `/metrics`，默认端口为 `1235`；readiness 需要数据库可用且最近一次存储没有失败。
+- 优雅关闭同时停止健康服务器、flush 待存储文档并销毁 Hocuspocus，避免留下半存活端口。
+- 服务冒烟必须连续请求健康与指标端点，并确认进程仍然存活。
+
+## 49. Team 文档初始化与旧正文保存可能形成两个权威来源
+
+### 问题
+
+协作服务从 `documents.content` 初始化 Yjs 状态期间，旧编辑器仍可通过 `updateDocument(content)` 保存 Team 正文。两条写入交错时，Yjs 可能基于旧 JSON 初始化，随后再把旧内容投影回数据库，覆盖刚完成的普通保存。
+
+### 根因
+
+初始化与旧保存原本没有竞争同一数据库锁；`updateDocument` 也没有检查协作状态或服务端功能开关。仅依靠客户端选择编辑模式不能建立正文权威边界。
+
+### 解决方法
+
+- 初始化和普通正文保存都在事务内锁定同一条 `documents` 记录。
+- 普通保存获得锁后用新的数据库语句查询协作状态，确保能看到等待锁期间提交的初始化结果。
+- Team 文档一旦存在协作状态，或协作功能开关已启用，服务端拒绝 `updateDocument(content)`；标题保存继续允许。
+
+## 50. 已持久化的 Yjs 状态可能被静默标记为新 Schema 版本
+
+### 问题
+
+加载已有协作状态时没有检查 `document_schema_version`，存储时却直接写入当前版本。未来 Schema 变化后，旧状态可能未经迁移就被当前扩展解释并标记为已升级。
+
+### 根因
+
+版本字段只在首次初始化时写入，没有参与加载和更新条件，因此没有真正形成兼容性边界。
+
+### 解决方法
+
+- 加载已有状态时要求版本与 `DOCUMENT_CONTENT_SCHEMA_VERSION` 完全一致，不兼容时拒绝打开。
+- 持久化更新同时匹配文档 ID 和当前状态版本，不允许存储路径承担隐式迁移。
+- 后续 Schema 升级必须提供显式 Yjs 状态迁移，成功后才能更新版本字段。
+
+## 51. 协作服务关闭可能在存储失败后无限等待
+
+### 问题
+
+Hocuspocus 在 `onStoreDocument` 失败时会把文档保留在内存中避免丢失，而 `destroy()` 等待文档卸载；直接调用 `flushPendingStores()` 后 `destroy()` 可能永远不返回。异步信号处理若不传播错误，还会让 systemd 只能通过强制终止结束进程。
+
+### 根因
+
+`flushPendingStores()` 不返回可等待的持久化 promise，原关闭流程无法知道最终状态是否成功写入，也没有截止时间或数据库连接释放步骤。
+
+### 解决方法
+
+- 先停止接受连接并关闭现有连接，再在每篇文档的 save mutex 内显式等待事务性持久化。
+- 持久化成功后再执行带 15 秒截止时间的 Hocuspocus destroy，并取消已完成操作对应的超时计时器。
+- 关闭失败时输出结构化错误、关闭健康端口、设置非零退出码；无论成功失败都释放 PostgreSQL 连接池。
+
+## 52. Next.js 完整 Auth 实例不能作为独立协作进程的 Session 验证器
+
+### 问题
+
+协作进程需要验证浏览器携带的 Better Auth 签名 Cookie，但直接导入应用 `Auth.ts` 会同时加载邮件发送、注册后 Workspace 初始化和 `server-only` 模块，使独立 Node.js 入口重新遇到框架专用模块边界，并把无关副作用带入长连接进程。
+
+### 根因
+
+现有 Auth 实例既定义 Session Cookie 和数据库适配器，也注册了只属于 Next.js 注册、验证邮件流程的生命周期 hook。身份协议配置与应用副作用没有可直接供独立进程复用的最小边界。
+
+### 解决方法
+
+- 协作服务建立只包含相同 Better Auth secret、base URL、Cookie 默认值和 Drizzle Auth Schema 的最小验证实例。
+- 首次握手通过 Better Auth API 验证签名 Cookie，并禁用 Cookie Session 缓存，确保从数据库读取当前 Session。
+- 后续写入和周期复查只使用握手获得的 Session ID 与 user ID 查询数据库，不在连接上下文保存或记录 Cookie、Session Token 和正文。
+
+## 53. 权限与 Session 失效不能只依赖进程内状态或盲目关闭
+
+### 问题
+
+成员角色、Session 和文档由 Next.js 与 Better Auth 进程写入数据库，独立 Hocuspocus 进程不会自动获知变化。另一方面，Session 正常续期也会更新到期时间；若收到任何 Session 更新都直接关闭连接，会让合法用户在续期时无故断线。
+
+### 根因
+
+长连接建立时的权限快照会过期，而跨进程内存事件无法覆盖数据库中的全部写入者。数据库通知只说明相关记录发生变化，不证明连接已经失效。
+
+### 解决方法
+
+- 在 Project 成员角色、Session 和文档相关表上建立事务性 PostgreSQL 触发器，只发布资源 ID、用户 ID 或 Session ID。
+- 协作进程收到信号后重新查询当前 Session 与 Project 文档权限，仅在身份、资源或有效读写级别变化时关闭连接。
+- 每次客户端正文写入前强制重新验证，并以 15 秒周期复查作为 LISTEN 断线或漏信号的兜底；复查异常只记录脱敏结构化错误，不产生未处理 Promise rejection。
+
+## 54. 协作开关关闭后已激活 Team 文档没有只读降级
+
+### 问题
+
+Team 文档一旦存在协作状态，服务端即使发现协作功能开关已关闭，仍会向客户端返回 `collaborative` 编辑模式；页面的 `canEdit` 又只反映 `document.update` 业务权限。与此同时，独立协作服务在开关关闭时拒绝普通启动。因此已激活文档可能停留在连接或离线界面，而不是从最新持久化 JSON 快照降级为只读。
+
+### 根因
+
+当前 `single-user | collaborative` 二值模式同时承担正文权威来源、协作服务可用性和界面写入能力三个不同概念。`hasCollaborationState` 能阻止已激活文档回退到单人 JSON 写入，却没有表达“正文仍以 Yjs 为权威，但当前只能读取派生快照”的状态；客户端 `canEdit` 也只来自 Project 权限，无法执行 ADR 0012 的运维只读降级边界。
+
+### 解决方法
+
+- 服务端将“已有协作状态但功能关闭”分流为明确的 `collaborative-readonly` 模式，使用最新持久化的 `documents.content` 派生快照且不建立 Provider。
+- 只读快照编辑器把标题和正文能力分开：正文不可本地编辑、不会注册正文写入 UI，也不会调用 `updateDocument(content)`；标题继续按现有 `document.update` 授权保存。
+- `updateDocument` 继续根据既有协作状态拒绝 Team 正文 JSON 写入，重新启用功能开关后同一文档恢复 `collaborative` 模式，不会打开旧正文写入链路。
+- 模式单元测试覆盖功能开关关闭时有、无既有协作状态的分流；真实 Chrome/Edge 验收确认关闭时两端都只读显示同一最新快照且不建立 Provider，重新启用后恢复同一协作正文，没有产生分叉写入路径。
+
+## 55. Windows 本地进程树清理会绕过协作服务的优雅持久化
+
+### 问题
+
+本地运行脚本原本只需管理 Next.js 和 PGlite，退出时可以直接终止整个进程树。把 Hocuspocus 作为普通 npm 子进程加入同一清理方式后，Windows `taskkill /T` 会直接结束包装进程及其后代，协作服务来不及执行最长 15 秒的待存储文档 flush，可能丢失退出前尚未落库的更新。
+
+### 根因
+
+进程树信号只能表达“结束进程”，不能可靠地把应用级优雅关闭请求穿过 npm 包装层传递给实际 tsx 子进程；原运行脚本统一使用较短的清理等待时间，也小于协作服务已经定义的持久化截止时间。Windows 控制台还会把 `Ctrl+C` 同时广播给共享控制台的所有子进程，导致 PGlite 可能在编排器请求 Hocuspocus flush 前先退出。
+
+### 解决方法
+
+- 本地运行脚本直接以 Node.js 和 tsx CLI 启动协作入口，并建立 IPC 通道，不经过 npm 包装进程。
+- Windows 下把数据库、Hocuspocus 和 Next.js 等长生命周期子进程放入独立进程组，并通过管道转发输出；迁移和构建等一次性命令继续由编排器直接等待。
+- Windows 清理时先发送 `{ type: 'shutdown' }`，协作入口复用既有的优雅关闭流程；为其预留超过服务端 15 秒截止时间的等待窗口，超时后才回退到进程树终止。
+- 就绪探测必须等待独立健康端口 `/ready` 返回结构化 ready 状态，并限制单次 HTTP 请求时间；协作进程提前退出或整体超时都应阻止 Next.js 启动。
+- 功能开关关闭时保持原本的本地启动行为，不创建协作进程。
+
+## 56. 协作编辑器离开再进入会残留连接并重复显示在线成员
+
+### 问题
+
+真实双浏览器验收中，owner 和 editor 首次打开同一 Team 文档时各自只显示对方一位在线成员。editor 导航离开文档再返回后，owner 端变成“2 位成员在线”，两个条目都是同一个 editor；健康指标也从预期的 2 条连接增长到 3 条。两个页面离开应用后，服务端连接仍要等待超时才降为 0。
+
+### 根因
+
+`HocuspocusProviderWebsocketComponent` 与 `HocuspocusRoom` 同时随编辑器卸载，并各自用零延迟任务兼容 React Strict Mode。外层任务可能先销毁 WebSocket，使房间 Provider 来不及通过仍可用的传输发送关闭消息；重新挂载会建立新连接，而旧连接及其 Awareness 状态继续存活到服务端超时。Presence 展示又直接按 Awareness client ID 映射，因而把同一用户的残留状态显示为两位成员。
+
+### 解决方法
+
+协作编辑器显式持有外层 WebSocket，并在卸载时为其设置短暂销毁延迟，使 `HocuspocusRoom` 先销毁文档 Provider、发送关闭消息并清理 Awareness，再关闭传输；Strict Mode 的立即重挂载会取消待执行的销毁。Presence 成员同时按稳定用户 ID 防御性去重，并由单元测试覆盖重复 Awareness 状态。真实 Edge/Chrome 验收中，两端通过站内路由离开后 `activeConnections` 与 `activeDocuments` 均立即归零，重新进入时每个用户只出现一次。
+
+## 57. 已连接 editor 被降为 viewer 后界面仍允许本地编辑
+
+### 问题
+
+真实权限撤回验收中，把已连接的 editor 改为 viewer 后，服务端在 2 秒内关闭旧写连接并拒绝后续更新，owner 没有收到 viewer 的测试文本；但 viewer 页面仍保持 `contenteditable=true`，格式工具栏仍可用，本地可以输入一段不会同步的正文。刷新页面后才显示“只读模式”，并丢弃这段本地假写入。
+
+### 根因
+
+客户端只使用首次 Server Component 渲染时的 Project 权限快照作为 `canEdit`，忽略 Hocuspocus 认证返回的 `read-write | readonly` scope。服务端权限失效调用的是文档连接 `close()`，客户端收到的是 Provider `close` 事件而不是底层 WebSocket `disconnect`；只监听断线事件不会撤销 Tiptap 的 `editable` 和工具栏注册。
+
+### 解决方法
+
+客户端初始保持只读；认证成功后只有页面授权仍包含写入能力且服务端 scope 为 `read-write` 才挂载可编辑 Tiptap。Provider `close`、底层断线或认证失败都会撤销运行时编辑能力，并以只读实例替换可写实例；已认证 Provider 重挂载时从其当前 scope 恢复状态。真实 Edge/Chrome 验收中，editor 降为 viewer 后正文 `contenteditable`、格式工具栏和标题写入均被冻结，owner 仍可编辑；恢复 editor 并刷新后重新获得写入能力。成员移除和 Session 撤销仍由相同服务端失效路径覆盖，但尚未分别做浏览器验收。
+
+## 58. 实时同步成功的 Yjs 更新没有写入数据库
+
+### 问题
+
+真实双浏览器验收中，owner 与 editor 的输入能够双向实时出现，重连时也能从服务端内存文档恢复。但等待超过 5 秒最大 debounce、让两个浏览器离开房间并最终确认 `activeConnections=0`、`activeDocuments=0` 后，`document_collaboration_states.state` 与 `documents.content` 仍保持编辑前版本。被服务端拒绝的 viewer 文本没有落库是正确的，但两个合法 editor 的文本也没有落库。
+
+### 根因
+
+Tiptap Collaboration 扩展未显式配置字段名，客户端把正文写入 Y.Doc 的默认 `default` XmlFragment；服务端转换和 JSON 投影固定读取 `content` XmlFragment。因此 Hocuspocus 实际已经持久化二进制更新，但 `documents.content` 一直投影空的 canonical 字段，重启后客户端也只挂载空字段。旧二进制状态解码后，`document.share.get('default')` 还是惰性的 `AbstractType`，若直接用 `instanceof Y.XmlFragment` 判断又会跳过兼容修复。
+
+### 解决方法
+
+- 客户端 Collaboration 扩展与服务端 transformer 统一显式使用 `content` 字段；服务端加载旧状态时先以 `getXmlFragment('default')` 具体化惰性类型，再把有效旧正文转换为只包含 canonical `content` 的新 Y.Doc。
+- 指标增加正文变化次数、store 成功次数和最近成功时间，区分“没有触发持久化”与“持久化失败”。
+- 转换测试覆盖“编码、解码后修复旧字段”的真实恢复路径；真实 Edge/Chrome 验收确认双向更新同时进入 Yjs 二进制与 JSON 投影，双方离开、完整重启服务后仍恢复相同正文。
+
+## 59. 认证表单在客户端未接管前会把凭据提交到 URL
+
+### 问题
+
+本地双浏览器验收中，在登录页尚未完成客户端 hydration 时提交表单，浏览器执行原生 GET 导航，把邮箱和密码写入地址栏查询参数，并随请求进入开发服务器访问日志。即使认证失败，敏感凭据也可能留在浏览器历史、代理日志或截图中。
+
+### 根因
+
+登录表单依赖客户端提交处理器阻止默认导航，但 HTML 表单没有独立的安全提交方法与服务端目标作为 hydration 前兜底。客户端 JavaScript 尚未注册事件时，浏览器采用表单默认 GET 行为并序列化所有具名字段。
+
+### 解决方法
+
+- 登录、注册、申请重置与完成重置表单都显式声明 `method="post"`；客户端接管后仍由原提交处理器调用 Better Auth，接管前或禁用 JavaScript时浏览器也不会再把具名凭据序列化到 URL。
+- Playwright 使用禁用 JavaScript的登录页提交覆盖 hydration 前路径，断言导航请求使用 POST，且请求 URL和最终页面 URL均不包含邮箱或密码。
+- 开发服务器访问日志只记录不含凭据的页面 URL；测试只使用明确标记为非真实密码的固定值，不把真实凭据、请求正文或含敏感参数的截图保存为工件。
+
+## 60. Windows 本地编排退出后残留 Next.js 与 PGlite 进程
+
+### 问题
+
+真实 Windows 本地验收中，对 `npm run dev` 发送 `Ctrl+C` 后编排器和 Hocuspocus 会退出，但 Next.js 与 PGlite 后代进程仍持续监听 3000 和 5432 端口。随后重新启动会因 5432 已占用而失败，并可能继续复用未被清理的旧 Next.js 进程。
+
+### 根因
+
+当前编排器通过 npm 包装层启动 Next.js，并在 Hocuspocus 优雅关闭完成后异步启动 `taskkill`。Windows 终端处理 `Ctrl+C` 时会先结束外层 npm/编排器会话，异步清理子命令尚未完成便随父进程终止；Next.js 包装进程退出后留下实际 `next-server`，PGlite 也继续运行。原清理逻辑既忽略 `taskkill` 退出状态，也不复核实际监听端口；现有单元测试只使用模拟 `ChildProcess` 验证调用顺序和 IPC 请求，无法覆盖外层终端结束与真实 Windows 进程树之间的竞争。
+
+### 解决方法
+
+- Next.js 不再经过长期 npm 包装层，Windows 下所有后台子进程都使用隐藏窗口启动；多个 Node 子进程仍是 Next.js 和各独立服务的正常内部结构，但不会各自创建可见终端窗口。
+- 编排器收到退出请求时启动独立、隐藏且脱离外层终端生命周期的清理进程，同时请求 Hocuspocus 通过 IPC 优雅关闭。清理进程立即终止 Next.js 树，等待 Hocuspocus 在截止时间内完成持久化后再终止 PGlite，并在超时后强制结束协作进程树。
+- 清理进程启动时记录本次运行实际占用四个服务端口的 PID，结束时只允许终止这些精确进程并复核 3000、5432、1234 和 1235 全部释放；出现其他 PID 接管端口时报告错误，不终止无关进程。
+- 真实 Windows 验收连续两次确认 `Ctrl+C` 后一秒内四个端口全部释放、辅助清理进程不残留，中间能够立即无冲突重启；服务监听进程的可见主窗口句柄均为零。
+
+## 61. Windows 清理兜底不能写死 Next.js 默认端口
+
+### 问题
+
+本地 `dev` 使用 3000 时退出清理验收通过，但 Playwright 本地运行通过 `PORT=3008` 启动 Next.js。清理辅助进程最初只复核固定的 3000、5432、1234 和 1235；如果 Next.js 根进程先退出并留下实际 server 后代，3008 可能不在兜底检查范围内。
+
+### 根因
+
+清理逻辑把默认开发端口误当成运行时不变量，没有沿用本地编排已经传给 Next.js 和协作服务的实际环境配置。正常 `taskkill /T /F` 能掩盖这个缺口，因此只验证默认 `npm run dev` 或一次正常 Playwright 退出不足以证明自定义端口也受保护。
+
+### 解决方法
+
+- 编排器启动清理辅助进程时显式传入当前 `PORT`、`COLLABORATION_PORT` 和 `COLLABORATION_HEALTH_PORT`，数据库端口继续使用本地运行协议固定的 5432。
+- 清理辅助进程校验端口范围，以本次实际配置建立监听 PID 快照，只终止这些已确认进程；不再假设应用一定监听 3000。
+- 无 JavaScript Playwright 验收使用 3008 启动并通过，退出后再次确认 3008、5432、1234 和 1235 均不再监听。

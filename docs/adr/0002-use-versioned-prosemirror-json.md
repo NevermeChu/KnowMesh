@@ -2,6 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-08-04
+- 适用范围：Personal 文档；Team 文档正文权威状态由 [ADR 0012](0012-use-yjs-for-team-document-collaboration.md) 替代
 
 ## 背景
 

@@ -2,7 +2,7 @@
 
 状态：Current
 
-本文描述项目内文档的内容模型、访问控制和当前单人编辑流程。
+本文描述项目内文档的内容模型、访问控制，以及 Personal 单人编辑与 Team 实时协作编辑流程。
 
 ## 领域模型
 
@@ -35,7 +35,9 @@
 | --- | --- | --- |
 | 列出和读取文档 | `owner`、`editor`、`viewer` | `getProjectDocuments` 和 `getProjectAuthorization` |
 | 创建文档 | `owner`、`editor` | `createDocument` Server Action |
-| 修改标题或内容 | `owner`、`editor` | `updateDocument` Server Action |
+| 修改标题 | `owner`、`editor` | `updateDocument` Server Action |
+| 修改 Personal 正文 | `owner` | `updateDocument` Server Action |
+| 修改 Team 正文 | `owner`、`editor` | Hocuspocus 鉴权连接与 Yjs 更新 |
 | 删除文档 | `owner`、`editor` | `deleteDocument` Server Action |
 
 客户端传入的 `workspaceId`、`projectId`、`documentId`、角色和能力都不能作为授权依据。Server Action 必须通过 `requireUser()` 从 Better Auth Session 取得 `userId`，再由统一权限模块解析资源、项目及所属 Workspace。Personal Workspace 中的项目只允许 owner；Team Workspace 中只有 `project_members` 直接角色授予正文权限，Workspace 角色只授予结构发现能力。
@@ -50,9 +52,13 @@
 
 项目节点本身可以折叠，展开后才显示其文档。项目节点的加号和右键菜单中的“新建文件”共用同一创建弹窗；只有具有 `document.create` 能力时入口才可用。右键文件节点可以查看权限、修改名称和删除文件；服务端仍会独立验证对应能力。文件权限完全继承项目，当前没有文档级 ACL。
 
-编辑器使用 Tiptap，初始内容来自 ProseMirror JSON。标题失焦时保存；正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，避免较早的请求覆盖较新的本地内容。
+编辑模式由 `getProjectDocuments` 根据服务端已验证的 Workspace 类型、协作功能开关和既有协作状态推导，客户端不能自行选择存储链路。Personal 文档继续以 ProseMirror JSON 初始化 Tiptap；标题失焦时保存，正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，避免较早的请求覆盖较新的本地内容。Personal 文档不创建 Provider 或 Y.Doc。
 
-当前是单人编辑模型，没有版本历史、冲突检测、离线队列、Yjs 状态或实时连接。多个浏览器同时编辑同一文档时仍是后写覆盖；在引入多人协作前不得把当前自动保存描述为协同编辑。
+启用功能开关后的 Team 文档使用按文档隔离的 Hocuspocus Provider 和 Y.Doc。客户端和服务端 transformer 必须统一把正文存放在名为 `content` 的 Y.XmlFragment；加载早期版本写入的 `default` 字段时，服务端会在读取二进制状态后转换为 canonical `content` 状态。客户端必须完成首次 Yjs 同步后才创建 Tiptap，不把服务端传入的 JSON 再次写入 Y.Doc；Team 正文更新只进入 Collaboration 扩展，StarterKit Undo/Redo 在该模式关闭，标题仍由 `updateDocument` 保存。文档组件只在协作编辑器挂载期间创建 WebSocket；卸载时先销毁房间 Provider、发送关闭消息，再销毁外层传输，避免路由切换遗留连接。界面区分连接、同步、离线、失败、已同步和 viewer 只读状态；文档连接关闭、底层断线或认证失败会立即冻结正文，重新认证后只有服务端返回 `read-write` scope 且页面授权仍允许写入时才恢复编辑。在线成员、远端光标与选区来自服务端净化后的 Awareness，成员列表按用户 ID 防御性去重。
+
+已有协作状态的 Team 文档不会回退到 JSON 正文写入。功能开关关闭时，服务端返回 `collaborative-readonly` 模式，页面直接读取最新持久化的 `documents.content` 派生快照，不建立 Provider，也不允许正文编辑或调用 `updateDocument(content)`；标题仍按独立的 `document.update` 授权保存。重新启用开关后，同一文档恢复协作模式并继续使用既有 Yjs 权威状态。
+
+独立 Hocuspocus 服务使用 Better Auth Cookie 验证身份，重新计算 Project 文档权限，将 viewer 设为只读，并通过数据库通知和最长 15 秒周期复查使权限与 Session 变化失效；Origin、连接数、消息大小和 Presence 身份也由服务端限制。存储在同一事务中更新 Yjs 二进制权威状态与 `documents.content` JSON 派生投影，指标区分正文变化、store 成功、store 失败与最近成功时间。本地 `npm run dev` 和 Playwright Web Server 在 `COLLABORATION_ENABLED=true` 时会于数据库迁移后启动该服务、等待 `/ready`，退出时先请求协作服务优雅持久化；Windows 长生命周期子进程使用独立进程组，避免控制台中断先关闭数据库。开关关闭时不会启动它。CI 与生产编排、生产 Nginx WSS 路由仍未实现；`NEXT_PUBLIC_COLLABORATION_URL` 当前默认指向本地 `ws://localhost:1234`，生产启用前必须显式覆盖。版本历史和长期 IndexedDB 离线队列仍未实现。
 
 ## 导出
 
@@ -87,9 +93,14 @@
 - `src/features/documents/components/CreateDocumentDialog.tsx`
 - `src/features/documents/components/DocumentWorkspace.tsx`
 - `src/features/documents/components/DocumentEditor.tsx`
+- `src/features/documents/components/DocumentEditorDispatcher.tsx`
+- `src/features/documents/components/CollaborativeDocumentEditor.tsx`
+- `src/features/documents/components/DocumentEditorSurface.tsx`
 - `src/features/documents/components/DocumentEditorToolbar.tsx`
 - `src/features/documents/components/DocumentExportMenu.tsx`
 - `src/features/documents/DocumentMarkdown.ts`
+- `src/features/documents/collaboration/DocumentCollaborationTransform.ts`
+- `src/features/documents/collaboration/DocumentCollaborationState.ts`
 - `src/components/layout/GlobalContextMenuBoundary.tsx`
 - `src/components/ui/ContextMenu.tsx`
 - `src/components/ui/ModalDialog.tsx`
@@ -107,6 +118,7 @@
 ## 相关决策
 
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
+- [ADR 0012：Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照](../adr/0012-use-yjs-for-team-document-collaboration.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0006：分离 Workspace 结构发现与 Project 内容访问](../adr/0006-separate-workspace-discovery-from-project-content-access.md)

@@ -14,6 +14,7 @@
 | 修改站内通知、未读状态或通知触发事件 | [`features/notifications.md`](features/notifications.md) |
 | 修改系统偏好、外观主题或全站颜色 token | [`features/preferences.md`](features/preferences.md) |
 | 修改文档模型、编辑器或文档权限 | [`features/documents.md`](features/documents.md) 和 [`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) |
+| 实施文档实时协作写作 | [`document-collaboration-plan.md`](document-collaboration-plan.md)、[`features/documents.md`](features/documents.md)、[`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) 和 [`adr/0012-use-yjs-for-team-document-collaboration.md`](adr/0012-use-yjs-for-team-document-collaboration.md) |
 | 修改全文搜索、命令面板或搜索结果排序 | [`features/search.md`](features/search.md) 和 [`adr/0006-separate-workspace-discovery-from-project-content-access.md`](adr/0006-separate-workspace-discovery-from-project-content-access.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
 | 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |
@@ -43,10 +44,10 @@
 └─ server-only 查询
 
 文档业务
-├─ documents + ProseMirror JSON
+├─ documents + Personal ProseMirror JSON / Team Yjs 协作状态
 ├─ 项目成员资源授权
-├─ Tiptap 单人编辑器
-└─ Server Action 自动保存
+├─ 按 Workspace 类型由服务端选择 Tiptap 单人或协作编辑器
+└─ Personal Server Action 自动保存 / Team（功能开关启用时）Hocuspocus 同步
 
 搜索业务
 ├─ /search + CommandPalette

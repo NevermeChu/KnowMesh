@@ -14,7 +14,7 @@ ADR 记录具有真实替代方案和长期影响的架构决定。它回答“�
 | ADR | 状态 | 决策 |
 | --- | --- | --- |
 | [0001](0001-use-server-components-for-workspace-data.md) | Accepted | 工作区初始数据使用 Server Component 查询 |
-| [0002](0002-use-versioned-prosemirror-json.md) | Accepted | 文档内容使用版本化 ProseMirror JSON 持久化 |
+| [0002](0002-use-versioned-prosemirror-json.md) | Accepted | Personal 文档内容使用版本化 ProseMirror JSON 持久化 |
 | [0003](0003-introduce-workspace-resource-boundary.md) | Superseded | 引入真实 Workspace 资源边界并分阶段实现权限继承 |
 | [0004](0004-use-capability-authorization-and-collaboration-inheritance.md) | Superseded | 使用能力授权并继承协作项目权限 |
 | [0005](0005-use-workspace-kind-as-project-mode.md) | Superseded | 使用 Workspace 类型作为项目权限模式 |
@@ -24,6 +24,7 @@ ADR 记录具有真实替代方案和长期影响的架构决定。它回答“�
 | [0009](0009-use-better-auth-for-local-identity.md) | Accepted | 使用 Better Auth 管理本地身份并保持业务授权独立 |
 | [0010](0010-use-sse-for-realtime-notifications.md) | Superseded | 使用进程内总线配合 SSE 实现实时站内通知 |
 | [0011](0011-use-postgresql-notify-for-realtime-delivery.md) | Accepted | 使用事务性 PostgreSQL 通知驱动跨进程 SSE |
+| [0012](0012-use-yjs-for-team-document-collaboration.md) | Accepted | Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照 |
 
 ## 新 ADR 模板
 

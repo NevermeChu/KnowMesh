@@ -78,7 +78,15 @@
 - `content_schema_version` 记录应用文档结构版本，当前为 `1`。
 - `created_by_id` 通常保存创建者的 Better Auth user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
+
+### `document_collaboration_states`
+
+- `document_id` 是指向 `documents.id` 的主键外键；删除文档时数据库级联删除协作状态。
+- `state` 使用 `BYTEA` 保存 `Y.encodeStateAsUpdate()` 产生的完整二进制状态，不保存 Y.Doc JSON 或逐条更新日志。
+- `document_schema_version` 记录生成状态时使用的应用文档 Schema 版本；`initialized_at` 和 `updated_at` 记录初始化与最近持久化时间。
+- 数据库保证每篇文档至多一条状态；只有 Team 文档允许初始化的跨表规则由应用入口执行。当前表属于 expand-only 准备结构，编辑器 Provider 尚未启用，不会由普通文档页面写入。
 - 与项目相同，`updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
+- `project_members` 角色变化或删除、Better Auth Session 到期字段变化或删除，以及文档移动或删除会在事务提交后向 `knowmesh_document_collaboration` 发布不含正文、Cookie 或 Token 的失效信号。协作进程收到信号后重新查询 Session 与权限，再决定是否关闭连接；15 秒周期复查用于覆盖监听器短暂断线。
 
 ### `notifications`
 
@@ -147,6 +155,8 @@ Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFE
 `0005_add-workspace-kind.sql` 识别个人空间、为缺少个人空间的已知用户补建 Workspace，并将旧 Personal 项目迁移到 owner 的个人空间。`0006_remove-project-kind.sql` 随后删除 `projects.kind`、旧枚举、分类索引和冗余的 `user_onboarding` 表。`0007_remove-redundant-indexes.sql` 删除已经被部分唯一索引或联合主键覆盖、且没有当前查询消费者的三个索引。`0008_dashing_vivisector.sql` 为 Project owner 增加 Workspace 成员复合外键。`0009_cheerful_mockingbird.sql` 增加 Project 邀请和 Workspace/Project 权限申请状态，并移除 Workspace 邀请的可选角色，使接受邀请固定为 viewer。`0010_silly_nomad.sql` 回填 `project_members.workspace_id`，预检既有成员和 owner 数据，增加两级成员复合外键、唯一 owner 索引及事务结束时执行的 owner 不变量触发器。
 
 `0011_add-notifications.sql` 增加用户级通知表、事件和目标枚举、目标字段成对约束，以及列表与未读统计索引。`0012_add-user-preferences.sql` 增加用户偏好表、主题枚举和 `user_id` 唯一索引。`0013_add-content-width-preference.sql` 给用户偏好表增加 `content_width` 整数列(默认 80)。`0014_flawless_lilandra.sql` 增加 `starred_documents` 收藏表、级联外键与创建时间倒序索引。`0019_add-better-auth.sql` 增加 Better Auth 的 `user`、`session`、`account` 和 `verification` 表、认证查询索引及用户级级联外键。
+
+`0022_giant_annihilus.sql` 以 expand-only 方式增加 `document_collaboration_states`，旧应用可以忽略该表；迁移不回填或自动激活既有 Team 文档。
 
 ## 迁移不变量
 
