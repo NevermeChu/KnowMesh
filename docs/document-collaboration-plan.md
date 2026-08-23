@@ -1,6 +1,6 @@
 # KnowMesh 文档实时协作写作实施计划
 
-状态：In Progress（阶段 0–5 已实现；阶段 5 新增的失败重试 E2E 尚待真实 PostgreSQL 运行确认，阶段 6 的本地运行编排已通过 Windows 验收，CI 已接入真实 PostgreSQL 与协作服务但尚待远端运行确认，生产部署和阶段 7 尚未完成）
+状态：In Progress（阶段 0–5 已实现并通过真实 PostgreSQL CI；阶段 6 的本地、CI 与仓库侧生产交付已实现，服务器首次安装和公网真实会话验收尚未完成；阶段 7 尚未完成）
 
 本文规划现有 Tiptap 文档编辑器从单人自动保存迁移到实时协作写作的实施路径。计划只覆盖文档正文协作、在线成员和光标、权限、持久化、部署与验证；当前实现事实仍以代码、Schema、迁移和当前状态文档为准。
 
@@ -408,7 +408,7 @@ Personal 文档继续显示当前保存中、已保存和保存失败状态，�
 
 验收：本地、CI 和生产使用同一协议与授权路径；部署失败不会把应用切换到缺少协作服务的半版本。
 
-当前进度：本地 `dev` 与 Playwright 模式已经按 `COLLABORATION_ENABLED` 条件启动 Hocuspocus，在数据库迁移后等待协作 `/ready` 再启动 Next.js，并监控异常退出和请求 Hocuspocus 优雅关闭。Windows 后台服务统一隐藏窗口，Next.js 直接通过 CLI 启动；退出时先请求 Hocuspocus 优雅持久化，再由独立隐藏的清理进程终止 Next.js/PGlite 进程树，并按本次实际 `PORT` 与协作端口配置复核监听 PID。真实 Windows 验收已连续两次确认默认开发栈在 `Ctrl+C` 后一秒内全部释放，清理辅助进程不残留且中间可以立即无冲突重启；运行时服务进程均没有可见主窗口。无 JavaScript Playwright 验收也确认使用 3008 时正常启动、通过并释放 3008、5432、1234 和 1235。CI E2E job 使用 PostgreSQL 17 service，并显式启用协作服务、真实 PostgreSQL 标记、稳定端口和 WebSocket URL；运行时在该模式下不启动 PGlite，而是迁移并复用外部数据库。GitHub Actions CI #41 已确认 build、static、40 个测试文件中的 137 项测试、19 项 E2E、容器清理和现有生产部署全部通过。生产 systemd/Nginx、同 SHA 协作服务发布与公网 WSS 冒烟仍未实现，因此阶段 6 仍不能整体标记为完成。
+当前进度：本地 `dev` 与 Playwright 模式已经按 `COLLABORATION_ENABLED` 条件启动 Hocuspocus，在数据库迁移后等待协作 `/ready` 再启动 Next.js，并监控异常退出和请求 Hocuspocus 优雅关闭。Windows 后台服务统一隐藏窗口，Next.js 直接通过 CLI 启动；退出时先请求 Hocuspocus 优雅持久化，再由独立隐藏的清理进程终止 Next.js/PGlite 进程树，并按本次实际 `PORT` 与协作端口配置复核监听 PID。真实 Windows 验收已连续两次确认默认开发栈在 `Ctrl+C` 后一秒内全部释放，清理辅助进程不残留且中间可以立即无冲突重启；运行时服务进程均没有可见主窗口。无 JavaScript Playwright 验收也确认使用 3008 时正常启动、通过并释放 3008、5432、1234 和 1235。CI E2E job 使用 PostgreSQL 17 service，并显式启用协作服务、真实 PostgreSQL 标记、稳定端口和 WebSocket URL；运行时在该模式下不启动 PGlite，而是迁移并复用外部数据库。GitHub Actions CI #41 已确认 build、static、40 个测试文件中的 137 项测试、19 项 E2E、容器清理和现有生产部署全部通过。生产 release 已打包同 SHA 的 `collaboration-server.cjs`、systemd unit 与 Nginx snippets；部署通过独立 GitHub 开关与服务器开关一致性检查，启用时依次验证协作 readiness、应用健康和公网 WSS Upgrade，失败时回滚软链接并重启两个服务。服务器尚未完成 unit、Nginx 和环境变量首次安装，也尚未执行公网真实登录双会话验收，因此阶段 6 仍不能整体标记为完成。
 
 ### 阶段 7：文档、清理与启用
 

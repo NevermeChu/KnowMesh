@@ -1,0 +1,27 @@
+[Unit]
+Description=KnowMesh Hocuspocus collaboration service
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=thisme
+Group=thisme
+WorkingDirectory=/srv/knowmesh-app/current
+EnvironmentFile=/etc/knowmesh.env
+ExecStartPre=/usr/bin/test -f /srv/knowmesh-app/current/collaboration-server.cjs
+ExecStart=/home/thisme/.nvm/versions/node/v24.19.0/bin/node /srv/knowmesh-app/current/collaboration-server.cjs
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=25s
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

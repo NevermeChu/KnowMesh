@@ -69,17 +69,34 @@ process.on('message', (message) => {
   }
 });
 
-if (!preparationMode) {
-  await invalidationSubscriber.start();
+async function startCollaborationServer() {
+  if (!preparationMode) {
+    await invalidationSubscriber.start();
+  }
+  await server.listen();
+  healthServer.listen(Env.COLLABORATION_HEALTH_PORT, Env.COLLABORATION_ADDRESS);
+  await once(healthServer, 'listening');
+  console.info(
+    JSON.stringify({
+      address: server.configuration.address,
+      event: 'document_collaboration_started',
+      healthPort: Env.COLLABORATION_HEALTH_PORT,
+      port: server.address.port,
+    }),
+  );
 }
-await server.listen();
-healthServer.listen(Env.COLLABORATION_HEALTH_PORT, Env.COLLABORATION_ADDRESS);
-await once(healthServer, 'listening');
-console.info(
-  JSON.stringify({
-    address: server.configuration.address,
-    event: 'document_collaboration_started',
-    healthPort: Env.COLLABORATION_HEALTH_PORT,
-    port: server.address.port,
-  }),
-);
+
+void (async () => {
+  try {
+    await startCollaborationServer();
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Unknown startup error',
+        event: 'document_collaboration_startup_failed',
+      }),
+    );
+    await db.$client.end();
+    process.exitCode = 1;
+  }
+})();

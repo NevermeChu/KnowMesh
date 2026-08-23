@@ -1092,3 +1092,19 @@ GitHub Actions 的真实 PostgreSQL E2E 已通过容器环境注入数据库、�
 ### 解决方法
 
 运行器只在工作目录确实存在 `.env` 时附加 `--env-file=.env`；否则协作进程直接继承父进程已经验证和注入的环境变量。本地开发仍保留 `.env` 加载，CI 不再依赖未提交文件。GitHub Actions CI #41 已确认 Hocuspocus 能够在无 `.env` 的容器中启动并完成真实 PostgreSQL E2E。
+
+## 67. 生产 release 无法启动同 SHA 的协作服务
+
+### 问题
+
+生产 release 只包含 Next.js standalone 与数据库迁移程序；协作入口仍依赖仓库源码、`tsx` 和开发依赖。即使服务器手动创建 systemd unit，也不能从 `/srv/knowmesh-app/current` 启动与应用相同 Git SHA 的协作进程，应用回滚也不会同步回滚 Hocuspocus。
+
+### 根因
+
+生产制品与部署脚本最初只管理单个 HTTP 应用进程，没有把独立 WebSocket 服务视为同一 release 的组成部分。协作入口还使用 top-level await，不能直接输出为现有 Node.js CJS 运维制品；Hocuspocus 依赖中的 `import.meta.url` 也需要在 CJS bundle 中显式保留文件 URL 语义。
+
+### 解决方法
+
+- 将协作启动阶段收敛到普通 async 函数，使用 esbuild 生成自包含的 `collaboration-server.cjs`，并为依赖中的 `import.meta.url` 注入当前 bundle 文件 URL。
+- CI 与手动 Release artifact 同时包含 Next.js、迁移程序、协作服务和版本化 systemd/Nginx 模板，并逐项验证制品。
+- 使用独立生产部署开关约束首次启用；启用后先验证 Hocuspocus `/ready` 再重启应用，并执行公网 WSS Upgrade 冒烟。任一检查失败时，同一软链接和两个 systemd 服务一起回滚。
