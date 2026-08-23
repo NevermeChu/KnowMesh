@@ -1108,3 +1108,19 @@ GitHub Actions 的真实 PostgreSQL E2E 已通过容器环境注入数据库、�
 - 将协作启动阶段收敛到普通 async 函数，使用 esbuild 生成自包含的 `collaboration-server.cjs`，并为依赖中的 `import.meta.url` 注入当前 bundle 文件 URL。
 - CI 与手动 Release artifact 同时包含 Next.js、迁移程序、协作服务和版本化 systemd/Nginx 模板，并逐项验证制品。
 - 使用独立生产部署开关约束首次启用；启用后先验证 Hocuspocus `/ready` 再重启应用，并执行公网 WSS Upgrade 冒烟。任一检查失败时，同一软链接和两个 systemd 服务一起回滚。
+
+## 68. 生产环境首次引导无法由仓库完整重建
+
+### 问题
+
+自动部署依赖已经存在的 `current` 回滚目标、`knowmesh.service`、完整 Nginx 站点、数据库、证书、部署用户和 sudoers。仓库只版本化协作 systemd unit 与 Nginx 片段，空服务器无法仅凭仓库建立与当前生产一致的运行环境，服务器迁移和灾难恢复依赖人工回忆或现场导出。
+
+### 根因
+
+CI/CD 是在已有服务器上逐步演进出来的 release 更新流程，首次服务器配置没有被当作独立、可重复验证的基础设施交付物；Next.js unit 和站点主配置仍只存在于服务器。
+
+### 解决方法
+
+- 当前部署手册明确区分自动 release 与人工 bootstrap，列出仓库能证明和必须现场核对的配置边界。
+- 后续将 Next.js systemd unit、完整 Nginx 站点、受限 sudoers 和幂等 bootstrap/check 脚本纳入版本控制，并让脚本拒绝覆盖未审查的服务器改动。
+- 为 PostgreSQL 备份恢复、证书续期、监控告警和新服务器灾难恢复建立可实际演练的运维流程；在完成前不得把 CI 绿色等同于整套生产基础设施可重建。
