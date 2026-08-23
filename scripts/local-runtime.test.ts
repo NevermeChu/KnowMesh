@@ -50,6 +50,7 @@ describe('local runtime collaboration orchestration', () => {
       command: 'node',
       name: 'Next.js',
     });
+    expect(commands.collaboration.args).not.toContain('--env-file=.env');
   });
 
   it('isolates Windows children from console shutdown signals', () => {

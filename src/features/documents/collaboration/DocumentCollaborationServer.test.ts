@@ -32,6 +32,17 @@ const createCollaborationContext = (userId: string) => ({
 });
 
 vi.mock(import('server-only'), () => ({}));
+vi.mock(import('@/libs/Env'), () => ({
+  Env: {
+    BETTER_AUTH_SECRET: 'test-secret-at-least-thirty-two-characters',
+    COLLABORATION_ADDRESS: '127.0.0.1',
+    COLLABORATION_HEALTH_PORT: 1235,
+    COLLABORATION_PORT: 1234,
+    DATABASE_URL: 'postgresql://localhost/knowmesh-test',
+    NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+    NEXT_PUBLIC_COLLABORATION_URL: 'ws://localhost:1234',
+  },
+}));
 vi.mock(import('./DocumentCollaborationSecurity'), () => ({
   assertDocumentCollaborationOrigin: vi.fn<() => void>(),
   // oxlint-disable-next-line eslint/require-await -- The mock follows the asynchronous authentication API.

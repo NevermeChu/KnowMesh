@@ -1,5 +1,6 @@
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { connect } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
@@ -65,6 +66,11 @@ export const createCommands = (options: {
   }
 
   const applicationCommand = options.mode === 'playwright-start' ? 'start' : 'dev';
+  const collaborationArgs = [tsxCliPath];
+  if (existsSync(resolve(options.cwd, '.env'))) {
+    collaborationArgs.push('--env-file=.env');
+  }
+  collaborationArgs.push(resolve(options.cwd, 'scripts/collaboration-server.ts'));
 
   return {
     application: {
@@ -74,11 +80,7 @@ export const createCommands = (options: {
     },
     build: npmCommand('Next.js build', 'build:next'),
     collaboration: {
-      args: [
-        tsxCliPath,
-        '--env-file=.env',
-        resolve(options.cwd, 'scripts/collaboration-server.ts'),
-      ],
+      args: collaborationArgs,
       command: options.nodePath,
       ipc: true,
       name: 'Hocuspocus',
