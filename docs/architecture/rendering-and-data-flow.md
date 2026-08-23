@@ -121,7 +121,7 @@ Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `upda
 
 模式分流把 Workspace 正文权威类型和协作服务当前是否允许写入分开表达。功能开关关闭时，所有 Team 文档都选择 `collaborative-readonly`，直接显示当前 JSON 快照且不建立 Provider；正文编辑和 `updateDocument(content)` 保持关闭，标题继续按独立业务授权保存。重新启用后，已有状态继续使用既有 Yjs 历史，尚未初始化的 Team 文档才从经过验证的 JSON 快照建立首次 Yjs 状态。
 
-独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本在功能开关开启时于迁移完成后启动协作进程并等待 `/ready`，任一受管进程异常退出都会结束整组服务；Windows 下长生命周期子进程使用独立进程组，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。GitHub Actions 已在真实 PostgreSQL 与协作服务下确认 E2E 和容器清理；生产 release 现在包含同 SHA 的协作可执行文件、systemd/Nginx 模板和受显式部署开关保护的双服务健康检查与回滚。服务器尚未安装并完成公网验收前，生产功能开关仍必须保持关闭。
+独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本在功能开关开启时于迁移完成后启动协作进程并等待 `/ready`，任一受管进程异常退出都会结束整组服务；Windows 下长生命周期子进程使用独立进程组，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。GitHub Actions 已在真实 PostgreSQL 与协作服务下确认 E2E 和容器清理；生产 release 包含同 SHA 的协作可执行文件、systemd/Nginx 模板和受显式部署开关保护的双服务健康检查与回滚。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用；真实登录双会话业务验收仍需单独确认。
 
 `DocumentEditor` 在创建和销毁时通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例。共享 `ContentToolbar` 从该上下文取得编辑器，仅在可编辑文档打开时显示格式命令；编辑器内容仍由文档页面持有，工具栏上下文不保存正文副本。
 
@@ -153,7 +153,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - 当前存在 `/api/auth/[...all]` Better Auth Route Handler，提供认证和账户生命周期接口。
 - 当前存在 `/api/realtime/notifications` SSE Route Handler，基于 Web Streams `ReadableStream` 向已登录用户推送实时通知与未读数同步事件，包含 25 秒心跳保活。跨进程信号由 PostgreSQL `LISTEN / NOTIFY` 传递，进程内 `NotificationBroadcaster` 只负责向本进程连接扇出。
 - `src/proxy.ts` 的 matcher 排除了 `/api`；Route Handler 由自身通过 `requireUser()` 执行 Session 和身份校验。
-- 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地与 CI 已接入真实运行路径，生产 release 和部署流程已覆盖同 SHA 协作进程、双服务回滚与公网 Upgrade 冒烟。Nginx 和 systemd 模板尚待服务器首次安装和真实验收，完成前生产功能开关必须保持关闭。
+- 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地、CI 和生产部署已接入真实运行路径，生产 release 与部署流程覆盖同 SHA 协作进程、双服务回滚和公网 Upgrade 冒烟。生产功能开关已经启用，真实登录双会话业务验收仍需单独确认。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
 

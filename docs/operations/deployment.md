@@ -28,6 +28,8 @@ CI workflow 的 build 和默认测试继续使用 runner 内由本地运行器�
 
 `PRODUCTION_COLLABORATION_ENABLED` 是部署层保护开关，必须与服务器 `/etc/knowmesh.env` 中的 `COLLABORATION_ENABLED` 一致。首次安装 systemd 与 Nginx 前保持两者为 `false`；不一致时部署在迁移和软链接切换前失败，避免应用进入有编辑入口但无协作服务的半启用状态。
 
+当前生产服务器已安装并启用协作 systemd unit、Nginx WSS 路由和两个一致的协作开关；完整手动 CI 已通过真实 PostgreSQL E2E、双服务重启、readiness、HTTPS 与公网 WSS Upgrade。真实登录双会话业务验收仍需单独完成。
+
 手动 `Release` workflow 只生成保留 14 天的 production artifact，不会部署服务器。它用于审计、下载或人工恢复。
 
 部署功能分支会覆盖 `thisme.icu` 当前运行的应用，并对同一个生产数据库执行该分支包含的迁移。之后再次 push `main`，原有自动部署仍会照常运行并切回 `main` 的最新版本。由于应用回滚不会逆转数据库 schema，功能分支迁移必须保持与当前 `main` 版本兼容。
