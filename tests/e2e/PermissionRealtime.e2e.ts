@@ -1,19 +1,22 @@
 import 'dotenv/config';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type { Browser, Page } from '@playwright/test';
 import { Pool } from 'pg';
 import { Env } from '@/libs/Env';
 
-const ownerUserId = 'e2e_permission_owner';
-const targetUserId = 'e2e_permission_target';
-const ownerSessionToken = 'e2e-permission-owner-session-token';
-const targetSessionToken = 'e2e-permission-target-session-token';
-const workspaceId = '10000000-0000-4000-8000-000000000900';
-const ownerPersonalWorkspaceId = '10000000-0000-4000-8000-000000000901';
-const targetPersonalWorkspaceId = '10000000-0000-4000-8000-000000000902';
-const projectId = '20000000-0000-4000-8000-000000000900';
-const documentId = '30000000-0000-4000-8000-000000000900';
+const fixtureId = randomUUID();
+const ownerUserId = `e2e_permission_owner_${fixtureId}`;
+const targetUserId = `e2e_permission_target_${fixtureId}`;
+const ownerSessionId = `e2e_permission_owner_session_${fixtureId}`;
+const targetSessionId = `e2e_permission_target_session_${fixtureId}`;
+const ownerSessionToken = `e2e-permission-owner-session-token-${fixtureId}`;
+const targetSessionToken = `e2e-permission-target-session-token-${fixtureId}`;
+const workspaceId = randomUUID();
+const ownerPersonalWorkspaceId = randomUUID();
+const targetPersonalWorkspaceId = randomUUID();
+const projectId = randomUUID();
+const documentId = randomUUID();
 const pool = new Pool({ connectionString: Env.DATABASE_URL });
 
 function getSignedSessionCookie(token: string) {
@@ -97,14 +100,14 @@ test.describe('permission changes with realtime sessions', () => {
     await pool.query(`
       INSERT INTO "user" (id, name, email, email_verified)
       VALUES
-        ('${ownerUserId}', 'Permission Owner', 'permission-owner@example.test', true),
-        ('${targetUserId}', 'Permission Target', 'permission-target@example.test', true)
+        ('${ownerUserId}', 'Permission Owner', '${ownerUserId}@example.test', true),
+        ('${targetUserId}', 'Permission Target', '${targetUserId}@example.test', true)
     `);
     await pool.query(`
       INSERT INTO "session" (id, expires_at, token, user_id)
       VALUES
-        ('e2e_permission_owner_session', now() + interval '1 day', '${ownerSessionToken}', '${ownerUserId}'),
-        ('e2e_permission_target_session', now() + interval '1 day', '${targetSessionToken}', '${targetUserId}')
+        ('${ownerSessionId}', now() + interval '1 day', '${ownerSessionToken}', '${ownerUserId}'),
+        ('${targetSessionId}', now() + interval '1 day', '${targetSessionToken}', '${targetUserId}')
     `);
     const client = await pool.connect();
     try {

@@ -1060,6 +1060,7 @@ CI 同时运行 Chromium 和 Firefox 项目时，两套协作测试使用相同�
 
 - 每个测试生成独立用户、Session、Workspace、Project 和 Document ID，并在 `beforeEach` 中建立完整初始状态、在 `afterEach` 中级联清理。
 - 后续测试只断言自身夹具的初始正文，不读取其他测试产生的恢复文本。
+- 同样由 Chromium 和 Firefox 并行执行的权限实时 E2E 按 worker 生成独立用户、Session 和资源 ID，避免固定主键在共享 PostgreSQL 中冲突。
 - 协作验收固定由 Chromium 执行，Firefox 继续运行其余通用 E2E，避免对已稳定的同一 WebSocket/Yjs 路径做跨引擎重复验收；真实远端运行仍是确认容器网络、测试隔离和服务清理的最终证据。
 
 ## 65. 单个连接复查异常会跳过同批次后续权限撤销
