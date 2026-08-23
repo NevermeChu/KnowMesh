@@ -944,7 +944,7 @@ Team 文档一旦存在协作状态，服务端即使发现协作功能开关已
 
 ### 解决方法
 
-客户端初始保持只读；认证成功后只有页面授权仍包含写入能力且服务端 scope 为 `read-write` 才挂载可编辑 Tiptap。Provider `close`、底层断线或认证失败都会撤销运行时编辑能力，并以只读实例替换可写实例；首次认证失败也会撤销基于旧页面授权的标题编辑入口，普通服务断线仍保留独立且由 Server Action 再授权的标题保存。已认证 Provider 重挂载时从其当前 scope 恢复状态。真实 Edge/Chrome 验收中，editor 降为 viewer 后正文 `contenteditable`、格式工具栏和标题写入均被冻结，owner 仍可编辑；恢复 editor 并刷新后重新获得写入能力。自动化浏览器场景覆盖 viewer 初始只读、Project 角色降级、Workspace 成员移除和 Session 撤销；Project 成员删除与角色降级共用 `project_members` 通知和复查路径，不重复保留浏览器场景。上述场景仍待真实 PostgreSQL CI 运行确认。
+客户端初始保持只读；认证成功后只有页面授权仍包含写入能力且服务端 scope 为 `read-write` 才挂载可编辑 Tiptap。Provider `close`、底层断线或认证失败都会撤销运行时编辑能力，并以只读实例替换可写实例；首次认证失败也会撤销基于旧页面授权的标题编辑入口，普通服务断线仍保留独立且由 Server Action 再授权的标题保存。已认证 Provider 重挂载时从其当前 scope 恢复状态。真实 Edge/Chrome 验收中，editor 降为 viewer 后正文 `contenteditable`、格式工具栏和标题写入均被冻结，owner 仍可编辑；恢复 editor 并刷新后重新获得写入能力。自动化浏览器场景覆盖 viewer 初始只读、Project 角色降级、Workspace 成员移除和 Session 撤销；Project 成员删除与角色降级共用 `project_members` 通知和复查路径，不重复保留浏览器场景。GitHub Actions CI #41 已在真实 PostgreSQL 与 Hocuspocus 服务下确认这些场景通过。
 
 ## 58. 实时同步成功的 Yjs 更新没有写入数据库
 
@@ -1061,7 +1061,7 @@ CI 同时运行 Chromium 和 Firefox 项目时，两套协作测试使用相同�
 - 每个测试生成独立用户、Session、Workspace、Project 和 Document ID，并在 `beforeEach` 中建立完整初始状态、在 `afterEach` 中级联清理。
 - 后续测试只断言自身夹具的初始正文，不读取其他测试产生的恢复文本。
 - 同样由 Chromium 和 Firefox 并行执行的权限实时 E2E 按 worker 生成独立用户、Session 和资源 ID，避免固定主键在共享 PostgreSQL 中冲突。
-- 协作验收固定由 Chromium 执行，Firefox 继续运行其余通用 E2E，避免对已稳定的同一 WebSocket/Yjs 路径做跨引擎重复验收；真实远端运行仍是确认容器网络、测试隔离和服务清理的最终证据。
+- 协作验收固定由 Chromium 执行，Firefox 继续运行其余通用 E2E，避免对已稳定的同一 WebSocket/Yjs 路径做跨引擎重复验收；GitHub Actions CI #41 已确认 19 项 E2E 全部通过且容器生命周期能够正常结束。
 
 ## 65. 单个连接复查异常会跳过同批次后续权限撤销
 
@@ -1091,4 +1091,4 @@ GitHub Actions 的真实 PostgreSQL E2E 已通过容器环境注入数据库、�
 
 ### 解决方法
 
-运行器只在工作目录确实存在 `.env` 时附加 `--env-file=.env`；否则协作进程直接继承父进程已经验证和注入的环境变量。本地开发仍保留 `.env` 加载，CI 不再依赖未提交文件。
+运行器只在工作目录确实存在 `.env` 时附加 `--env-file=.env`；否则协作进程直接继承父进程已经验证和注入的环境变量。本地开发仍保留 `.env` 加载，CI 不再依赖未提交文件。GitHub Actions CI #41 已确认 Hocuspocus 能够在无 `.env` 的容器中启动并完成真实 PostgreSQL E2E。
