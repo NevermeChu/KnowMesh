@@ -52,13 +52,15 @@
 
 项目节点本身可以折叠，展开后才显示其文档。项目节点的加号和右键菜单中的“新建文件”共用同一创建弹窗；只有具有 `document.create` 能力时入口才可用。右键文件节点可以查看权限、修改名称和删除文件；服务端仍会独立验证对应能力。文件权限完全继承项目，当前没有文档级 ACL。
 
-编辑模式由 `getProjectDocuments` 根据服务端已验证的 Workspace 类型、协作功能开关和既有协作状态推导，客户端不能自行选择存储链路。Personal 文档继续以 ProseMirror JSON 初始化 Tiptap；标题失焦时保存，正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，避免较早的请求覆盖较新的本地内容。Personal 文档不创建 Provider 或 Y.Doc。
+编辑模式由 `getProjectDocuments` 根据服务端已验证的 Workspace 类型和协作功能开关推导，客户端不能自行选择存储链路。Personal 文档继续以 ProseMirror JSON 初始化 Tiptap；标题失焦时保存，正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，避免较早的请求覆盖较新的本地内容。Personal 文档不创建 Provider 或 Y.Doc。
 
-启用功能开关后的 Team 文档使用按文档隔离的 Hocuspocus Provider 和 Y.Doc。客户端和服务端 transformer 必须统一把正文存放在名为 `content` 的 Y.XmlFragment；加载早期版本写入的 `default` 字段时，服务端会在读取二进制状态后转换为 canonical `content` 状态。客户端必须完成首次 Yjs 同步后才创建 Tiptap，不把服务端传入的 JSON 再次写入 Y.Doc；Team 正文更新只进入 Collaboration 扩展，StarterKit Undo/Redo 在该模式关闭，标题仍由 `updateDocument` 保存。文档组件只在协作编辑器挂载期间创建 WebSocket；卸载时先销毁房间 Provider、发送关闭消息，再销毁外层传输，避免路由切换遗留连接。界面区分连接、同步、离线、失败、已同步和 viewer 只读状态；文档连接关闭、底层断线或认证失败会立即冻结正文，重新认证后只有服务端返回 `read-write` scope 且页面授权仍允许写入时才恢复编辑。在线成员、远端光标与选区来自服务端净化后的 Awareness，成员列表按用户 ID 防御性去重。
+启用功能开关后的 Team 文档使用按文档隔离的 Hocuspocus Provider 和 Y.Doc。客户端和服务端 transformer 必须统一把正文存放在名为 `content` 的 Y.XmlFragment；加载早期版本写入的 `default` 字段时，服务端会在读取二进制状态后转换为 canonical `content` 状态。客户端必须完成首次 Yjs 同步后才创建 Tiptap，不把服务端传入的 JSON 再次写入 Y.Doc；Team 正文更新只进入 Collaboration 扩展，StarterKit Undo/Redo 在该模式关闭，标题仍由 `updateDocument` 保存。文档组件只在协作编辑器挂载期间创建 WebSocket；卸载时先销毁房间 Provider、发送关闭消息，再销毁外层传输，避免路由切换遗留连接。界面区分连接、同步、离线、失败、已同步和 viewer 只读状态；文档连接关闭、底层断线或认证失败会立即冻结正文，认证失败也会撤销基于旧页面权限的标题编辑入口。重新认证后只有服务端返回 `read-write` scope 且页面授权仍允许写入时才恢复编辑。在线成员、远端光标与选区来自服务端净化后的 Awareness，成员列表按用户 ID 防御性去重。
 
-已有协作状态的 Team 文档不会回退到 JSON 正文写入。功能开关关闭时，服务端返回 `collaborative-readonly` 模式，页面直接读取最新持久化的 `documents.content` 派生快照，不建立 Provider，也不允许正文编辑或调用 `updateDocument(content)`；标题仍按独立的 `document.update` 授权保存。重新启用开关后，同一文档恢复协作模式并继续使用既有 Yjs 权威状态。
+Team 文档不会进入 JSON 正文写入。功能开关关闭时，服务端对所有 Team 文档返回 `collaborative-readonly` 模式，页面直接读取当前 `documents.content` 快照，不建立 Provider，也不允许正文编辑或调用 `updateDocument(content)`；标题仍按独立的 `document.update` 授权保存。重新启用开关后，已有协作状态的文档继续使用既有 Yjs 权威状态，尚未初始化的文档才从经过验证的 JSON 快照首次初始化。
 
-独立 Hocuspocus 服务使用 Better Auth Cookie 验证身份，重新计算 Project 文档权限，将 viewer 设为只读，并通过数据库通知和最长 15 秒周期复查使权限与 Session 变化失效；Origin、连接数、消息大小和 Presence 身份也由服务端限制。存储在同一事务中更新 Yjs 二进制权威状态与 `documents.content` JSON 派生投影，指标区分正文变化、store 成功、store 失败与最近成功时间。本地 `npm run dev` 和 Playwright Web Server 在 `COLLABORATION_ENABLED=true` 时会于数据库迁移后启动该服务、等待 `/ready`，退出时先请求协作服务优雅持久化；Windows 长生命周期子进程使用独立进程组，避免控制台中断先关闭数据库。开关关闭时不会启动它。CI 与生产编排、生产 Nginx WSS 路由仍未实现；`NEXT_PUBLIC_COLLABORATION_URL` 当前默认指向本地 `ws://localhost:1234`，生产启用前必须显式覆盖。版本历史和长期 IndexedDB 离线队列仍未实现。
+Provider 报告本地未同步正文更新后，界面保持“保存中”直到协作服务完成 Yjs 状态与 JSON 投影的事务写入；服务通过房间内无状态消息反馈成功或失败。持久化失败会显示保存失败但不会启用 JSON 正文写入。首次同步前若服务不可用或认证失败，页面显示服务端读取的只读 JSON 快照；连接恢复并完成首次 Yjs 同步后才重新创建可编辑协作编辑器。Markdown 导出与打印使用当前编辑器内容，搜索继续读取最近一次成功持久化的 `documents.content` 投影，最近文档和收藏只消费文档元数据。
+
+独立 Hocuspocus 服务使用 Better Auth Cookie 验证身份，重新计算 Project 文档权限，将 viewer 设为只读，并通过数据库通知和最长 15 秒周期复查使权限与 Session 变化失效；每条连接独立执行复查，一个数据库查询失败只记录脱敏错误，不跳过其余连接。Origin、连接数、消息大小和 Presence 身份也由服务端限制。存储在同一事务中更新 Yjs 二进制权威状态与 `documents.content` JSON 派生投影。store 失败后服务按文档保留内存状态并周期重试；任一失败文档未恢复时 `/ready` 保持失败，最后一个客户端离开也不会卸载它。关闭时逐篇执行最终持久化，一个文档失败不会跳过后续文档；资源清理完成后仍以失败状态退出。Windows 长生命周期子进程使用独立进程组，避免控制台中断先关闭数据库。开关关闭时不会启动它。CI E2E 使用 PostgreSQL service 并显式启用协作服务；`E2E_REAL_POSTGRES=true` 时本地运行器不会创建 PGlite，而是迁移并使用外部数据库。每个测试使用独立资源 ID，避免并行执行互相删除数据库状态；Chromium 覆盖 viewer 只读、Project 角色降级、Workspace 成员移除和 Session 撤销，Firefox 继续运行通用 E2E。Project 成员删除与角色降级共用 `project_members` 通知和复查路径，不重复保留浏览器场景。生产编排和 Nginx WSS 路由仍未实现；`NEXT_PUBLIC_COLLABORATION_URL` 当前默认指向本地 `ws://localhost:1234`，生产启用前必须显式覆盖。版本历史和长期 IndexedDB 离线队列仍未实现。
 
 ## 导出
 

@@ -111,17 +111,17 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 → getProjectAuthorization 用 Workspace 成员关系授予结构发现，再用 Project 直接角色授予内容权限
 → 验证项目属于当前 Workspace
 → 查询项目文档元数据和所选文档内容
-→ 服务端根据 Workspace 类型、功能开关和既有协作状态推导编辑模式
+→ 服务端根据 Workspace 类型和功能开关推导编辑模式
 → DocumentWorkspace 与 DocumentEditorDispatcher 接收所选文档数据和编辑模式
 ```
 
 创建、更新和删除均使用 Server Action。客户端的 `projectId`、`documentId` 或能力只用于定位候选资源和界面呈现，服务端仍会重新计算授权。`viewer` 可以读取，不能创建、修改或删除文件；`owner` 和 `editor` 可以管理文件。
 
-Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`；服务端再次验证 ProseMirror JSON 结构后写入 `documents.content`。Team 文档在功能开关开启或已经存在协作状态时改用 `CollaborativeDocumentEditor`：Provider 按 `document:<uuid>` 隔离 Y.Doc，客户端 Collaboration 扩展与服务端 transformer 统一使用 `content` XmlFragment，首次同步完成后才挂载 Tiptap，正文变更不调用 Server Action。服务端加载旧二进制状态时把早期 `default` XmlFragment 转换为 canonical `content` 状态。协作编辑器持有文档级 WebSocket 生命周期；路由卸载时房间 Provider 先从共享传输分离，外层 WebSocket 随后销毁，防止旧 Awareness 和连接残留。Provider 文档连接关闭、底层断线、认证失败或重新认证为 `readonly` 时，客户端立即以只读编辑器替换可写实例；只有页面授权与服务端 `read-write` scope 同时成立才允许正文写入。该状态变化不会回退到 JSON 写入；Personal 编辑器也不会因协作服务故障改变保存行为。
+Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`；服务端再次验证 ProseMirror JSON 结构后写入 `documents.content`。Team 文档在功能开关开启时使用 `CollaborativeDocumentEditor`：Provider 按 `document:<uuid>` 隔离 Y.Doc，客户端 Collaboration 扩展与服务端 transformer 统一使用 `content` XmlFragment，首次同步完成后才挂载 Tiptap，正文变更不调用 Server Action。服务端加载旧二进制状态时把早期 `default` XmlFragment 转换为 canonical `content` 状态。协作编辑器持有文档级 WebSocket 生命周期；路由卸载时房间 Provider 先从共享传输分离，外层 WebSocket 随后销毁，防止旧 Awareness 和连接残留。Provider 文档连接关闭、底层断线、认证失败或重新认证为 `readonly` 时，客户端立即以只读编辑器替换可写实例；只有页面授权与服务端 `read-write` scope 同时成立才允许正文写入。该状态变化不会回退到 JSON 写入；Personal 编辑器也不会因协作服务故障改变保存行为。
 
-模式分流把“Yjs 仍是权威来源”和“协作服务当前允许写入”分开表达。已有协作状态但功能开关关闭时，页面选择 `collaborative-readonly`，直接显示最新 JSON 派生快照且不建立 Provider；正文编辑和 `updateDocument(content)` 保持关闭，标题继续按独立业务授权保存。重新启用开关后恢复协作连接和既有 Yjs 状态。
+模式分流把 Workspace 正文权威类型和协作服务当前是否允许写入分开表达。功能开关关闭时，所有 Team 文档都选择 `collaborative-readonly`，直接显示当前 JSON 快照且不建立 Provider；正文编辑和 `updateDocument(content)` 保持关闭，标题继续按独立业务授权保存。重新启用后，已有状态继续使用既有 Yjs 历史，尚未初始化的 Team 文档才从经过验证的 JSON 快照建立首次 Yjs 状态。
 
-独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影；运行指标记录正文变化、store 成功与失败及最近成功时间。它使用独立本地 HTTP 端口区分进程 liveness、数据库和存储 readiness，并在关闭前显式等待内存文档持久化。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence。本地运行脚本在功能开关开启时于迁移完成后启动协作进程并等待 `/ready`，任一受管进程异常退出都会结束整组服务；Windows 下长生命周期子进程使用独立进程组，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。CI 与生产 WSS 部署仍未实现，因此生产功能开关必须保持关闭。
+独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本在功能开关开启时于迁移完成后启动协作进程并等待 `/ready`，任一受管进程异常退出都会结束整组服务；Windows 下长生命周期子进程使用独立进程组，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。CI E2E 已配置真实 PostgreSQL 与协作服务，但远端生命周期尚未确认；生产 Nginx WSS 和 systemd 仍未实现，因此生产功能开关必须保持关闭。
 
 `DocumentEditor` 在创建和销毁时通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例。共享 `ContentToolbar` 从该上下文取得编辑器，仅在可编辑文档打开时显示格式命令；编辑器内容仍由文档页面持有，工具栏上下文不保存正文副本。
 
@@ -153,7 +153,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - 当前存在 `/api/auth/[...all]` Better Auth Route Handler，提供认证和账户生命周期接口。
 - 当前存在 `/api/realtime/notifications` SSE Route Handler，基于 Web Streams `ReadableStream` 向已登录用户推送实时通知与未读数同步事件，包含 25 秒心跳保活。跨进程信号由 PostgreSQL `LISTEN / NOTIFY` 传递，进程内 `NotificationBroadcaster` 只负责向本进程连接扇出。
 - `src/proxy.ts` 的 matcher 排除了 `/api`；Route Handler 由自身通过 `requireUser()` 执行 Session 和身份校验。
-- 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地普通启动已按功能开关完成编排，但 CI、Nginx 和 systemd 尚未接入，生产功能开关必须保持关闭。
+- 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地普通启动已按功能开关完成编排，CI 已配置真实 PostgreSQL 与协作服务但尚待远端确认，Nginx 和 systemd 尚未接入，生产功能开关必须保持关闭。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
 

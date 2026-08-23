@@ -70,7 +70,7 @@ PostgreSQL / 本地 PGlite
 
 - `/`：公开根页面，根据 Better Auth 登录状态显示登录、退出或进入工作台入口；页面中的产品示意内容不连接文档数据。
 - `/dashboard`：工作台首页，聚合最近可打开的文档、通知摘要、待处理邀请与协作权限申请。
-- `/personal`、`/collaboration`：读取 `project` 和可选的 `document` 查询参数，呈现项目文档列表、创建入口及单人编辑器；未选择项目时显示引导状态。
+- `/personal`、`/collaboration`：读取 `project` 和可选的 `document` 查询参数，呈现项目文档列表与创建入口；服务端按 Workspace 类型为所选文档选择 Personal 单人编辑器或 Team 协作/只读编辑器，未选择项目时显示引导状态。
 - `/search`：按个人空间或 Team Workspace 范围搜索当前用户有权读取的文档标题和 ProseMirror 正文，并返回高亮上下文片段。
 - `/starred`：列出当前用户收藏且仍具有读取权限的文档，并允许取消收藏。
 - `/notifications`：列出站内通知，支持单条或全部标记为已读。

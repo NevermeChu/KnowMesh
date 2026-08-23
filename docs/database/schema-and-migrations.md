@@ -84,7 +84,7 @@
 - `document_id` 是指向 `documents.id` 的主键外键；删除文档时数据库级联删除协作状态。
 - `state` 使用 `BYTEA` 保存 `Y.encodeStateAsUpdate()` 产生的完整二进制状态，不保存 Y.Doc JSON 或逐条更新日志。
 - `document_schema_version` 记录生成状态时使用的应用文档 Schema 版本；`initialized_at` 和 `updated_at` 记录初始化与最近持久化时间。
-- 数据库保证每篇文档至多一条状态；只有 Team 文档允许初始化的跨表规则由应用入口执行。当前表属于 expand-only 准备结构，编辑器 Provider 尚未启用，不会由普通文档页面写入。
+- 数据库保证每篇文档至多一条状态；只有 Team 文档允许初始化的跨表规则由应用入口执行。功能开关启用时，普通 Team 文档页面通过 Provider 和协作服务初始化或更新该表；Personal 文档和功能开关关闭时的 Team 只读页面不会写入协作状态。
 - 与项目相同，`updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
 - `project_members` 角色变化或删除、Better Auth Session 到期字段变化或删除，以及文档移动或删除会在事务提交后向 `knowmesh_document_collaboration` 发布不含正文、Cookie 或 Token 的失效信号。协作进程收到信号后重新查询 Session 与权限，再决定是否关闭连接；15 秒周期复查用于覆盖监听器短暂断线。
 
