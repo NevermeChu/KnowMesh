@@ -140,6 +140,7 @@ const assertSuccessful = (command: Command, result: ProcessResult) => {
 
 export const runRuntime = async (options: {
   collaborationEnabled: boolean;
+  manageDatabase: boolean;
   mode: RuntimeMode;
   operations: RuntimeOperations;
   signal?: Promise<RuntimeSignal>;
@@ -154,6 +155,7 @@ export const runRuntime = async (options: {
   let applicationChild: ChildProcess | undefined;
   let collaborationChild: ChildProcess | undefined;
   let databaseChild: ChildProcess | undefined;
+  let databaseExit: Promise<ProcessResult> | undefined;
   let cleanupPromise: Promise<void> | undefined;
 
   const start = (command: Command) => {
@@ -206,11 +208,14 @@ export const runRuntime = async (options: {
   };
 
   try {
-    const database = start(commands.database);
-    databaseChild = database.child;
-    const readiness = await waitOrSignal(options.operations.waitForPort(database.child));
-    if (isRuntimeSignal(readiness)) {
-      return readiness.exitCode;
+    if (options.manageDatabase) {
+      const database = start(commands.database);
+      databaseChild = database.child;
+      databaseExit = database.exit;
+      const readiness = await waitOrSignal(options.operations.waitForPort(database.child));
+      if (isRuntimeSignal(readiness)) {
+        return readiness.exitCode;
+      }
     }
     const migration = start(commands.migration);
     const migrationResult = await waitOrSignal(migration.exit);
@@ -244,7 +249,10 @@ export const runRuntime = async (options: {
 
     const application = start(commands.application);
     applicationChild = application.child;
-    const runtimeExits = [database.exit, application.exit];
+    const runtimeExits = [application.exit];
+    if (databaseExit) {
+      runtimeExits.push(databaseExit);
+    }
     if (collaborationExit) {
       runtimeExits.push(collaborationExit);
     }
@@ -520,6 +528,7 @@ const main = async () => {
   });
   const exitCode = await runRuntime({
     collaborationEnabled: process.env.COLLABORATION_ENABLED === 'true',
+    manageDatabase: process.env.E2E_REAL_POSTGRES !== 'true',
     mode,
     operations,
     signal: signalResolver.promise,

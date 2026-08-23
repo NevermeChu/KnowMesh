@@ -103,6 +103,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build]
+    services:
+      postgres:
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v6
 
@@ -118,7 +130,14 @@ jobs:
           args: sh -c "HOME=/root npm run test:e2e" # Set HOME to /root to avoid Playwright error with Firebox
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          COLLABORATION_ADDRESS: 127.0.0.1
+          COLLABORATION_ENABLED: 'true'
+          COLLABORATION_HEALTH_PORT: '1235'
+          COLLABORATION_PORT: '1234'
+          DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+          E2E_REAL_POSTGRES: 'true'
           NEXT_PUBLIC_APP_URL: http://localhost:3008
+          NEXT_PUBLIC_COLLABORATION_URL: ws://localhost:1234
 
       - name: Upload test results
         uses: actions/upload-artifact@v7

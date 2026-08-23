@@ -109,6 +109,7 @@ describe('local runtime collaboration orchestration', () => {
     await expect(
       runRuntime({
         collaborationEnabled: true,
+        manageDatabase: true,
         mode: 'dev',
         operations,
         signal: signal.promise,
@@ -154,12 +155,56 @@ describe('local runtime collaboration orchestration', () => {
 
     await runRuntime({
       collaborationEnabled: false,
+      manageDatabase: true,
       mode: 'dev',
       operations,
       signal: signal.promise,
     });
 
     expect(started).not.toContain('Hocuspocus');
+  });
+
+  it('uses an external database for real PostgreSQL E2E', async () => {
+    const started: string[] = [];
+    const signal = Promise.withResolvers<{ exitCode: number; signal: NodeJS.Signals }>();
+    const operations: RuntimeOperations = {
+      spawnProcess(command) {
+        const child = createChild();
+        started.push(command.name);
+        if (command.name === 'Database migration') {
+          queueMicrotask(() => {
+            exitChild(child);
+          });
+        }
+        if (command.name === 'Next.js') {
+          queueMicrotask(() => {
+            signal.resolve({ exitCode: 130, signal: 'SIGINT' });
+          });
+        }
+        return child;
+      },
+      terminateProcess: async () => {
+        await Promise.resolve();
+      },
+      waitForCollaborationReady: async () => {
+        await Promise.resolve();
+      },
+      waitForPort: async () => {
+        await Promise.reject(new Error('Managed database readiness must not run'));
+      },
+    };
+
+    await expect(
+      runRuntime({
+        collaborationEnabled: true,
+        manageDatabase: false,
+        mode: 'playwright-start',
+        operations,
+        signal: signal.promise,
+      }),
+    ).resolves.toBe(130);
+
+    expect(started).toStrictEqual(['Database migration', 'Hocuspocus', 'Next.js']);
   });
 
   it('waits for the collaboration readiness response', async () => {

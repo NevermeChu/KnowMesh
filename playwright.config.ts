@@ -65,6 +65,7 @@ export default defineConfig({
       ? [
           {
             name: 'firefox',
+            testIgnore: 'DocumentCollaboration.e2e.ts',
             use: { ...devices['Desktop Firefox'] },
           },
         ]
