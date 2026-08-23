@@ -5,6 +5,7 @@ on:
     branches: [main, feature/permissions]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
@@ -150,6 +151,7 @@ jobs:
   deploy:
     name: Deploy production
     if: >-
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'push' && github.ref == 'refs/heads/feature/permissions')
     needs: [build, static, unit, e2e]

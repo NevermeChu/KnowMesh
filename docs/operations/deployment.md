@@ -58,7 +58,7 @@ production environment 必须提供：
 2. 将 `deploy/nginx/knowmesh-websocket-map.conf` 安装到 Nginx `http` 上下文，将 `deploy/nginx/knowmesh-collaboration-location.conf` include 到现有 HTTPS `server` 块。
 3. 在 `/etc/knowmesh.env` 设置同源 URL、loopback 端口与 `COLLABORATION_ENABLED=true`，启动协作服务并确认 `/ready`。
 4. 重启 Next.js，使服务端模式分流读取新开关；通过 `nginx -t` 后 reload Nginx。
-5. 将 GitHub production variable `PRODUCTION_COLLABORATION_ENABLED` 改为 `true`。后续发布自动执行双服务健康检查、WSS Upgrade 冒烟和双服务回滚。
+5. 将 GitHub production variable `PRODUCTION_COLLABORATION_ENABLED` 改为 `true`，再从 Actions 手动运行 `CI` workflow 验证当前 SHA。后续发布自动执行双服务健康检查、WSS Upgrade 冒烟和双服务回滚。
 
 完整生产验收仍需使用两个真实登录会话确认同步、只读权限、撤权、重连和服务重启后的持久化；公网 Upgrade 冒烟只证明 TLS、Nginx 和 Hocuspocus 握手链路可达，不替代应用协议与权限验收。
 
