@@ -7,6 +7,7 @@ import { useRef, useState } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import type { Document } from '../Document';
+import { isDocumentContent } from '../DocumentSchema';
 import { updateDocument } from '../server/UpdateDocument';
 import { DocumentBubbleMenu } from './DocumentBubbleMenu';
 import {
@@ -23,7 +24,8 @@ import { DocumentSlashMenu } from './DocumentSlashMenu';
 import { StarDocumentButton } from './StarDocumentButton';
 
 export function DocumentEditorSurface(props: {
-  canEdit: boolean;
+  canEditContent: boolean;
+  canEditTitle: boolean;
   collaborationMembers?: DocumentCollaborationMember[];
   collaborationState?: CollaborationState;
   document: Document;
@@ -41,6 +43,8 @@ export function DocumentEditorSurface(props: {
   );
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(true);
   const lastSavedTitle = useRef(props.document.title);
+  const currentContent = props.editor?.getJSON();
+  const exportContent = isDocumentContent(currentContent) ? currentContent : props.document.content;
 
   const saveTitle = async () => {
     const normalizedTitle = title.trim();
@@ -80,7 +84,7 @@ export function DocumentEditorSurface(props: {
         <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-ink-faint">
           <div className="flex min-w-0 items-center gap-2.5">
             <DocumentSaveStatus
-              canEdit={props.canEdit}
+              canEdit={props.canEditContent}
               collaborationState={props.collaborationState}
               state={props.saveState}
             />
@@ -103,14 +107,14 @@ export function DocumentEditorSurface(props: {
             <span aria-hidden="true" className="text-line">
               ·
             </span>
-            <DocumentExportMenu content={props.document.content} title={title} />
+            <DocumentExportMenu content={exportContent} title={title} />
           </div>
         </div>
 
         <input
           aria-label="文档标题"
           className="mt-5 w-full bg-transparent text-4xl font-bold tracking-tight text-ink outline-none placeholder:text-ink-faint-strong disabled:opacity-100"
-          disabled={!props.canEdit}
+          disabled={!props.canEditTitle}
           maxLength={200}
           placeholder="无标题"
           value={title}
@@ -149,7 +153,7 @@ export function DocumentEditorSurface(props: {
           <EditorContent editor={props.editor} />
         </div>
 
-        {props.canEdit && (
+        {props.canEditContent && (
           <>
             <DocumentBubbleMenu
               editor={props.editor}

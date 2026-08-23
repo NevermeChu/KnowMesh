@@ -37,6 +37,13 @@ export function getDocumentCollaborationCanEdit(options: {
   return options.canEdit && options.scope === 'read-write';
 }
 
+export function getDocumentCollaborationCanEditTitle(options: {
+  authenticationFailed: boolean;
+  canEdit: boolean;
+}) {
+  return options.canEdit && !options.authenticationFailed;
+}
+
 export function getDocumentCollaborationState(options: {
   authenticationFailed: boolean;
   connectionStatus: ConnectionStatus;

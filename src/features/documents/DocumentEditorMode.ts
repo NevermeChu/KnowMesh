@@ -2,7 +2,6 @@ import type { DocumentEditorMode } from './Document';
 
 export function getDocumentEditorMode(options: {
   collaborationEnabled: boolean;
-  hasCollaborationState: boolean;
   workspaceKind: 'personal' | 'team';
 }): DocumentEditorMode {
   if (options.workspaceKind !== 'team') {
@@ -13,9 +12,5 @@ export function getDocumentEditorMode(options: {
     return 'collaborative';
   }
 
-  if (options.hasCollaborationState) {
-    return 'collaborative-readonly';
-  }
-
-  return 'single-user';
+  return 'collaborative-readonly';
 }

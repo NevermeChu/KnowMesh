@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getDocumentCollaborationCanEdit,
+  getDocumentCollaborationCanEditTitle,
   getDocumentCollaborationMembers,
   getDocumentCollaborationState,
 } from './DocumentCollaborationClientState';
@@ -38,5 +39,11 @@ describe('document collaboration client state', () => {
     expect(getDocumentCollaborationCanEdit({ canEdit: true, scope: 'read-write' })).toBeTruthy();
     expect(getDocumentCollaborationCanEdit({ canEdit: true, scope: 'readonly' })).toBeFalsy();
     expect(getDocumentCollaborationCanEdit({ canEdit: false, scope: 'read-write' })).toBeFalsy();
+  });
+
+  it('revokes title editing after authentication failure', () => {
+    expect(
+      getDocumentCollaborationCanEditTitle({ authenticationFailed: true, canEdit: true }),
+    ).toBeFalsy();
   });
 });

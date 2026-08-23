@@ -161,6 +161,8 @@ export function DocumentEditor(props: {
       }, 700);
     },
   });
+  const currentContent = editor?.getJSON();
+  const exportContent = isDocumentContent(currentContent) ? currentContent : props.document.content;
 
   const saveTitle = async () => {
     const normalizedTitle = title.trim();
@@ -216,7 +218,7 @@ export function DocumentEditor(props: {
             <span aria-hidden="true" className="text-line">
               ·
             </span>
-            <DocumentExportMenu content={props.document.content} title={title} />
+            <DocumentExportMenu content={exportContent} title={title} />
           </div>
         </div>
 

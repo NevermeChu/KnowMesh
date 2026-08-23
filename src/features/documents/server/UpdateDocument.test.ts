@@ -16,11 +16,8 @@ const state = vi.hoisted(() => {
   const firstInnerJoin = vi.fn<() => { innerJoin: typeof secondInnerJoin }>(() => ({
     innerJoin: secondInnerJoin,
   }));
-  const stateLimit = vi.fn<() => Promise<unknown[]>>();
-  const stateWhere = vi.fn<() => { limit: typeof stateLimit }>(() => ({ limit: stateLimit }));
-  const from = vi.fn<() => { innerJoin: typeof firstInnerJoin; where: typeof stateWhere }>(() => ({
+  const from = vi.fn<() => { innerJoin: typeof firstInnerJoin }>(() => ({
     innerJoin: firstInnerJoin,
-    where: stateWhere,
   }));
   const select = vi.fn<() => { from: typeof from }>(() => ({ from }));
   const transaction = vi.fn<
@@ -39,7 +36,6 @@ const state = vi.hoisted(() => {
     returning,
     revalidatePath,
     set,
-    stateLimit,
     transaction,
     update,
     where,
@@ -70,9 +66,7 @@ describe(updateDocument, () => {
       document: { id: '10000000-0000-4000-8000-000000000001', projectId: 'project_1' },
     });
     state.returning.mockResolvedValue([{ id: '10000000-0000-4000-8000-000000000001' }]);
-    state.forUpdate.mockResolvedValue([
-      { collaborationDocumentId: null, workspaceKind: 'personal' },
-    ]);
+    state.forUpdate.mockResolvedValue([{ workspaceKind: 'personal' }]);
   });
 
   it('updates document content without revalidating workspace layout', async () => {
@@ -95,16 +89,12 @@ describe(updateDocument, () => {
     expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
   });
 
-  it('rejects legacy content writes after collaboration initializes', async () => {
+  it('rejects team document content writes', async () => {
     state.forUpdate.mockResolvedValueOnce([
       {
         workspaceKind: 'team',
       },
     ]);
-    state.stateLimit.mockResolvedValueOnce([
-      { documentId: '10000000-0000-4000-8000-000000000001' },
-    ]);
-
     await expect(
       updateDocument({
         content: { content: [{ type: 'paragraph' }], type: 'doc' },
@@ -112,5 +102,16 @@ describe(updateDocument, () => {
       }),
     ).rejects.toThrow('团队文档正文必须通过协作服务保存');
     expect(state.update).not.toHaveBeenCalled();
+  });
+
+  it('updates team document titles', async () => {
+    state.forUpdate.mockResolvedValueOnce([{ workspaceKind: 'team' }]);
+
+    await updateDocument({
+      documentId: '10000000-0000-4000-8000-000000000001',
+      title: 'Team title',
+    });
+
+    expect(state.update).toHaveBeenCalledOnce();
   });
 });

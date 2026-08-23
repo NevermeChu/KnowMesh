@@ -5,13 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { db } from '@/libs/DB';
-import { Env } from '@/libs/Env';
-import {
-  documentCollaborationStatesSchema,
-  documentsSchema,
-  projectsSchema,
-  workspacesSchema,
-} from '@/models/Schema';
+import { documentsSchema, projectsSchema, workspacesSchema } from '@/models/Schema';
 import { updateDocumentSchema } from '../DocumentSchema';
 import type { UpdateDocumentInput } from '../DocumentSchema';
 
@@ -45,20 +39,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
       throw new Error('文档保存失败');
     }
 
-    const [collaborationState] =
-      documentInput.content !== undefined && documentMode.workspaceKind === 'team'
-        ? await transaction
-            .select({ documentId: documentCollaborationStatesSchema.documentId })
-            .from(documentCollaborationStatesSchema)
-            .where(eq(documentCollaborationStatesSchema.documentId, documentInput.documentId))
-            .limit(1)
-        : [];
-
-    if (
-      documentInput.content !== undefined &&
-      documentMode.workspaceKind === 'team' &&
-      (Env.COLLABORATION_ENABLED === 'true' || collaborationState !== undefined)
-    ) {
+    if (documentInput.content !== undefined && documentMode.workspaceKind === 'team') {
       throw new Error('团队文档正文必须通过协作服务保存');
     }
 

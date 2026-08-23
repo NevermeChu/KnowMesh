@@ -4,6 +4,7 @@ type CollaborationMetricsSnapshot = {
   authenticationFailures: number;
   consecutiveStoreFailures: number;
   documentChanges: number;
+  failedDocuments: number;
   invalidatedConnections: number;
   lastStoreSuccessAt: string | null;
   projectionFailures: number;
@@ -16,6 +17,7 @@ export class DocumentCollaborationMetrics {
   private authenticationFailures = 0;
   private consecutiveStoreFailures = 0;
   private documentChanges = 0;
+  private readonly failedDocumentIds = new Set<string>();
   private invalidatedConnections = 0;
   private lastStoreSuccessAt: string | null = null;
   private projectionFailures = 0;
@@ -43,19 +45,21 @@ export class DocumentCollaborationMetrics {
     this.readOnlyWriteRejections += 1;
   }
 
-  recordStoreFailure() {
+  recordStoreFailure(documentId: string) {
     this.consecutiveStoreFailures += 1;
+    this.failedDocumentIds.add(documentId);
     this.storeFailures += 1;
   }
 
-  recordStoreSuccess() {
+  recordStoreSuccess(documentId: string) {
     this.consecutiveStoreFailures = 0;
+    this.failedDocumentIds.delete(documentId);
     this.lastStoreSuccessAt = new Date().toISOString();
     this.storeSuccesses += 1;
   }
 
   isStoreReady() {
-    return this.consecutiveStoreFailures === 0;
+    return this.failedDocumentIds.size === 0;
   }
 
   snapshot(options: { activeConnections: number; activeDocuments: number }) {
@@ -64,6 +68,7 @@ export class DocumentCollaborationMetrics {
       authenticationFailures: this.authenticationFailures,
       consecutiveStoreFailures: this.consecutiveStoreFailures,
       documentChanges: this.documentChanges,
+      failedDocuments: this.failedDocumentIds.size,
       invalidatedConnections: this.invalidatedConnections,
       lastStoreSuccessAt: this.lastStoreSuccessAt,
       projectionFailures: this.projectionFailures,

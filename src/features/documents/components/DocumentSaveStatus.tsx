@@ -16,7 +16,11 @@ export function DocumentSaveStatus(props: {
   collaborationState?: CollaborationState;
   state: SaveState;
 }) {
-  if (!props.canEdit) {
+  if (
+    !props.canEdit &&
+    props.state !== 'error' &&
+    (props.collaborationState === undefined || props.collaborationState === 'synced')
+  ) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs text-ink-muted">
         <span className="size-1.5 rounded-full bg-ink-faint" />
@@ -25,7 +29,10 @@ export function DocumentSaveStatus(props: {
     );
   }
 
-  if (props.state === 'saving') {
+  if (
+    props.state === 'saving' &&
+    (props.collaborationState === undefined || props.collaborationState === 'synced')
+  ) {
     return (
       <span
         aria-live="polite"
@@ -37,7 +44,10 @@ export function DocumentSaveStatus(props: {
     );
   }
 
-  if (props.state === 'error') {
+  if (
+    props.state === 'error' &&
+    (props.collaborationState === undefined || props.collaborationState === 'synced')
+  ) {
     return (
       <span
         aria-live="polite"

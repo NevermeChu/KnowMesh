@@ -14,10 +14,13 @@ import type { Editor } from '@tiptap/react';
 import { useEditor } from '@tiptap/react';
 import { useEffect, useRef, useState } from 'react';
 import { Env } from '@/libs/Env';
+import { parseDocumentCollaborationPersistenceMessage } from '../collaboration/DocumentCollaborationPersistenceMessage';
 import { getDocumentCollaborationRoom } from '../collaboration/DocumentCollaborationRoom';
 import type { Document } from '../Document';
+import { documentExtensions } from '../DocumentExtensions';
 import {
   getDocumentCollaborationCanEdit,
+  getDocumentCollaborationCanEditTitle,
   getDocumentCollaborationMembers,
   getDocumentCollaborationState,
 } from './DocumentCollaborationClientState';
@@ -71,6 +74,17 @@ function CollaborativeDocumentEditorContent(props: {
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [wordCount, setWordCount] = useState(0);
   const registeredEditor = useRef<Editor | null>(null);
+  useHocuspocusEvent('stateless', (data) => {
+    const message = parseDocumentCollaborationPersistenceMessage(data.payload);
+    if (message) {
+      setSaveState(message.status);
+    }
+  });
+  useHocuspocusEvent('unsyncedChanges', (data) => {
+    if (data.number > 0) {
+      setSaveState('saving');
+    }
+  });
   const editor = useEditor({
     editable: props.canEdit,
     editorProps: {
@@ -101,8 +115,45 @@ function CollaborativeDocumentEditorContent(props: {
 
   return (
     <DocumentEditorSurface
-      canEdit={props.canEdit}
+      canEditContent={props.canEdit}
+      canEditTitle={props.canEdit}
       collaborationMembers={props.collaborationMembers}
+      collaborationState={props.collaborationState}
+      document={props.document}
+      editor={editor}
+      saveState={saveState}
+      setSaveState={setSaveState}
+      wordCount={wordCount}
+    />
+  );
+}
+
+function CollaborativeDocumentSnapshot(props: {
+  canEditTitle: boolean;
+  collaborationState: CollaborationState;
+  document: Document;
+}) {
+  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [wordCount, setWordCount] = useState(0);
+  const editor = useEditor({
+    content: props.document.content,
+    editable: false,
+    editorProps: {
+      attributes: {
+        class: 'min-h-[32rem] px-1 pb-32 pt-4 text-[15px] leading-7 text-ink outline-none',
+      },
+    },
+    extensions: documentExtensions,
+    immediatelyRender: false,
+    onCreate: ({ editor: createdEditor }) => {
+      setWordCount(createdEditor.state.doc.textContent.length);
+    },
+  });
+
+  return (
+    <DocumentEditorSurface
+      canEditContent={false}
+      canEditTitle={props.canEditTitle}
       collaborationState={props.collaborationState}
       document={props.document}
       editor={editor}
@@ -160,6 +211,19 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
   });
 
   if (!hasSynced) {
+    if (authenticationFailed || hasDisconnected) {
+      return (
+        <CollaborativeDocumentSnapshot
+          canEditTitle={getDocumentCollaborationCanEditTitle({
+            authenticationFailed,
+            canEdit: props.canEdit,
+          })}
+          collaborationState={collaborationState}
+          document={props.document}
+        />
+      );
+    }
+
     return (
       <div className="relative">
         <DocumentEditorSkeleton />

@@ -2,6 +2,7 @@ import { once } from 'node:events';
 import { createServer as createHttpServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Server } from '@hocuspocus/server';
+import type { Document as HocuspocusDocument } from '@hocuspocus/server';
 import { db } from '@/libs/DB';
 import { Env } from '@/libs/Env';
 import { documentCollaborationStatesSchema } from '@/models/Schema';
@@ -12,6 +13,7 @@ import {
   loadDocumentCollaborationState,
   persistDocumentCollaborationState,
 } from './DocumentCollaborationPersistence';
+import { createDocumentCollaborationPersistenceMessage } from './DocumentCollaborationPersistenceMessage';
 import { getDocumentIdFromCollaborationRoom } from './DocumentCollaborationRoom';
 import {
   assertDocumentCollaborationOrigin,
@@ -23,6 +25,7 @@ import type { DocumentCollaborationContext } from './DocumentCollaborationSecuri
 
 const STORE_DEBOUNCE_MS = 1000;
 const STORE_MAX_DEBOUNCE_MS = 5000;
+const STORE_RETRY_MS = 1000;
 const MAX_PAYLOAD_BYTES = 1024 * 1024;
 const READINESS_TIMEOUT_MS = 2000;
 const SHUTDOWN_TIMEOUT_MS = 15_000;
@@ -32,7 +35,13 @@ const MAX_CONNECTIONS_PER_DOCUMENT = 100;
 const MAX_CONNECTIONS_PER_USER = 10;
 const SYNC_STEP_TWO = 1;
 const SYNC_UPDATE = 2;
-const securityCleanups = new WeakMap<Server<DocumentCollaborationContext>, () => void>();
+const serverLifecycles = new WeakMap<
+  Server<DocumentCollaborationContext>,
+  {
+    beginShutdown: () => void;
+    finishFinalPersistence: () => void;
+  }
+>();
 
 function getDocumentCollaborationConnections(server: Server<DocumentCollaborationContext>) {
   return [...server.hocuspocus.documents.values()].flatMap((document) => document.getConnections());
@@ -64,6 +73,35 @@ function matchesInvalidation(
   return context.sessionId === invalidation.sessionId;
 }
 
+export async function revalidateDocumentCollaborationConnections(options: {
+  connections: Iterable<{ close: () => void; context: unknown }>;
+  metrics: DocumentCollaborationMetrics;
+  shouldRevalidate?: (context: DocumentCollaborationContext) => boolean;
+}) {
+  for (const connection of options.connections) {
+    if (
+      !isDocumentCollaborationContext(connection.context) ||
+      (options.shouldRevalidate && !options.shouldRevalidate(connection.context))
+    ) {
+      continue;
+    }
+
+    try {
+      if (!(await revalidateDocumentCollaborationConnection(connection.context))) {
+        options.metrics.recordInvalidatedConnection();
+        connection.close();
+      }
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : 'Unknown revalidation error',
+          event: 'document_collaboration_revalidation_failed',
+        }),
+      );
+    }
+  }
+}
+
 async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, message: string) {
   const controller = new AbortController();
   try {
@@ -81,6 +119,46 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, message:
 export function createDocumentCollaborationServer() {
   const metrics = new DocumentCollaborationMetrics();
   const allowedOrigin = new URL(Env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').origin;
+  const failedStores = new Map<string, { document: HocuspocusDocument; documentId: string }>();
+  let preventUnload = false;
+  let retryRunning = false;
+  let shuttingDown = false;
+
+  const persistDocument = async (options: {
+    broadcastFailure: boolean;
+    document: HocuspocusDocument;
+    documentId: string;
+  }) => {
+    try {
+      await persistDocumentCollaborationState({
+        document: options.document,
+        documentId: options.documentId,
+      });
+      failedStores.delete(options.documentId);
+      metrics.recordStoreSuccess(options.documentId);
+      options.document.broadcastStateless(createDocumentCollaborationPersistenceMessage('saved'));
+    } catch (error) {
+      failedStores.set(options.documentId, {
+        document: options.document,
+        documentId: options.documentId,
+      });
+      metrics.recordStoreFailure(options.documentId);
+      if (options.broadcastFailure) {
+        options.document.broadcastStateless(createDocumentCollaborationPersistenceMessage('error'));
+      }
+      if (error instanceof Error && error.message === '协作文档正文投影失败') {
+        metrics.recordProjectionFailure();
+      }
+      console.error(
+        JSON.stringify({
+          documentId: options.documentId,
+          error: error instanceof Error ? error.message : 'Unknown collaboration store error',
+          event: 'document_collaboration_store_failed',
+        }),
+      );
+      throw error;
+    }
+  };
 
   const server = new Server<DocumentCollaborationContext>({
     address: Env.COLLABORATION_ADDRESS,
@@ -118,6 +196,14 @@ export function createDocumentCollaborationServer() {
         metrics.recordInvalidatedConnection();
         data.connection.close();
         throw new Error('permission-denied');
+      }
+    },
+    // Failed stores retain the in-memory document until a retry succeeds.
+    // oxlint-disable-next-line eslint/require-await -- Hocuspocus hooks require a Promise result.
+    async beforeUnloadDocument(data) {
+      const documentId = getDocumentIdFromCollaborationRoom(data.documentName);
+      if (preventUnload || failedStores.has(documentId)) {
+        throw new Error('document-persistence-pending');
       }
     },
     async onAuthenticate(data) {
@@ -183,39 +269,17 @@ export function createDocumentCollaborationServer() {
     },
     async onStoreDocument(data) {
       const documentId = getDocumentIdFromCollaborationRoom(data.documentName);
-
-      try {
-        await persistDocumentCollaborationState({ document: data.document, documentId });
-        metrics.recordStoreSuccess();
-      } catch (error) {
-        metrics.recordStoreFailure();
-        if (error instanceof Error && error.message === '协作文档正文投影失败') {
-          metrics.recordProjectionFailure();
-        }
-        console.error(
-          JSON.stringify({
-            documentId,
-            error: error instanceof Error ? error.message : 'Unknown collaboration store error',
-            event: 'document_collaboration_store_failed',
-          }),
-        );
-        throw error;
-      }
+      await persistDocument({ broadcastFailure: true, document: data.document, documentId });
     },
   });
 
   const invalidationSubscriber = new DocumentCollaborationInvalidationSubscriber(
     async (invalidation) => {
-      for (const connection of getDocumentCollaborationConnections(server)) {
-        if (
-          isDocumentCollaborationContext(connection.context) &&
-          matchesInvalidation(connection.context, invalidation) &&
-          !(await revalidateDocumentCollaborationConnection(connection.context))
-        ) {
-          metrics.recordInvalidatedConnection();
-          connection.close();
-        }
-      }
+      await revalidateDocumentCollaborationConnections({
+        connections: getDocumentCollaborationConnections(server),
+        metrics,
+        shouldRevalidate: (context) => matchesInvalidation(context, invalidation),
+      });
     },
   );
 
@@ -227,31 +291,53 @@ export function createDocumentCollaborationServer() {
     revalidationRunning = true;
     void (async () => {
       try {
-        for (const connection of getDocumentCollaborationConnections(server)) {
-          if (
-            isDocumentCollaborationContext(connection.context) &&
-            !(await revalidateDocumentCollaborationConnection(connection.context))
-          ) {
-            metrics.recordInvalidatedConnection();
-            connection.close();
-          }
-        }
-      } catch (error) {
-        console.error(
-          JSON.stringify({
-            error: error instanceof Error ? error.message : 'Unknown revalidation error',
-            event: 'document_collaboration_revalidation_failed',
-          }),
-        );
+        await revalidateDocumentCollaborationConnections({
+          connections: getDocumentCollaborationConnections(server),
+          metrics,
+        });
       } finally {
         revalidationRunning = false;
       }
     })();
   }, AUTHORIZATION_REVALIDATION_MS);
   revalidationTimer.unref();
-  securityCleanups.set(server, () => {
-    clearInterval(revalidationTimer);
-    invalidationSubscriber.stop();
+  const storeRetryTimer = setInterval(() => {
+    if (retryRunning || shuttingDown || failedStores.size === 0) {
+      return;
+    }
+
+    retryRunning = true;
+    void (async () => {
+      try {
+        for (const failedStore of failedStores.values()) {
+          try {
+            await failedStore.document.saveMutex.runExclusive(async () => {
+              await persistDocument({ ...failedStore, broadcastFailure: false });
+            });
+            if (failedStore.document.getConnectionsCount() === 0) {
+              await server.hocuspocus.unloadDocument(failedStore.document);
+            }
+          } catch {
+            // The failed document remains in memory and will be retried.
+          }
+        }
+      } finally {
+        retryRunning = false;
+      }
+    })();
+  }, STORE_RETRY_MS);
+  storeRetryTimer.unref();
+  serverLifecycles.set(server, {
+    beginShutdown: () => {
+      shuttingDown = true;
+      preventUnload = true;
+      clearInterval(revalidationTimer);
+      clearInterval(storeRetryTimer);
+      invalidationSubscriber.stop();
+    },
+    finishFinalPersistence: () => {
+      preventUnload = false;
+    },
   });
 
   return { invalidationSubscriber, metrics, server };
@@ -314,27 +400,49 @@ export async function stopDocumentCollaborationServer(options: {
   healthServer?: ReturnType<typeof createHttpServer>;
   server: Server<DocumentCollaborationContext>;
 }) {
-  securityCleanups.get(options.server)?.();
-  securityCleanups.delete(options.server);
+  const shutdownErrors: unknown[] = [];
+  const lifecycle = serverLifecycles.get(options.server);
+  lifecycle?.beginShutdown();
   options.server.httpServer.close();
   options.server.hocuspocus.closeConnections();
 
   for (const [documentName, document] of options.server.hocuspocus.documents) {
-    const documentId = getDocumentIdFromCollaborationRoom(documentName);
-    await document.saveMutex.runExclusive(async () => {
-      await persistDocumentCollaborationState({ document, documentId });
-    });
+    try {
+      const documentId = getDocumentIdFromCollaborationRoom(documentName);
+      await document.saveMutex.runExclusive(async () => {
+        await persistDocumentCollaborationState({ document, documentId });
+      });
+    } catch (error) {
+      shutdownErrors.push(error);
+    }
+  }
+  lifecycle?.finishFinalPersistence();
+  serverLifecycles.delete(options.server);
+
+  try {
+    await withTimeout(
+      options.server.destroy(),
+      SHUTDOWN_TIMEOUT_MS,
+      `协作服务未能在 ${SHUTDOWN_TIMEOUT_MS}ms 内关闭`,
+    );
+  } catch (error) {
+    shutdownErrors.push(error);
   }
 
-  await withTimeout(
-    options.server.destroy(),
-    SHUTDOWN_TIMEOUT_MS,
-    `协作服务未能在 ${SHUTDOWN_TIMEOUT_MS}ms 内关闭`,
-  );
+  try {
+    if (options.healthServer?.listening) {
+      const closed = once(options.healthServer, 'close');
+      options.healthServer.close();
+      await closed;
+    }
+  } catch (error) {
+    shutdownErrors.push(error);
+  }
 
-  if (options.healthServer) {
-    const closed = once(options.healthServer, 'close');
-    options.healthServer.close();
-    await closed;
+  if (shutdownErrors.length === 1) {
+    throw shutdownErrors[0];
+  }
+  if (shutdownErrors.length > 1) {
+    throw new AggregateError(shutdownErrors, '协作服务关闭时发生多个错误');
   }
 }

@@ -5,11 +5,7 @@ import { getProjectAuthorization } from '@/features/permissions/server/ProjectAu
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
 import { Env } from '@/libs/Env';
-import {
-  documentCollaborationStatesSchema,
-  documentsSchema,
-  starredDocumentsSchema,
-} from '@/models/Schema';
+import { documentsSchema, starredDocumentsSchema } from '@/models/Schema';
 import { getDocumentEditorMode } from '../DocumentEditorMode';
 
 export async function getProjectDocuments(options: {
@@ -72,15 +68,10 @@ export async function getProjectDocuments(options: {
     db
       .select({
         content: documentsSchema.content,
-        collaborationDocumentId: documentCollaborationStatesSchema.documentId,
         contentSchemaVersion: documentsSchema.contentSchemaVersion,
         projectId: documentsSchema.projectId,
       })
       .from(documentsSchema)
-      .leftJoin(
-        documentCollaborationStatesSchema,
-        eq(documentCollaborationStatesSchema.documentId, documentsSchema.id),
-      )
       .where(
         and(
           eq(documentsSchema.id, selectedMetadata.id),
@@ -106,7 +97,6 @@ export async function getProjectDocuments(options: {
     selectedDocumentEditorMode: selectedContent
       ? getDocumentEditorMode({
           collaborationEnabled: Env.COLLABORATION_ENABLED === 'true',
-          hasCollaborationState: selectedContent.collaborationDocumentId !== null,
           workspaceKind: options.workspaceKind,
         })
       : null,
