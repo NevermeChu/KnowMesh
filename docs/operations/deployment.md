@@ -48,11 +48,11 @@
                 │
              浏览器用户
 
-Next.js 与 Hocuspocus ───────────────→ 生产 PostgreSQL
+Next.js 与 Hocuspocus ───────────────→ 本机 PostgreSQL 16，127.0.0.1:5432
 认证和邀请邮件 ─────────────────────→ Resend（配置后）
 ```
 
-用户不能直接访问 3000、1234 或 1235。公网只需要 HTTP/HTTPS 和管理用 SSH；三个应用端口都绑定到 `127.0.0.1`，由 Nginx 或服务器本机访问。
+用户不能直接访问 3000、1234、1235 或 5432；这些端口当前都只绑定到 `127.0.0.1`。主机对外监听 22、80 和 443，但 UFW 当前未启用且 iptables INPUT 默认允许，是否只由 Azure NSG 放行预期流量尚未确认。
 
 ## 哪些事实能够从仓库确认
 
@@ -65,15 +65,15 @@ Next.js 与 Hocuspocus ───────────────→ 生产 P
 - `/etc/knowmesh.env` 中应用认识的变量。
 - Hocuspocus systemd unit 和两个 Nginx 协作片段的完整内容。
 
-仓库不能独立确认或重建：
+仓库不能独立重建：
 
 - 云服务器、DNS 和防火墙最初如何创建。
-- 生产 PostgreSQL 在哪里运行、如何创建用户，以及如何备份和恢复。
+- 本机 PostgreSQL 16 如何首次安装、创建数据库用户，以及如何备份和恢复。
 - Let's Encrypt 证书最初如何申请和续期。
-- 当前 `knowmesh.service`、完整 Nginx 站点和 sudoers 的完整内容。
+- 当前 `knowmesh.service`、完整 Nginx 站点和 sudoers；现场内容已经审计，但尚无仓库模板。
 - 服务器文件后来是否被人工修改。
 
-本项目当前不是“空服务器一键安装”。首次引导完成后，日常发布已经自动化。当前服务器通过实际命令确认过两个 systemd 服务、本地 readiness、本地 Next.js、公网 HTTPS 和公网 WSS Upgrade；这些运行事实仍可能在未来人工改动后漂移，因此手册保留了现场检查命令。
+本项目当前不是“空服务器一键安装”。首次引导完成后，日常发布已经自动化。2026-08-23 的只读现场审计确认了两个 systemd 服务、本机 PostgreSQL、Nginx、Certbot、本地 readiness、公网 HTTPS 和公网 WSS Upgrade；现场配置仍可能在未来人工改动后漂移，因此手册保留检查命令且以服务器实时输出为准。
 
 ## 当前生产拓扑
 
@@ -82,16 +82,20 @@ Next.js 与 Hocuspocus ───────────────→ 生产 P
 | 公网域名 | `thisme.icu`，`www.thisme.icu` 重定向到主域名 | DNS + Nginx |
 | HTTPS 证书 | `/etc/letsencrypt/live/thisme.icu/` | Certbot / Nginx |
 | 部署服务器和 SSH 用户 | 定义在 `.github/workflows/CI.yml` 的 deploy job | GitHub workflow |
-| Node.js | 24；workflow 与 systemd 使用的具体路径必须同步 | GitHub Actions + 服务器 NVM |
+| 操作系统 | Ubuntu 24.04 LTS x86-64，Azure VM，UTC | 云平台 + Ubuntu |
+| Node.js | v24.19.0；`/home/thisme/.nvm/versions/node/v24.19.0/bin/node` | GitHub Actions + 服务器 NVM |
 | Next.js 服务 | `knowmesh.service`，本机 `127.0.0.1:3000` | systemd |
 | 协作服务 | `knowmesh-collaboration.service`，本机 `127.0.0.1:1234` | systemd |
 | 协作健康检查 | `http://127.0.0.1:1235/ready` | Hocuspocus |
 | release 根目录 | `/srv/knowmesh-app/releases/<GITHUB_SHA>` | deploy job |
 | 当前版本 | `/srv/knowmesh-app/current` 软链接 | deploy job |
-| 生产环境变量 | `/etc/knowmesh.env` | 服务器管理员 |
-| 生产数据库 | 由 `/etc/knowmesh.env` 的 `DATABASE_URL` 指向 | 外部于仓库 |
+| 生产环境变量 | `/etc/knowmesh.env`，`root:thisme 0640` | 服务器管理员 |
+| 生产数据库 | 本机 PostgreSQL 16，`127.0.0.1:5432`，数据目录 `/var/lib/postgresql/16/main` | systemd + PostgreSQL |
+| TLS | Let's Encrypt；Certbot snap 续期 timer enabled/active | Certbot + Nginx |
 
 不要把 `/etc/knowmesh.env`、数据库连接串、SSH 私钥或真实用户数据复制到文档、Issue、Actions 日志或聊天记录。
+
+release 目录以 40 位 Git SHA 命名，但 artifact 内目前没有独立的 `REVISION` 文件或签名。版本来源依赖 GitHub workflow 和目录名；服务器不能仅从 release 内容独立证明其 commit 身份。后续应在构建时写入只读 revision marker。
 
 ## 什么情况下会部署
 
@@ -199,7 +203,7 @@ host fingerprint 不是密码，它用来确认 GitHub 连接的是预期服务�
 
 ### 服务器 `/etc/knowmesh.env`
 
-这个文件同时由 Next.js、Hocuspocus 和生产迁移程序读取。建议权限只允许 root 与运行服务的受控身份读取。不要在命令中打印完整文件。
+这个文件同时由 Next.js、Hocuspocus 和生产迁移程序读取。现场权限是 `root:thisme 0640`，允许 systemd 服务用户读取且不允许其他用户读取。不要在命令中打印完整文件。
 
 结构示例只写占位符：
 
@@ -237,6 +241,7 @@ COLLABORATION_HEALTH_PORT=1235
 - `HOSTNAME=localhost` 和 `PORT=3000` 由生产迁移程序强制检查，防止应用意外监听公网地址或错误端口。
 - `COLLABORATION_ENABLED` 不写或不是精确的 `true` 时，应用按关闭处理。当前生产启用协作，因此 GitHub Variable 和服务器文件都必须为 `true`。
 - `COLLABORATION_ADDRESS=127.0.0.1` 让 WebSocket 和健康端口只监听本机。
+- 现场其余必需变量均已配置且没有重复键；`NEXT_TELEMETRY_DISABLED` 当前缺失，它不阻止应用启动，但若希望生产禁用 Next.js telemetry，应按示例补充后重启应用。
 
 安全地检查变量名是否存在，可以使用：
 
@@ -252,14 +257,38 @@ sudo grep -nE '^(HOSTNAME|PORT|NEXT_PUBLIC_APP_URL|NEXT_PUBLIC_COLLABORATION_URL
 
 ### Next.js
 
-部署链路要求 `knowmesh.service` 在 restart 后从 `/srv/knowmesh-app/current` 启动 standalone Next.js、读取 `/etc/knowmesh.env` 并监听本机 3000 端口。当前服务器已经满足健康检查，但仓库没有这个 unit 的版本化模板，无法仅从代码证明它的实际 `WorkingDirectory`、`EnvironmentFile` 和 `ExecStart`；修改前必须查看现场配置：
+现场 `knowmesh.service` 已确认使用以下关键配置：
+
+```ini
+[Unit]
+Description=KnowMesh Next.js application
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thisme
+Group=thisme
+WorkingDirectory=/srv/knowmesh-app/current
+EnvironmentFile=/etc/knowmesh.env
+Environment=NODE_ENV=production
+ExecStart=/home/thisme/.nvm/versions/node/v24.19.0/bin/node /srv/knowmesh-app/current/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
+```
+
+它已 enabled/running，并只监听 `127.0.0.1:3000`。仓库仍没有该 unit 的版本化模板；现场 unit 也尚未配置 `NoNewPrivileges`、`PrivateTmp`、`ProtectSystem`、`UMask` 等与协作服务类似的沙箱限制。修改前先查看实时配置：
 
 ```bash
 sudo systemctl cat knowmesh.service --no-pager
 sudo systemctl status knowmesh.service --no-pager -l
 ```
 
-不要根据本文猜测 `ExecStart`；以 `systemctl cat` 为准。workflow 假定该服务已经存在，并允许部署身份执行 restart。
+以 `systemctl cat` 为最终现场事实。workflow 假定该服务已经存在，并允许部署身份执行 restart。
 
 ### Hocuspocus
 
@@ -291,6 +320,67 @@ sudo systemctl restart knowmesh-collaboration.service
 - HTTPS `server {}` include `/etc/nginx/snippets/knowmesh-collaboration-location.conf`，把精确路径 `/collaboration-ws` 转到 `127.0.0.1:1234`。
 - Nginx `http` 上下文加载 WebSocket connection map，保证普通请求与 Upgrade 使用正确的 `Connection` header。
 
+现场还保留 `/etc/nginx/conf.d/knowmesh-websocket.conf`，定义旧变量 `$connection_upgrade`；主站 `location /` 使用它。新文件 `/etc/nginx/conf.d/knowmesh-websocket-map.conf` 定义 `$knowmesh_connection_upgrade`，仅协作 location 使用。两个 map 变量不同，目前不冲突，但新服务器模板应明确保留两者用途或合并成一个统一变量，避免误删普通代理所需的 map。
+
+当前完整主站配置如下。它不包含证书私钥，只引用 Certbot 管理的文件路径：
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name thisme.icu www.thisme.icu;
+    return 301 https://thisme.icu$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name www.thisme.icu;
+
+    ssl_certificate /etc/letsencrypt/live/thisme.icu/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/thisme.icu/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://thisme.icu$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name thisme.icu;
+
+    ssl_certificate /etc/letsencrypt/live/thisme.icu/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/thisme.icu/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 10m;
+    include /etc/nginx/snippets/knowmesh-collaboration-location.conf;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+}
+```
+
+这个主站仍是“现场配置的文档副本”，不是由 CI 自动安装的模板；修改服务器后必须同步更新手册，后续应将它加入 `deploy/nginx/knowmesh-site.conf`。
+
 协作片段的权威版本位于：
 
 - `deploy/nginx/knowmesh-websocket-map.conf`
@@ -307,7 +397,7 @@ sudo systemctl reload nginx
 
 ## PostgreSQL 与迁移
 
-生产应用只认识 `DATABASE_URL`，仓库无法判断数据库是本机、云数据库还是其他主机。部署前必须确保服务器能够通过该 URL 连接 PostgreSQL，并且数据库有可靠备份。
+生产数据库已确认是本机 PostgreSQL 16 cluster `16/main`：`postgresql.service` enabled/active，只监听 `127.0.0.1:5432`，数据目录为 `/var/lib/postgresql/16/main`，配置位于 `/etc/postgresql/16/main/`，日志位于 `/var/log/postgresql/postgresql-16-main.log`。`DATABASE_URL` 没有启用 TLS 的参数；当前连接只经过 loopback，这不代表允许将同一连接串用于远程明文数据库。
 
 生产迁移由 artifact 中的 `migrate-production.cjs` 执行，不依赖服务器安装 Drizzle CLI，也不使用服务器源码。迁移发生在 `current` 切换之前：
 
@@ -317,6 +407,12 @@ sudo systemctl reload nginx
 因此所有生产迁移必须向后兼容。破坏性 Schema 变更使用 expand/contract：先增加兼容结构并部署兼容代码，确认旧版本不再依赖旧结构后，再由后续 release 删除旧结构。不要依赖自动 down migration 恢复生产数据。
 
 GitHub E2E 使用的 PostgreSQL 只证明迁移和关键行为能在真实 PostgreSQL 上运行；它不验证生产数据库容量、备份、网络、磁盘和权限配置。
+
+### 当前备份状态
+
+现场没有发现 KnowMesh/PostgreSQL 自动业务备份：现有 `pg_dump@.timer` 和 `pg_basebackup@.timer` 模板均未启用，没有实例化 timer、相关 cron、专用备份目录、异地副本、保留策略或恢复演练证据。因此当前不能声称生产数据可恢复。
+
+在实际开放前必须选择备份目标，定义可接受的数据丢失窗口（RPO）和恢复时间（RTO），再建立自动备份、加密、异地保留、失败告警和定期恢复演练。仅在本机生成备份不能覆盖整台 VM 或磁盘丢失。
 
 ## 当前自动回滚能保护什么
 
@@ -335,7 +431,7 @@ GitHub E2E 使用的 PostgreSQL 只证明迁移和关键行为能在真实 Postg
 
 workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目标，因此不能用它给一台空服务器做第一次发布。首次 release 必须由管理员引导安装并确认服务可运行，之后自动部署才接管。
 
-当前 workflow 也不会自动清理旧 release。清理前必须先解析 `current`、确认没有回滚需要，并保留足够的已知可用版本；不要对 release 根目录执行宽泛递归删除。
+当前 workflow 也不会自动清理旧 release。现场审计时已经保留 16 个 release，说明它们会持续累积。清理前必须先解析 `current`、确认没有回滚需要，并保留足够的已知可用版本；不要对 release 根目录执行宽泛递归删除。
 
 ## 第一次建立服务器需要做什么
 
@@ -353,7 +449,7 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 10. 人工建立第一个 release 和 `current`，确认本地服务与公网 HTTPS 正常。
 11. 在 GitHub production environment 配置 Secrets/Variables，再手动运行 `CI` 接管后续发布。
 
-当前仓库只版本化了协作 systemd unit 和两个协作 Nginx 片段，没有覆盖上述整个 bootstrap。迁移到新服务器前，必须先从当前服务器导出并审查未版本化配置，不能只 clone 仓库就开始部署。
+当前 VM 来自 Azure cloud-init，但没有发现 KnowMesh 初始化脚本、Ansible、Terraform、Docker Compose 或当前可用的 bootstrap。服务器上的旧 `/srv/knowmesh` checkout 早于当前生产 workflow，不能作为权威来源。当前仓库只版本化了协作 systemd unit 和两个协作 Nginx 片段，没有覆盖上述整个 bootstrap。迁移到新服务器前，必须先从当前服务器导出并审查未版本化配置，不能只 clone 仓库就开始部署。
 
 ## 日常发布：你实际需要做什么
 
@@ -466,15 +562,31 @@ workflow 不会继续启动新 Next.js，并会回滚。检查协作服务日志
 
 下列事项不能因为 CI 绿色就视为已经解决：
 
-- PostgreSQL 定时备份、备份加密、保留周期和实际恢复演练。
+- PostgreSQL 定时备份、备份加密、异地保留和实际恢复演练；现场已经确认目前没有可用证据。
 - 服务器系统更新、磁盘容量、时钟、证书续期和防火墙审计。
 - 应用和数据库监控、告警、日志保留与敏感信息检查。
 - 旧 release 的安全清理。
 - 部署 SSH key、Better Auth secret、数据库密码和 Resend key 的轮换。
-- 最小化 sudoers；当前文档已知服务器部署权限仍需收紧。
+- 最小化 sudoers；现场 `thisme ALL=(ALL) NOPASSWD:ALL`，部署账户当前可以获得任意 root shell。
 - 将 `knowmesh.service`、完整 Nginx 站点和首次 bootstrap 收入版本控制。
+- 收紧 SSH 与网络边界；`PermitRootLogin` 当前允许 root 公钥登录，UFW inactive，Azure NSG 规则未确认。
+- 为 Next.js unit 增加与协作 unit 相称的 systemd 沙箱，并验证应用确实不需要被移除的权限。
+- 为 artifact 增加 revision marker，使服务器可以独立核对 release 身份。
 
-这些是“系统能部署”与“系统可长期可靠运营”之间的差别。生产上线前至少要补齐数据库恢复演练、监控告警和最小权限审计。
+这些是“系统能部署”与“系统可长期可靠运营”之间的差别。生产实际开放前至少要完成数据库备份和恢复演练、确认云侧防火墙、收紧部署 sudoers，并建立监控告警。安全加固必须先验证现有 GitHub 部署仍能执行必要操作，不能直接删除权限导致无法发布或回滚。
+
+## 当前服务器安全边界
+
+| 项目 | 已确认状态 | 后续动作 |
+| --- | --- | --- |
+| 应用端口 | 3000、1234、1235 和 5432 仅监听 loopback | 保持并持续检查 |
+| 主机防火墙 | UFW inactive，iptables 默认 ACCEPT | 核对 Azure NSG 后建立最小入站规则 |
+| SSH | 密码和交互式认证关闭；root 公钥登录仍允许 | 确认救援路径后禁用直接 root 登录 |
+| 部署 sudoers | `thisme` 可无密码执行任意 root 命令 | 改成经验证的最小部署命令或受控 root helper |
+| Next.js systemd | 以非 root 用户运行，但沙箱基本未加固 | 版本化 unit 并逐项测试加固参数 |
+| Hocuspocus systemd | 非 root，启用基础 systemd 沙箱 | 保持仓库模板与现场一致 |
+| TLS | Let's Encrypt ECDSA 证书，Certbot timer enabled/active | 增加续期失败和到期告警 |
+| 数据库备份 | 未发现自动备份、异地副本或恢复演练 | 实际开放前补齐 |
 
 ## 修改部署配置时的同步规则
 
