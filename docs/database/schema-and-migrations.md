@@ -73,12 +73,15 @@
 ### `documents`
 
 - UUID 主键，每篇文档通过 `project_id` 属于一个项目；删除项目时级联删除文档。
+- `parent_id` 可空自引用外键指向 `documents.id`，实现项目内无限层级父子文档嵌套；删除父文档时级联删除其所有子孙文档。
+- `sort_order` 双精度浮点数（`double precision`），用于兄弟节点间的排序（基于 Fractional Indexing）。
 - 标题最长 200 字符。
 - `content` 使用 `JSONB` 保存 ProseMirror JSON，默认内容是包含一个空段落的 `doc` 根节点。
 - `content_schema_version` 记录应用文档结构版本，当前为 `1`。
 - `search_text` 纯文本投影列，在单人保存或协作状态落库时同步由 ProseMirror 树提取并持久化，供全文检索直接匹配。
 - `created_by_id` 通常保存创建者的 Better Auth user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
+- `(project_id, parent_id, sort_order)` 索引支持层级树构建与同级排序。
 - `documents_search_text_trgm_idx` 与 `documents_title_trgm_idx` 分别为 `search_text` 和 `title` 建立基于 `pg_trgm` 扩展的 GIN 三元组倒排索引，支持全文模糊检索直接命中索引。
 
 ### `document_collaboration_states`
@@ -115,6 +118,8 @@
 
 
 当前已经加入 Better Auth 本地用户表。认证迁移完成后，业务表中的 `owner_id` 和 `user_id` 保存 Better Auth 字符串用户 ID；账户删除由应用事务同时删除该用户拥有的 Workspace、Project、其他业务关系和 Better Auth `user` 行。其他通知中的触发者引用置空，其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`，因此这些业务引用不会全部直接级联到 `user`。
+
+自 `0027_woozy_magus.sql` 起，上述用户引用关系由数据库外键兜底：归属类列（通知收件人、偏好、收藏、成员、访问请求、邀请双方、Workspace/Project 的 owner）对 `user.id` 级联删除；`notifications.actor_user_id` 为可空外键并随触发者删除置空，与既有清理语义一致。两个例外保持无外键：`audit_logs.actor_user_id` 在账户删除后必须保留审计历史，`documents.created_by_id` 会被替换为哨兵值 `deleted_user` 而非真实用户行。同一迁移把全部时间戳列统一为 `timestamptz`（按 UTC 解释存量值），为 `project_invitations` 补充七天过期的 `expires_at`（存量行按 `created_at + 7 天` 回填），并新增 `(workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL` 部分唯一索引防止重复待处理工作区邀请；迁移在清理孤儿行与回填期间临时禁用 owner 不变量触发器。
 
 ## 数据库约束与应用层不变量
 

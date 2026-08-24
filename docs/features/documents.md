@@ -50,7 +50,7 @@
 
 应用根布局通过客户端事件边界禁用浏览器默认右键菜单。工作区、项目、文件和可编辑正文等明确注册了自定义菜单的区域显示对应菜单；其他区域右键不显示任何菜单。只读正文不会显示格式菜单。
 
-项目节点本身可以折叠，展开后才显示其文档。项目节点的加号和右键菜单中的“新建文件”共用同一创建弹窗；只有具有 `document.create` 能力时入口才可用。右键文件节点可以查看权限、修改名称和删除文件；服务端仍会独立验证对应能力。文件权限完全继承项目，当前没有文档级 ACL。
+项目节点本身可以折叠，展开后才显示其文档。内部文档列表以**多层级递归树**呈现，支持任意层级深度展开/折叠，并在同级按 `sort_order` 排序。项目加号创建根文档，文件悬停的加号或右键“新建子文件”创建子级文档；侧边栏支持**原生拖拽（Drag & Drop）**：可将文档拖拽至其他文档上方/下方重排序（中点计算 `sort_order`）、拖入文档内部变为子文档、或拖入其他项目根目录/子文档中（自动校验防环并级联迁移子树）；右键文件节点支持查看权限、修改名称、弹窗移动文件（`MoveDocumentDialog`）以及级联删除。文件权限完全继承项目，当前没有文档级 ACL。文档编辑区顶部呈现层级面包屑导航（`项目 > 父文档 > ... > 当前文档`），支持点击快速跳转。编辑器正文支持**Notion 风格块级悬浮手柄与文档内拖拽（`DocumentBlockHandle` 与 `BlockDragDropExtension`）**：鼠标悬停在顶层块或左侧空白边距（Gutter）时显示浮动手柄，提供快捷添加新行（`+`）、按住拖拽把手（`⠿`）在文档内任意上下重排块级节点，以及点击 6-dot 手柄呼出块级快捷菜单（`DocumentBlockMenu`，支持删除块、创建副本、转换为其他块类型、上移/下移等）。拖拽过程中通过 `BlockDragDropExtension` 计算块级包围盒中线实现精确的块边界吸附（Block Boundary Snapping），呈现全宽蓝色落点指示线（Drop Indicator），并在单次原子事务（Atomic Transaction）内执行位置重排，确保与 Yjs 实时协同及单人 Undo/Redo 历史无缝兼容。
 
 编辑模式由 `getProjectDocuments` 根据服务端已验证的 Workspace 类型和协作功能开关推导，客户端不能自行选择存储链路。Personal 文档继续以 ProseMirror JSON 初始化 Tiptap；标题失焦时保存，正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，避免较早的请求覆盖较新的本地内容。Personal 文档不创建 Provider 或 Y.Doc。
 
@@ -62,7 +62,7 @@ Team 文档不会进入 JSON 正文写入。功能开关关闭时，服务端对
 
 Provider 报告本地未同步正文更新后，界面保持“保存中”直到协作服务完成 Yjs 状态与 JSON 投影的事务写入；服务通过房间内无状态消息反馈成功或失败。持久化失败会显示保存失败但不会启用 JSON 正文写入。首次同步前若服务不可用或认证失败，页面显示服务端读取的只读 JSON 快照；连接恢复并完成首次 Yjs 同步后才重新创建可编辑协作编辑器。Markdown 导出与打印使用当前编辑器内容，搜索继续读取最近一次成功持久化的 `documents.content` 投影，最近文档和收藏只消费文档元数据。
 
-独立 Hocuspocus 服务使用 Better Auth Cookie 验证身份，重新计算 Project 文档权限，将 viewer 设为只读，并通过数据库通知和最长 15 秒周期复查使权限与 Session 变化失效；每条连接独立执行复查，一个数据库查询失败只记录脱敏错误，不跳过其余连接。Origin、连接数、消息大小和 Presence 身份也由服务端限制。存储在同一事务中更新 Yjs 二进制权威状态与 `documents.content` JSON 派生投影。store 失败后服务按文档保留内存状态并周期重试；任一失败文档未恢复时 `/ready` 保持失败，最后一个客户端离开也不会卸载它。关闭时逐篇执行最终持久化，一个文档失败不会跳过后续文档；资源清理完成后仍以失败状态退出。Windows 长生命周期子进程使用独立进程组，避免控制台中断先关闭数据库。开关关闭时不会启动它。CI E2E 使用 PostgreSQL service 并显式启用协作服务；`E2E_REAL_POSTGRES=true` 时本地运行器不会创建 PGlite，而是迁移并使用外部数据库。每个测试使用独立资源 ID，避免并行执行互相删除数据库状态；Chromium 覆盖 viewer 只读、Project 角色降级、Workspace 成员移除和 Session 撤销，Firefox 继续运行通用 E2E。Project 成员删除与角色降级共用 `project_members` 通知和复查路径，不重复保留浏览器场景。生产 release 包含同 SHA 的协作可执行文件和 systemd/Nginx 模板；部署在显式开关开启时先验证协作 readiness，再启动应用并执行公网 WSS Upgrade 冒烟，失败时回滚两个服务。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用，真实登录双会话业务验收仍需单独确认。版本历史和长期 IndexedDB 离线队列仍未实现。
+独立 Hocuspocus 服务使用 Better Auth Cookie 验证身份，重新计算 Project 文档权限，将 viewer 设为只读，并通过数据库通知和最长 15 秒周期复查使权限与 Session 变化失效；每条连接独立执行复查，一个数据库查询失败只记录脱敏错误，不跳过其余连接。Origin、连接数、消息大小和 Presence 身份也由服务端限制。存储在同一事务中更新 Yjs 二进制权威状态与 `documents.content` JSON 派生投影。协作服务以显式 `yDocOptions: { gc: true }` 创建文档：Yjs GC 在事务清理时剥离已删除内容的载荷，持久化快照因此不保留墓碑文本；该隐私不变量是对库默认值的显式声明，改动此配置前必须重新评估。store 失败后服务按文档保留内存状态并周期重试；任一失败文档未恢复时 `/ready` 保持失败，最后一个客户端离开也不会卸载它。关闭时逐篇执行最终持久化，一个文档失败不会跳过后续文档；资源清理完成后仍以失败状态退出。Windows 长生命周期子进程使用独立进程组，避免控制台中断先关闭数据库。开关关闭时不会启动它。CI E2E 使用 PostgreSQL service 并显式启用协作服务；`E2E_REAL_POSTGRES=true` 时本地运行器不会创建 PGlite，而是迁移并使用外部数据库。每个测试使用独立资源 ID，避免并行执行互相删除数据库状态；Chromium 覆盖 viewer 只读、Project 角色降级、Workspace 成员移除和 Session 撤销，Firefox 继续运行通用 E2E。Project 成员删除与角色降级共用 `project_members` 通知和复查路径，不重复保留浏览器场景。生产 release 包含同 SHA 的协作可执行文件和 systemd/Nginx 模板；部署在显式开关开启时先验证协作 readiness，再启动应用并执行公网 WSS Upgrade 冒烟，失败时回滚两个服务。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用，真实登录双会话业务验收仍需单独确认。版本历史和长期 IndexedDB 离线队列仍未实现。
 
 ## 导出
 
@@ -90,11 +90,16 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - `src/features/documents/Document.ts`
 - `src/features/documents/DocumentSchema.ts`
 - `src/features/documents/DocumentExtensions.ts`
+- `src/features/documents/extensions/BlockDragDropExtension.ts`
 - `src/features/documents/extensions/CalloutExtension.ts`
 - `src/features/documents/extensions/DetailsExtension.ts`
 - `src/features/documents/extensions/TaskListExtension.ts`
 - `src/features/documents/components/ProjectDocumentsPage.tsx`
 - `src/features/documents/components/CreateDocumentDialog.tsx`
+- `src/features/documents/components/MoveDocumentDialog.tsx`
+- `src/features/documents/components/DocumentBreadcrumbs.tsx`
+- `src/features/documents/components/DocumentBlockHandle.tsx`
+- `src/features/documents/components/DocumentBlockMenu.tsx`
 - `src/features/documents/components/DocumentWorkspace.tsx`
 - `src/features/documents/components/DocumentEditor.tsx`
 - `src/features/documents/components/DocumentEditorDispatcher.tsx`
@@ -114,6 +119,7 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - `src/features/documents/server/GetProjectDocuments.ts`
 - `src/features/workspaces/server/GetWorkspaceNavigation.ts`
 - `src/features/documents/server/CreateDocument.ts`
+- `src/features/documents/server/MoveDocument.ts`
 - `src/features/documents/server/UpdateDocument.ts`
 - `src/features/documents/server/DeleteDocument.ts`
 - `src/features/permissions/`
