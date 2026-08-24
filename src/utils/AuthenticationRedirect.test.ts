@@ -6,8 +6,8 @@ import {
   getSafeAuthenticationRedirect,
 } from './AuthenticationRedirect';
 
-describe(createSignInUrl, () => {
-  it('preserves protected destination and invitation token', () => {
+describe('authentication redirects', () => {
+  it('preserves local invitation destination across authentication flow', () => {
     const returnBackUrl = new URL(
       'https://knowmesh.example/invitations/accept?token=invitation_token',
     );
@@ -17,30 +17,19 @@ describe(createSignInUrl, () => {
     expect(signInUrl.searchParams.get('redirect_url')).toBe(
       '/invitations/accept?token=invitation_token',
     );
+    expect(
+      createAuthenticationPageUrl('/sign-up', '/invitations/accept?token=invitation_token'),
+    ).toBe('/sign-up?redirect_url=%2Finvitations%2Faccept%3Ftoken%3Dinvitation_token');
+    expect(createRegistrationSuccessRedirect('/invitations/accept?token=invitation_token')).toBe(
+      '/invitations/accept?token=invitation_token&registration=success',
+    );
   });
-});
 
-describe(getSafeAuthenticationRedirect, () => {
-  it('rejects external redirect target', () => {
+  it('rejects external redirect targets', () => {
     expect(
       getSafeAuthenticationRedirect('https://malicious.example/invitations/accept'),
     ).toBeNull();
     expect(getSafeAuthenticationRedirect('//malicious.example/invitations/accept')).toBeNull();
-  });
-});
-
-describe(createAuthenticationPageUrl, () => {
-  it('preserves destination when switching authentication page', () => {
-    expect(
-      createAuthenticationPageUrl('/sign-up', '/invitations/accept?token=invitation-token'),
-    ).toBe('/sign-up?redirect_url=%2Finvitations%2Faccept%3Ftoken%3Dinvitation-token');
-  });
-});
-
-describe(createRegistrationSuccessRedirect, () => {
-  it('marks registration without dropping invitation token', () => {
-    expect(createRegistrationSuccessRedirect('/invitations/accept?token=invitation-token')).toBe(
-      '/invitations/accept?token=invitation-token&registration=success',
-    );
+    expect(getSafeAuthenticationRedirect('/\\malicious.example/invitations/accept')).toBeNull();
   });
 });

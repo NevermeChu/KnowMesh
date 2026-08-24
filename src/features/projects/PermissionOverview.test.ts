@@ -4,8 +4,8 @@ import {
   getPermissionOverviewRemovalMode,
 } from './PermissionOverview';
 
-describe(canMutatePermissionGroupMembers, () => {
-  it('allows actions only on the direct member group', () => {
+describe('permission overview actions', () => {
+  it('allows mutations only on the direct member group', () => {
     const cases = [
       { expected: true, scope: 'project', source: 'project' },
       { expected: false, scope: 'project', source: 'workspace' },
@@ -22,12 +22,9 @@ describe(canMutatePermissionGroupMembers, () => {
       ).toBe(testCase.expected);
     }
   });
-});
-
-describe(getPermissionOverviewRemovalMode, () => {
   const baseGroup = { id: 'resource_1', members: [], name: '资源', source: 'project' as const };
 
-  it('maps owners to deletion and members to exit', () => {
+  it('maps owners, direct members, and inherited viewers to removal modes', () => {
     expect(
       getPermissionOverviewRemovalMode({
         currentUserRole: 'owner',
@@ -52,9 +49,6 @@ describe(getPermissionOverviewRemovalMode, () => {
         workspaceId: 'workspace_1',
       }),
     ).toBe('leave');
-  });
-
-  it('hides exit for workspace-only project viewers', () => {
     expect(
       getPermissionOverviewRemovalMode({
         currentUserRole: null,
@@ -66,9 +60,6 @@ describe(getPermissionOverviewRemovalMode, () => {
         workspaceMembers: [],
       }),
     ).toBeNull();
-  });
-
-  it('allows direct project viewers to leave from member groups', () => {
     expect(
       getPermissionOverviewRemovalMode({
         currentUserRole: null,
