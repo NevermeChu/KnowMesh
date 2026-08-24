@@ -110,7 +110,7 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - `src/features/documents/DocumentMarkdown.ts`
 - `src/features/documents/collaboration/DocumentCollaborationTransform.ts`
 - `src/features/documents/collaboration/DocumentCollaborationState.ts`
-- `src/components/layout/GlobalContextMenuBoundary.tsx`
+- `src/components/layout/AppShell.tsx`
 - `src/components/ui/ContextMenu.tsx`
 - `src/components/ui/ModalDialog.tsx`
 - `src/components/ui/PopupMenu.tsx`

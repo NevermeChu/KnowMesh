@@ -1,5 +1,8 @@
 # KnowMesh：Better Auth 替换 Clerk 实施计划
 
+> [!NOTE]
+> 这是已经完成的 Better Auth 替换实施计划。当前认证架构、生命周期与数据流请参阅 [`architecture/overview.md`](architecture/overview.md)、[`architecture/rendering-and-data-flow.md`](architecture/rendering-and-data-flow.md) 与 [`adr/0009-use-better-auth-for-local-identity.md`](adr/0009-use-better-auth-for-local-identity.md)。
+
 ## 1. 目标
 
 使用 Better Auth 完整接管 Clerk 当前承担的身份认证职责，同时保持 KnowMesh 现有 Workspace、Project、成员、邀请和权限模型不变。

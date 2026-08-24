@@ -64,7 +64,7 @@ PostgreSQL / 本地 PGlite
 
 左上角切换器选择真实 Workspace。个人区域始终读取当前有效用户的 Personal Workspace；协作区域只在活动 Workspace 为 Team 时显示。两个区域复用同一项目与文档实现，但不是 Project 数据字段。
 
-个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。正文以 ProseMirror JSON 通过 Server Action 保存到 PostgreSQL `JSONB`。
+个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。Personal 文档正文以 ProseMirror JSON 通过 Server Action 自动保存，Team 文档在启用协作时通过 Hocuspocus/Yjs 实时协同并持久化二进制状态与 JSONB 派生快照。
 
 ## 当前页面状态
 
@@ -88,13 +88,13 @@ PostgreSQL / 本地 PGlite
 - 登录后共享应用外壳。
 - 个人与协作项目创建。
 - Workspace 创建、切换和项目归属。
-- Better Auth 用户创建和 Session 创建 hook 幂等创建或补偿 Personal Workspace；owner 也可以从工作区管理删除该空间。
+- Better Auth 用户创建和 Session 创建 hook 幂等创建或补偿 Personal Workspace；Personal Workspace 永久保留且不可删除或退出，仅在用户注销账号时随业务数据一同清理。
 - 账户删除前同步删除用户拥有的 Workspace 和 Project，并退出其他共享资源；业务清理失败会阻止身份删除。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
 - 项目内文档创建、列表和读取。
-- 基于 Tiptap 的单人富文本编辑与 JSONB 自动保存。
+- 基于 Tiptap 的富文本编辑：Personal 文档单人编辑与 JSONB 自动保存；Team 文档基于 Hocuspocus/Yjs 实时协同编辑与派生快照持久化。
 - 文档 Markdown 下载、复制以及浏览器打印。
 - 受项目正文权限约束的全站搜索与用户级文档收藏。
 - 站内通知列表、未读统计和已读操作。
@@ -106,8 +106,8 @@ PostgreSQL / 本地 PGlite
 
 尚未实现：
 
-- 文档层级树、移动、版本历史和 Markdown 导入。
-- 评论和实时协作。
+- 文档版本历史和 Markdown 导入。
+- 评论与讨论。
 - 面向外部客户端的稳定 API。
 
 未实现内容只表示当前边界，不构成已经批准的实现方案。

@@ -34,15 +34,16 @@
 
 ## 命令面板与最近访问
 
-没有查询词时，命令面板显示快捷导航、主题与专注模式等操作，以及最近从命令面板打开的最多四篇文档。当前实现把完整 `SearchResultItem` 写入固定的浏览器 `localStorage` 键 `knowmesh:recent-documents`，其中包含标题、Workspace、Project 和正文片段。
+没有查询词时，命令面板显示快捷导航、主题与专注模式等操作，以及最近从命令面板打开的最多 6 篇文档。客户端仅在浏览器 `localStorage` 中按当前 Better Auth 用户隔离保存最近访问的文档 UUID 列表（键名 `knowmesh:recent-document-ids:${userId}`），不持久化正文片段或完整搜索结果。
 
-这份客户端缓存当前没有按 Better Auth 用户隔离，打开命令面板时也不会重新向服务端验证缓存项的读取权限。同一浏览器切换账户或用户失去 Project 权限后，旧结果可能继续显示，直到缓存被后续访问覆盖或由用户清理。该问题已记录在 `docs/PROBLEMS.md`，在修复前不得把最近访问缓存视为授权来源；真正打开文档时仍由文档页面重新鉴权。
+打开命令面板时，客户端调用 `getRecentPaletteDocuments` Server Action，由服务端通过 `requireUser()` 重新验证当前用户对候选文档的 Project 直接读取权限并查询最新元数据；已删除或已失去访问权限的文档会被自动过滤。客户端缓存仅用于快速提供候选文档 ID，不作为授权来源。
 
 ## 相关代码
 
 - `src/app/(workspace)/search/page.tsx`
 - `src/features/search/Search.ts`
 - `src/features/search/server/SearchWorkspaceContent.ts`
+- `src/features/search/server/GetRecentPaletteDocuments.ts`
 - `src/features/search/components/SearchInterface.tsx`
 - `src/features/search/components/CommandPalette.tsx`
 - `src/components/layout/AppShell.tsx`

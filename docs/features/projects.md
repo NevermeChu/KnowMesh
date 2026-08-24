@@ -24,7 +24,7 @@ User
 ## 个人空间
 
 - Better Auth 用户创建 hook 调用 `ensureUserWorkspace` 创建 Personal Workspace，Session 创建 hook 在缺失时补偿；数据库部分唯一索引和事务使重复执行保持幂等，并保证同一 owner 最多一个。
-- Personal Workspace 不支持邀请成员或管理项目成员，但 owner 可以修改名称、创建项目，并从“设置 → 工作区管理”删除整个空间。
+- Personal Workspace 不支持邀请成员或管理项目成员，owner 可以修改名称、创建项目；Personal Workspace 是永久个人空间，不可主动删除或退出，仅在用户注销账号时随业务数据一同清理。
 - Personal 项目只允许项目 owner 访问，不继承 Workspace 成员能力，也不授予 `project.members.manage`。
 - Personal 区域始终读取当前用户的 Personal Workspace，与活动 Team Workspace 无关。
 - 选择 Personal Workspace 时不显示协作区域；选择 Team Workspace 时同时显示个人项目和当前团队项目。
@@ -82,6 +82,7 @@ KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，�
 - `getWorkspaceNavigation` 向 Workspace 成员返回目标 Workspace 的项目和文档导航元数据；导航元数据不包含正文、正文层级、摘要或预览。
 - Workspace Layout 合并 Personal Workspace 与可选活动 Team Workspace 的项目和文档导航。
 - `/personal` 只接受 Personal Workspace 中的项目；`/collaboration` 只接受当前活动 Team Workspace 中的项目。
+- 页面读取对当前身份不可见或不属于目标区域的项目时统一渲染不可索引的 Not Found 结果，不把资源授权异常暴露为应用错误；Next.js 流式响应可能保留 HTTP 200。
 
 客户端传入的 Workspace、Project、Document ID 和能力只用于定位候选资源；Server Action 必须通过 `requireUser()` 重新读取身份和资源关系执行授权。
 
