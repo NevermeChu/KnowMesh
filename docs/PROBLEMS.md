@@ -1222,3 +1222,38 @@ Tiptap CollaborationCaret 直接调用房间 Awareness 的 `setLocalStateField('
 ### 解决方法
 
 客户端为 `cursor` Awareness 字段增加 50ms 固定窗口，只提交窗口内最后一个位置；身份字段继续立即发送，`null` 移除立即清空待发送位置并广播，正文 Yjs update、服务端身份净化与授权路径保持不变。
+
+## 75. 个人空间可被直接删除破坏系统永久性不变量
+
+### 问题
+
+用户调用工作区删除接口时，Personal 个人空间能够被物理删除；删除后用户无法访问个人项目与文档，工作台个人区域出现断裂与空状态，破坏了每个用户有且仅有一个永久个人空间的设计不变量。同时，前端权限总览窗口也对个人空间显示了“删除个人空间”按钮。
+
+### 根因
+
+1. `deleteOrLeaveWorkspace` 服务端 Action 仅校验了工作区的只读权限（`workspace.read`），未对工作区类型 `kind === 'personal'` 进行拦截，且在执行 Owner 删除分支时未校验 `workspace.delete` 能力。
+2. 权限策略 `PermissionPolicy.ts` 中 Personal Owner 本未被授予 `workspace.delete`，但前端 `getPermissionOverviewRemovalMode` 在 `scope === 'workspace'` 时仅根据 `currentUserRole === 'owner'` 判断，误将个人空间识别为可删除资源。
+
+### 解决方法
+
+- 在 `deleteOrLeaveWorkspace` 中增加对 `authorization.workspace.kind === 'personal'` 的显式校验，直接拒绝删除或退出个人空间；并对 Team 工作区 Owner 校验 `workspace.delete` 能力。
+- 优化 `getPermissionOverviewRemovalMode`，对于 `scope === 'workspace'`，当且仅当拥有 `workspace.delete` 权限时才返回 `'delete'`，使个人空间 Owner 的移除模式为 `null` 并隐藏删除按钮。
+- 新增 `DeleteWorkspace.test.ts` 单元测试，并在 `PermissionOverview.test.ts` 中补充覆盖个人空间不可删除与不可退出行为。
+
+## 76. 全局检索硬编码限制且无分页导致深层文档不可触达
+
+### 问题
+
+全局搜索接口过去硬编码了 `.limit(30)`，且不支持分页参数（`page`, `pageSize`, `offset`）与命中总数返回（`totalCount`）。当工作区内匹配关键字的文档超过 30 篇时，第 30 篇之后的所有深层文档在搜索页与快捷指令面板中完全不可触达。
+
+### 根因
+
+1. `SearchWorkspaceContent` 仅执行单次限制 30 行的 SQL 查询，未返回分页元数据和命中统计。
+2. 搜索页面（`/search`）与交互组件（`SearchInterface`）缺少页码参数解析与翻页控制部件。
+
+### 解决方法
+
+- 扩展 `Search.ts` 引入 `SearchResults` 统一分页数据契约（包含 `items`, `page`, `pageSize`, `totalCount`, `totalPages`, `hasMore`）。
+- 服务端 `searchWorkspaceContent` 支持 `page` 和 `pageSize` 参数，并行执行精确命中计数 `count(*)` 与带 `limit/offset` 的检索查询。
+- 在 `/search` 页面支持 URL `?page=X` 参数流转，并在 `SearchInterface` 中提供清晰的页码指示与上一页/下一页翻页组件；在 `CommandPalette` 中适配新数据结构。
+- 补充 `SearchWorkspaceContent.test.ts` 分页单元测试。
