@@ -10,6 +10,7 @@ import type { Document, DocumentContent } from '../Document';
 import { documentExtensions } from '../DocumentExtensions';
 import { isDocumentContent } from '../DocumentSchema';
 import { updateDocument } from '../server/UpdateDocument';
+import { DocumentBlockHandle } from './DocumentBlockHandle';
 import { DocumentBubbleMenu } from './DocumentBubbleMenu';
 import {
   useDocumentEditorCommands,
@@ -266,6 +267,7 @@ export function DocumentEditor(props: {
 
         {props.canEditContent && (
           <>
+            <DocumentBlockHandle editor={editor} />
             <DocumentBubbleMenu
               editor={editor}
               onOpenLinkEditor={toolbarRegistration.openLinkEditor}

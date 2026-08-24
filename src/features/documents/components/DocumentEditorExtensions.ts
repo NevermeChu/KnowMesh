@@ -8,13 +8,18 @@ import type * as Y from 'yjs';
 import { getDocumentCollaborationColor } from '../collaboration/DocumentCollaborationPresence';
 import { DOCUMENT_COLLABORATION_FIELD } from '../collaboration/DocumentCollaborationTransform';
 import { documentNodeExtensions } from '../DocumentExtensions';
+import { BlockDragDropExtension } from '../extensions/BlockDragDropExtension';
 
 export function getCollaborativeDocumentExtensions(options: {
   document: Y.Doc;
   provider: HocuspocusProvider;
 }) {
   return [
-    StarterKit.configure({ undoRedo: false }),
+    StarterKit.configure({
+      dropcursor: false,
+      undoRedo: false,
+    }),
+    BlockDragDropExtension,
     ...documentNodeExtensions,
     Collaboration.configure({
       document: options.document,
