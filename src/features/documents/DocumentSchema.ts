@@ -12,51 +12,70 @@ import { documentExtensions } from './DocumentExtensions';
 
 const prosemirrorSchema = getSchema(documentExtensions);
 
+const MAX_DOCUMENT_JSON_CHARS = 512 * 1024;
+const MAX_DOCUMENT_NODE_DEPTH = 100;
+
 const isJsonObject = (value: JsonValue): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const isJsonValue = (value: unknown): value is JsonValue => {
+const isJsonValue = (value: unknown, depth: number): value is JsonValue => {
+  if (depth > MAX_DOCUMENT_NODE_DEPTH) {
+    return false;
+  }
+
   if (value === null || ['boolean', 'number', 'string'].includes(typeof value)) {
     return typeof value !== 'number' || Number.isFinite(value);
   }
 
   if (Array.isArray(value)) {
-    return value.every(isJsonValue);
+    return value.every((item) => isJsonValue(item, depth + 1));
   }
 
   if (typeof value === 'object') {
-    return Object.values(value).every(isJsonValue);
+    return Object.values(value).every((item) => isJsonValue(item, depth + 1));
   }
 
   return false;
 };
 
-const isDocumentMark = (value: unknown): value is DocumentMark => {
-  if (!isJsonValue(value) || !isJsonObject(value) || typeof value.type !== 'string') {
+const isDocumentMark = (value: unknown, depth: number): value is DocumentMark => {
+  if (!isJsonValue(value, depth) || !isJsonObject(value) || typeof value.type !== 'string') {
     return false;
   }
 
   return value.attrs === undefined || isJsonObject(value.attrs);
 };
 
-const isDocumentNode = (value: unknown): value is DocumentNode => {
-  if (!isJsonValue(value) || !isJsonObject(value) || typeof value.type !== 'string') {
+const isDocumentNode = (value: unknown, depth: number): value is DocumentNode => {
+  if (depth > MAX_DOCUMENT_NODE_DEPTH) {
+    return false;
+  }
+
+  if (!isJsonValue(value, depth) || !isJsonObject(value) || typeof value.type !== 'string') {
     return false;
   }
 
   const hasValidAttrs = value.attrs === undefined || isJsonObject(value.attrs);
   const hasValidContent =
     value.content === undefined ||
-    (Array.isArray(value.content) && value.content.every(isDocumentNode));
+    (Array.isArray(value.content) &&
+      value.content.every((item) => isDocumentNode(item, depth + 1)));
   const hasValidMarks =
-    value.marks === undefined || (Array.isArray(value.marks) && value.marks.every(isDocumentMark));
+    value.marks === undefined ||
+    (Array.isArray(value.marks) && value.marks.every((item) => isDocumentMark(item, depth)));
   const hasValidText = value.text === undefined || typeof value.text === 'string';
 
   return hasValidAttrs && hasValidContent && hasValidMarks && hasValidText;
 };
 
 export const isDocumentContent = (value: unknown): value is DocumentContent => {
-  if (!isDocumentNode(value) || value.type !== 'doc') {
+  const serialized = JSON.stringify(value);
+
+  if (serialized === undefined || serialized.length > MAX_DOCUMENT_JSON_CHARS) {
+    return false;
+  }
+
+  if (!isDocumentNode(value, 0) || value.type !== 'doc') {
     return false;
   }
 
@@ -70,11 +89,19 @@ export const isDocumentContent = (value: unknown): value is DocumentContent => {
 };
 
 export const createDocumentSchema = z.object({
+  parentId: z.uuid().optional(),
   projectId: z.uuid(),
   title: z.string().trim().min(1, '文件名不能为空').max(200, '文件名不能超过 200 个字符'),
 });
 
 export const deleteDocumentSchema = z.object({ documentId: z.uuid() });
+
+export const moveDocumentSchema = z.object({
+  documentId: z.uuid(),
+  sortOrder: z.number().optional(),
+  targetParentId: z.uuid().nullable(),
+  targetProjectId: z.uuid(),
+});
 
 export const updateDocumentSchema = z
   .object({
@@ -93,4 +120,5 @@ export const updateDocumentSchema = z
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type DeleteDocumentInput = z.infer<typeof deleteDocumentSchema>;
+export type MoveDocumentInput = z.infer<typeof moveDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;

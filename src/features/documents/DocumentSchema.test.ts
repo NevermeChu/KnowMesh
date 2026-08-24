@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { updateDocumentSchema } from './DocumentSchema';
+import { createDocumentSchema, moveDocumentSchema, updateDocumentSchema } from './DocumentSchema';
 
 const documentId = '01987654-3210-7000-8000-000000000001';
 
@@ -49,6 +49,71 @@ describe('document schemas', () => {
     ).toStrictEqual({
       content: validContent,
       documentId,
+    });
+  });
+
+  it('validates createDocumentSchema with and without parentId', () => {
+    const projectId = '01987654-3210-7000-8000-000000000002';
+    const parentId = '01987654-3210-7000-8000-000000000003';
+
+    expect(
+      createDocumentSchema.parse({
+        projectId,
+        title: '根文档',
+      }),
+    ).toStrictEqual({
+      projectId,
+      title: '根文档',
+    });
+
+    expect(
+      createDocumentSchema.parse({
+        parentId,
+        projectId,
+        title: '子文档',
+      }),
+    ).toStrictEqual({
+      parentId,
+      projectId,
+      title: '子文档',
+    });
+
+    expect(() =>
+      createDocumentSchema.parse({
+        projectId: 'invalid-uuid',
+        title: '文档',
+      }),
+    ).toThrow(/invalid/iu);
+  });
+
+  it('validates moveDocumentSchema inputs', () => {
+    const projectId = '01987654-3210-7000-8000-000000000002';
+    const parentId = '01987654-3210-7000-8000-000000000003';
+
+    expect(
+      moveDocumentSchema.parse({
+        documentId,
+        sortOrder: 500,
+        targetParentId: parentId,
+        targetProjectId: projectId,
+      }),
+    ).toStrictEqual({
+      documentId,
+      sortOrder: 500,
+      targetParentId: parentId,
+      targetProjectId: projectId,
+    });
+
+    expect(
+      moveDocumentSchema.parse({
+        documentId,
+        targetParentId: null,
+        targetProjectId: projectId,
+      }),
+    ).toStrictEqual({
+      documentId,
+      targetParentId: null,
+      targetProjectId: projectId,
     });
   });
 });
