@@ -100,7 +100,15 @@ export function getPermissionOverviewRemovalMode(overview: PermissionOverview) {
     return overview.permissions.includes('document.delete') ? ('delete' as const) : null;
   }
 
-  const directGroupSource = overview.scope === 'workspace' ? 'workspace' : 'project';
+  if (overview.scope === 'workspace') {
+    if (overview.permissions.includes('workspace.delete')) {
+      return 'delete' as const;
+    }
+
+    return overview.currentUserRole === 'owner' ? null : ('leave' as const);
+  }
+
+  const directGroupSource = 'project';
   const directMemberRole = overview.groups
     .find((group) => group.source === directGroupSource)
     ?.members.find((member) => member.isCurrentUser)?.role;

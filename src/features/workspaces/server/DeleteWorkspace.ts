@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { requireUser } from '@/features/auth/server/CurrentUser';
+import { AuthorizationError } from '@/features/permissions/AuthorizationError';
 import { removeWorkspaceForUser } from '@/features/permissions/server/ResourceRemoval';
 import { authorizeWorkspace } from '@/features/permissions/server/WorkspaceAuthorization';
 import { db } from '@/libs/DB';
@@ -18,10 +19,20 @@ export async function deleteOrLeaveWorkspace(input: DeleteWorkspaceInput) {
     userId,
     workspaceId: workspaceInput.workspaceId,
   });
+
+  if (authorization.workspace.kind === 'personal') {
+    throw new Error('个人空间不可删除或退出');
+  }
+
+  const isOwner = authorization.workspace.ownerId === userId;
+  if (isOwner && !authorization.decision.permissions.includes('workspace.delete')) {
+    throw new AuthorizationError();
+  }
+
   const operation = await db.transaction(
     async (transaction) =>
       await removeWorkspaceForUser(transaction, {
-        isOwner: authorization.workspace.ownerId === userId,
+        isOwner,
         userId,
         workspaceId: authorization.workspace.id,
       }),
