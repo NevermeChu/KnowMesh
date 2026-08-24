@@ -40,10 +40,17 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    minPasswordLength: 12,
     sendResetPassword: async ({ user, url }) => {
       await sendAuthenticationEmail({ kind: 'password-reset', to: user.email, url });
     },
   },
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 20,
+  },
+  trustedOrigins: [new URL(getBaseUrl()).origin],
   emailVerification: {
     autoSignInAfterVerification: true,
     afterEmailVerification: async (user) => {
