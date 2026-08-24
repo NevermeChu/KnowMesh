@@ -47,19 +47,18 @@ export async function ProjectDocumentsPage(props: {
     notFound();
   }
 
-  const [result, accessState] = await Promise.all([
-    getProjectDocuments({
-      documentId,
-      projectId,
-      workspaceId: targetWorkspace.id,
-      workspaceKind: targetWorkspace.kind,
-    }),
-    getProjectAccessState(projectId),
-  ]);
+  const result = await getProjectDocuments({
+    documentId,
+    projectId,
+    workspaceId: targetWorkspace.id,
+    workspaceKind: targetWorkspace.kind,
+  });
 
   if (!result) {
     notFound();
   }
+
+  const accessState = await getProjectAccessState(projectId);
 
   return (
     <DocumentWorkspace

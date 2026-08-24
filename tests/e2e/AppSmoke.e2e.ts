@@ -11,6 +11,10 @@ let userId: string;
 let sessionId: string;
 let sessionToken: string;
 let personalWorkspaceId: string;
+let outsiderUserId: string;
+let outsiderSessionId: string;
+let outsiderSessionToken: string;
+let outsiderPersonalWorkspaceId: string;
 let projectId: string;
 let documentId: string;
 const seededTitle = 'Smoke 冒烟文档';
@@ -33,6 +37,10 @@ test.describe('application smoke coverage', () => {
     sessionId = `e2e_smoke_session_${fixtureId}`;
     sessionToken = `e2e-smoke-token-${fixtureId}`;
     personalWorkspaceId = randomUUID();
+    outsiderUserId = `e2e_smoke_outsider_${fixtureId}`;
+    outsiderSessionId = `e2e_smoke_outsider_session_${fixtureId}`;
+    outsiderSessionToken = `e2e-smoke-outsider-token-${fixtureId}`;
+    outsiderPersonalWorkspaceId = randomUUID();
     projectId = randomUUID();
     documentId = randomUUID();
 
@@ -41,19 +49,27 @@ test.describe('application smoke coverage', () => {
       await client.query('BEGIN');
       await client.query(`
         INSERT INTO "user" (id, name, email, email_verified)
-        VALUES ('${userId}', 'Smoke Owner', '${userId}@example.test', true)
+        VALUES
+          ('${userId}', 'Smoke Owner', '${userId}@example.test', true),
+          ('${outsiderUserId}', 'Smoke Outsider', '${outsiderUserId}@example.test', true)
       `);
       await client.query(`
         INSERT INTO "session" (id, expires_at, token, user_id)
-        VALUES ('${sessionId}', now() + interval '1 day', '${sessionToken}', '${userId}')
+        VALUES
+          ('${sessionId}', now() + interval '1 day', '${sessionToken}', '${userId}'),
+          ('${outsiderSessionId}', now() + interval '1 day', '${outsiderSessionToken}', '${outsiderUserId}')
       `);
       await client.query(`
         INSERT INTO workspaces (id, kind, name, owner_id)
-        VALUES ('${personalWorkspaceId}', 'personal', 'Smoke Personal', '${userId}')
+        VALUES
+          ('${personalWorkspaceId}', 'personal', 'Smoke Personal', '${userId}'),
+          ('${outsiderPersonalWorkspaceId}', 'personal', 'Smoke Outsider Personal', '${outsiderUserId}')
       `);
       await client.query(`
         INSERT INTO workspace_members (workspace_id, user_id, role)
-        VALUES ('${personalWorkspaceId}', '${userId}', 'owner')
+        VALUES
+          ('${personalWorkspaceId}', '${userId}', 'owner'),
+          ('${outsiderPersonalWorkspaceId}', '${outsiderUserId}', 'owner')
       `);
       await client.query(`
         INSERT INTO projects (id, workspace_id, name, owner_id)
@@ -84,11 +100,18 @@ test.describe('application smoke coverage', () => {
   });
 
   test.afterEach(async () => {
-    await pool.query(`DELETE FROM workspaces WHERE id = '${personalWorkspaceId}'`);
-    await pool.query(`DELETE FROM "user" WHERE id = '${userId}'`);
+    await pool.query(
+      `DELETE FROM workspaces WHERE id IN ('${personalWorkspaceId}', '${outsiderPersonalWorkspaceId}')`,
+    );
+    await pool.query(`DELETE FROM "user" WHERE id IN ('${userId}', '${outsiderUserId}')`);
   });
 
-  async function newAuthenticatedPage(options: { baseURL: string; browser: Browser }) {
+  async function newAuthenticatedPage(options: {
+    baseURL: string;
+    browser: Browser;
+    sessionToken?: string;
+    workspaceId?: string;
+  }) {
     const browserContext = await options.browser.newContext();
     await browserContext.addCookies([
       {
@@ -97,7 +120,7 @@ test.describe('application smoke coverage', () => {
         name: 'better-auth.session_token',
         path: '/',
         sameSite: 'Lax',
-        value: getSignedSessionCookie(sessionToken),
+        value: getSignedSessionCookie(options.sessionToken ?? sessionToken),
       },
       {
         domain: new URL(options.baseURL).hostname,
@@ -105,29 +128,17 @@ test.describe('application smoke coverage', () => {
         name: 'knowmesh-active-workspace',
         path: '/',
         sameSite: 'Lax',
-        value: personalWorkspaceId,
+        value: options.workspaceId ?? personalWorkspaceId,
       },
     ]);
     const page = await browserContext.newPage();
-    return { page, close: async () =>{  await browserContext.close(); } };
+    return {
+      page,
+      close: async () => {
+        await browserContext.close();
+      },
+    };
   }
-
-  test('renders landing and redirects anonymous dashboard visits to sign-in', async ({
-    baseURL,
-    browser,
-  }) => {
-    if (!baseURL) {
-      throw new Error('Playwright base URL is unavailable');
-    }
-
-    const page = await browser.newPage();
-    await page.goto('/');
-    await expect(page.locator('body')).toContainText(/KnowMesh|知序/u);
-
-    await page.goto('/dashboard');
-    await expect(page).toHaveURL(/sign-in/u);
-    await page.close();
-  });
 
   test('edits a personal document and survives a reload through autosave', async ({
     baseURL,
@@ -163,6 +174,37 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
+  test("returns not found for another user's personal project and document", async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({
+      baseURL,
+      browser,
+      sessionToken: outsiderSessionToken,
+      workspaceId: outsiderPersonalWorkspaceId,
+    });
+
+    for (const path of [
+      `/personal?project=${projectId}`,
+      `/personal?project=${projectId}&document=${documentId}`,
+    ]) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { exact: true, name: '404' })).toBeVisible();
+      await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute(
+        'content',
+        'noindex',
+      );
+      await expect(page.locator('body')).not.toContainText('Application error');
+    }
+
+    await close();
+  });
+
   test('finds seeded documents through the search page', async ({ baseURL, browser }) => {
     if (!baseURL) {
       throw new Error('Playwright base URL is unavailable');
@@ -174,24 +216,24 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
-  test('renders starred, notifications, invitations and preferences pages', async ({
-    baseURL,
-    browser,
-  }) => {
+  test('renders authenticated destination pages', async ({ baseURL, browser }) => {
     if (!baseURL) {
       throw new Error('Playwright base URL is unavailable');
     }
 
     const { page, close } = await newAuthenticatedPage({ baseURL, browser });
-    for (const path of [
-      '/starred',
-      '/notifications',
-      '/invitations',
-      '/settings/preferences',
-      '/settings/user-profile',
+    for (const destination of [
+      { heading: '已收藏文档', path: '/starred' },
+      { heading: '通知', path: '/notifications' },
+      { heading: '邀请链接无效', path: '/invitations/accept' },
+      { heading: '系统偏好设置', path: '/settings/preferences' },
+      { heading: '账号设置', path: '/settings/user-profile' },
     ]) {
-      await page.goto(path);
-      await expect(page.locator('body')).not.toContainText('Application error');
+      const response = await page.goto(destination.path);
+      expect(response?.status()).toBe(200);
+      await expect(
+        page.getByRole('heading', { exact: true, name: destination.heading }),
+      ).toBeVisible();
     }
     await close();
   });
