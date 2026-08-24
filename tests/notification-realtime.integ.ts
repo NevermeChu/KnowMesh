@@ -1,12 +1,12 @@
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { executeMigrations } from './helpers/PGliteMigrations';
+import { createTestPGlite, executeMigrations } from './helpers/PGliteMigrations';
 
 let database: PGlite;
 
 describe('notification realtime database delivery', () => {
   beforeAll(async () => {
-    database = new PGlite();
+    database = createTestPGlite();
     await executeMigrations(database, [
       '0011_add-notifications.sql',
       '0021_notification_realtime_delivery.sql',

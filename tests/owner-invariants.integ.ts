@@ -1,12 +1,12 @@
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
+import { createTestPGlite, executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
 
 let database: PGlite;
 
 describe('database membership and owner invariants', () => {
   beforeAll(async () => {
-    database = new PGlite();
+    database = createTestPGlite();
 
     await executeMigrations(database, migrationFiles.slice(0, 10));
 

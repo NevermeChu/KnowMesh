@@ -15,14 +15,14 @@
 
 ## 查询与排序
 
-`searchWorkspaceContent` 先通过 `requireUser()` 取得当前 Better Auth 用户，再按标题或 `documents.content` 的 JSON 文本表示执行不区分大小写的包含匹配。空白查询不访问数据库。结果按以下顺序排序，最多返回 30 条：
+`searchWorkspaceContent` 先通过 `requireUser()` 取得当前 Better Auth 用户，再按标题 (`documents.title`) 或文档纯文本投影列 (`documents.search_text`) 执行不区分大小写的包含匹配。空白查询不访问数据库。结果按以下顺序排序，最多返回 30 条：
 
 1. 标题完全匹配，权重 100。
 2. 标题包含查询词，权重 50。
-3. 正文 JSON 包含查询词，权重 10。
+3. 正文纯文本包含查询词，权重 10。
 4. 相同权重按文档更新时间倒序。
 
-数据库查询返回内容后，服务端递归提取 ProseMirror 文本，并围绕首次匹配位置生成最长 140 个字符的上下文片段。当前查询直接匹配 JSONB 的文本表示，而不是预先构建的纯文本搜索索引，因此节点属性中的文本也可能命中；这属于当前搜索语义。
+数据库直接基于 `search_text` 与 `title` 列检索，并利用 PostgreSQL `pg_trgm` 扩展建立 GIN 三元组倒排索引（`documents_search_text_trgm_idx` 与 `documents_title_trgm_idx`）加速 `ILIKE` 模糊匹配，彻底避免全表扫描。系统在单人保存（`UpdateDocument`）与团队协同落库（`DocumentCollaborationPersistence`）时自动从 ProseMirror AST 提取并投影纯文本，彻底消除了检索时在数据库端全表序列化 JSON 以及在 Node.js 内存中反序列化 JSON 的开销，同时杜绝了匹配 JSON 结构标签词的假阳性干扰。数据库查询直接返回匹配的 `searchText`，服务端围绕首次匹配位置生成最长 140 个字符的上下文片段。
 
 `/search` 直接等待 Server Action 返回。`CommandPalette` 在输入停止 180ms 后调用同一 Action，并使用递增请求编号丢弃晚到的旧结果，避免较早查询覆盖较新的输入。
 

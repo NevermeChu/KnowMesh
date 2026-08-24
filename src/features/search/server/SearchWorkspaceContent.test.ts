@@ -50,37 +50,13 @@ describe(searchWorkspaceContent, () => {
     state.limit.mockResolvedValue([]);
   });
 
-  it('filters out false positives that only match JSON node structure names', async () => {
+  it('searches documents using indexed searchText and returns mapped results with snippets', async () => {
     state.limit.mockResolvedValueOnce([
       {
-        content: {
-          content: [{ content: [{ text: '这是一篇普通文档', type: 'text' }], type: 'paragraph' }],
-          type: 'doc',
-        },
-        documentId: 'doc_1',
-        projectId: 'project_1',
-        projectName: '项目一',
-        title: '文档一',
-        updatedAt: new Date('2026-08-01'),
-        workspaceId: 'workspace_1',
-        workspaceKind: 'team' as const,
-        workspaceName: '工作区一',
-      },
-      {
-        content: {
-          content: [
-            {
-              content: [
-                { text: '这里特别提到了关于 paragraph 的段落写作排版规范。', type: 'text' },
-              ],
-              type: 'paragraph',
-            },
-          ],
-          type: 'doc',
-        },
         documentId: 'doc_2',
         projectId: 'project_1',
         projectName: '项目一',
+        searchText: '这里特别提到了关于 paragraph 的段落写作排版规范。',
         title: '文档二',
         updatedAt: new Date('2026-08-02'),
         workspaceId: 'workspace_1',
@@ -94,5 +70,13 @@ describe(searchWorkspaceContent, () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.documentId).toBe('doc_2');
     expect(results[0]?.snippet).toContain('paragraph');
+    expect(results[0]?.title).toBe('文档二');
+    expect(state.select).toHaveBeenCalledOnce();
+  });
+
+  it('returns empty array when query is whitespace', async () => {
+    const results = await searchWorkspaceContent({ query: '   ' });
+    expect(results).toStrictEqual([]);
+    expect(state.select).not.toHaveBeenCalled();
   });
 });

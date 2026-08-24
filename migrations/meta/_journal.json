@@ -169,6 +169,20 @@
       "when": 1787285655873,
       "tag": "0023_document_collaboration_invalidation",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787300000000,
+      "tag": "0024_add-document-search-text",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787538482590,
+      "tag": "0025_add-trgm-search-indexes",
+      "breakpoints": true
     }
   ]
 }

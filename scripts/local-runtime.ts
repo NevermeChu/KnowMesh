@@ -59,7 +59,13 @@ export const createCommands = (options: {
   const databasePackage = fileURLToPath(import.meta.resolve('@electric-sql/pglite-socket'));
   const nextCliPath = fileURLToPath(import.meta.resolve('next/dist/bin/next'));
   const tsxCliPath = fileURLToPath(import.meta.resolve('tsx/cli'));
-  const databaseArgs = [resolve(dirname(databasePackage), 'scripts/server.js'), '-m', '100'];
+  const databaseArgs = [
+    resolve(dirname(databasePackage), 'scripts/server.js'),
+    '-m',
+    '100',
+    '-e',
+    'pg_trgm',
+  ];
 
   if (options.mode === 'dev') {
     databaseArgs.push('--db=local.db');

@@ -343,6 +343,7 @@ export const documentsSchema = pgTable(
     contentSchemaVersion: integer('content_schema_version')
       .default(DOCUMENT_CONTENT_SCHEMA_VERSION)
       .notNull(),
+    searchText: text('search_text').default('').notNull(),
     createdById: varchar('created_by_id', { length: 255 }).notNull(),
     updatedAt: timestamp('updated_at', { mode: 'date' })
       .defaultNow()
@@ -350,7 +351,11 @@ export const documentsSchema = pgTable(
       .notNull(),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
   },
-  (table) => [index('documents_project_updated_idx').on(table.projectId, table.updatedAt)],
+  (table) => [
+    index('documents_project_updated_idx').on(table.projectId, table.updatedAt),
+    index('documents_search_text_trgm_idx').using('gin', table.searchText.op('gin_trgm_ops')),
+    index('documents_title_trgm_idx').using('gin', table.title.op('gin_trgm_ops')),
+  ],
 );
 
 export const documentCollaborationStatesSchema = pgTable('document_collaboration_states', {

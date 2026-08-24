@@ -76,8 +76,10 @@
 - 标题最长 200 字符。
 - `content` 使用 `JSONB` 保存 ProseMirror JSON，默认内容是包含一个空段落的 `doc` 根节点。
 - `content_schema_version` 记录应用文档结构版本，当前为 `1`。
+- `search_text` 纯文本投影列，在单人保存或协作状态落库时同步由 ProseMirror 树提取并持久化，供全文检索直接匹配。
 - `created_by_id` 通常保存创建者的 Better Auth user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
+- `documents_search_text_trgm_idx` 与 `documents_title_trgm_idx` 分别为 `search_text` 和 `title` 建立基于 `pg_trgm` 扩展的 GIN 三元组倒排索引，支持全文模糊检索直接命中索引。
 
 ### `document_collaboration_states`
 

@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import type * as Y from 'yjs';
+import { extractPlainText } from '@/features/search/Search';
 import { db } from '@/libs/DB';
 import { documentCollaborationStatesSchema, documentsSchema } from '@/models/Schema';
 import { DOCUMENT_CONTENT_SCHEMA_VERSION } from '../Document';
@@ -54,6 +55,7 @@ export async function persistDocumentCollaborationState(options: {
       .set({
         content,
         contentSchemaVersion: DOCUMENT_CONTENT_SCHEMA_VERSION,
+        searchText: extractPlainText(content),
         updatedAt,
       })
       .where(

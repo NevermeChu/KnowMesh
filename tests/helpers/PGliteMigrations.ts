@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { PGlite } from '@electric-sql/pglite';
+import { PGlite } from '@electric-sql/pglite';
+import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 
 const statementBreakpoint = '--> statement-breakpoint';
 
@@ -29,7 +30,27 @@ export const migrationFiles = [
   '0021_notification_realtime_delivery.sql',
   '0022_giant_annihilus.sql',
   '0023_document_collaboration_invalidation.sql',
+  '0024_add-document-search-text.sql',
+  '0025_add-trgm-search-indexes.sql',
 ] as const;
+
+export function createTestPGlite(options?: ConstructorParameters<typeof PGlite>[0]) {
+  const extensions = {
+    pg_trgm,
+    ...(typeof options === 'object' && options !== null && 'extensions' in options
+      ? options.extensions
+      : {}),
+  };
+
+  if (typeof options === 'string') {
+    return new PGlite(options, { extensions });
+  }
+
+  return new PGlite({
+    ...options,
+    extensions,
+  });
+}
 
 export async function executeMigrations(database: PGlite, fileNames: readonly string[]) {
   for (const fileName of fileNames) {

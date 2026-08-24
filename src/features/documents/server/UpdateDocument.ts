@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
+import { extractPlainText } from '@/features/search/Search';
 import { db } from '@/libs/DB';
 import { documentsSchema, projectsSchema, workspacesSchema } from '@/models/Schema';
 import { updateDocumentSchema } from '../DocumentSchema';
@@ -46,7 +47,12 @@ export async function updateDocument(input: UpdateDocumentInput) {
     const [document] = await transaction
       .update(documentsSchema)
       .set({
-        ...(documentInput.content === undefined ? {} : { content: documentInput.content }),
+        ...(documentInput.content === undefined
+          ? {}
+          : {
+              content: documentInput.content,
+              searchText: extractPlainText(documentInput.content),
+            }),
         ...(documentInput.title === undefined ? {} : { title: documentInput.title }),
         updatedAt: new Date(),
       })

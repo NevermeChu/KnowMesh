@@ -10,7 +10,7 @@ import {
   workspacesSchema,
 } from '@/models/Schema';
 import { escapeSqlLikePattern } from '@/utils/SqlPattern';
-import { extractPlainText, extractSnippet } from '../Search';
+import { extractSnippet } from '../Search';
 import type { SearchFilter, SearchResultItem } from '../Search';
 
 export type SearchWorkspaceOptions = {
@@ -20,7 +20,7 @@ export type SearchWorkspaceOptions = {
 
 /**
  * Searches documents across user's accessible projects and workspaces by matching
- * title or document content, sorted with weighted relevance scoring.
+ * title or document plain text content, sorted with weighted relevance scoring.
  *
  * @param options - Search keyword and optional workspace filter.
  * @returns Filtered and sorted search results with contextual snippets.
@@ -42,7 +42,7 @@ export async function searchWorkspaceContent(
     eq(projectMembersSchema.userId, userId),
     or(
       ilike(documentsSchema.title, searchPattern),
-      sql`${documentsSchema.content}::text ilike ${searchPattern}`,
+      ilike(documentsSchema.searchText, searchPattern),
     ),
   ];
 
@@ -62,10 +62,10 @@ export async function searchWorkspaceContent(
 
   const rows = await db
     .select({
-      content: documentsSchema.content,
       documentId: documentsSchema.id,
       projectId: projectsSchema.id,
       projectName: projectsSchema.name,
+      searchText: documentsSchema.searchText,
       title: documentsSchema.title,
       updatedAt: documentsSchema.updatedAt,
       workspaceId: workspacesSchema.id,
@@ -86,32 +86,15 @@ export async function searchWorkspaceContent(
     .orderBy(desc(scoreSql), desc(documentsSchema.updatedAt))
     .limit(30);
 
-  const normalizedQuery = trimmedQuery.toLowerCase();
-  const results: SearchResultItem[] = [];
-
-  for (const row of rows) {
-    const plainText = extractPlainText(row.content);
-    const titleMatches = row.title.toLowerCase().includes(normalizedQuery);
-    const contentMatches = plainText.toLowerCase().includes(normalizedQuery);
-
-    if (!titleMatches && !contentMatches) {
-      continue;
-    }
-
-    const snippet = extractSnippet(plainText, trimmedQuery);
-
-    results.push({
-      documentId: row.documentId,
-      projectId: row.projectId,
-      projectName: row.projectName,
-      snippet,
-      title: row.title,
-      updatedAt: row.updatedAt,
-      workspaceId: row.workspaceId,
-      workspaceKind: row.workspaceKind,
-      workspaceName: row.workspaceName,
-    });
-  }
-
-  return results;
+  return rows.map((row) => ({
+    documentId: row.documentId,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    snippet: extractSnippet(row.searchText, trimmedQuery),
+    title: row.title,
+    updatedAt: row.updatedAt,
+    workspaceId: row.workspaceId,
+    workspaceKind: row.workspaceKind,
+    workspaceName: row.workspaceName,
+  }));
 }

@@ -1,6 +1,6 @@
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
+import { createTestPGlite, executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
 
 let database: PGlite;
 
@@ -18,7 +18,7 @@ function parseSignals(signals: string[]) {
 
 describe('document collaboration state persistence', () => {
   beforeAll(async () => {
-    database = new PGlite();
+    database = createTestPGlite();
     await executeMigrations(database, migrationFiles);
     await database.exec(`
       INSERT INTO workspaces (id, kind, name, owner_id)

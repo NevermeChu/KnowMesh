@@ -1,11 +1,11 @@
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { authorizeDocument as authorizeDocumentFunction } from '@/features/permissions/server/DocumentAuthorization';
 import type { authorizeProject as authorizeProjectFunction } from '@/features/permissions/server/ProjectAuthorization';
 import type { authorizeWorkspace as authorizeWorkspaceFunction } from '@/features/permissions/server/WorkspaceAuthorization';
 import * as schema from '@/models/Schema';
-import { executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
+import { createTestPGlite, executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
 
 let database: PGlite;
 let authorizeDocument: typeof authorizeDocumentFunction;
@@ -14,7 +14,7 @@ let authorizeWorkspace: typeof authorizeWorkspaceFunction;
 
 describe('authorization queries', () => {
   beforeAll(async () => {
-    database = new PGlite();
+    database = createTestPGlite();
     await executeMigrations(database, migrationFiles);
 
     await database.transaction(async (transaction) => {
