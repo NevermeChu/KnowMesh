@@ -30,6 +30,9 @@ const MAX_PAYLOAD_BYTES = 1024 * 1024;
 const READINESS_TIMEOUT_MS = 2000;
 const SHUTDOWN_TIMEOUT_MS = 15_000;
 const AUTHORIZATION_REVALIDATION_MS = 15_000;
+// Per-connection throttle for write-message revalidation; worst-case revocation
+// latency stays bounded by this interval plus the periodic sweep above.
+const WRITE_REVALIDATION_INTERVAL_MS = 3000;
 const MAX_CONNECTIONS = 1000;
 const MAX_CONNECTIONS_PER_DOCUMENT = 100;
 const MAX_CONNECTIONS_PER_USER = 10;
@@ -162,6 +165,10 @@ export function createDocumentCollaborationServer() {
 
   const server = new Server<DocumentCollaborationContext>({
     address: Env.COLLABORATION_ADDRESS,
+    // Deleted content must never survive into persisted snapshots; Yjs GC
+    // strips tombstone payloads at transaction cleanup. Pinning the option
+    // keeps that privacy invariant independent of library defaults.
+    yDocOptions: { gc: true, gcFilter: () => true },
     debounce: STORE_DEBOUNCE_MS,
     maxPendingDocuments: 1,
     maxUnauthenticatedQueueMessages: 32,
@@ -192,10 +199,13 @@ export function createDocumentCollaborationServer() {
         return;
       }
 
-      if (!(await revalidateDocumentCollaborationConnection(data.context))) {
-        metrics.recordInvalidatedConnection();
-        data.connection.close();
-        throw new Error('permission-denied');
+      if (Date.now() - (data.context.accessValidatedAt ?? 0) >= WRITE_REVALIDATION_INTERVAL_MS) {
+        if (!(await revalidateDocumentCollaborationConnection(data.context))) {
+          metrics.recordInvalidatedConnection();
+          data.connection.close();
+          throw new Error('permission-denied');
+        }
+        data.context.accessValidatedAt = Date.now();
       }
     },
     // Failed stores retain the in-memory document until a retry succeeds.

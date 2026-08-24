@@ -6,6 +6,7 @@ import {
 import { getDocumentIdFromCollaborationRoom } from './DocumentCollaborationRoom';
 
 export type DocumentCollaborationContext = {
+  accessValidatedAt?: number;
   canWrite: boolean;
   documentId: string;
   image: string | null;
@@ -27,7 +28,7 @@ export function assertDocumentCollaborationOrigin(options: {
 export async function authenticateDocumentCollaborationConnection(options: {
   documentName: string;
   requestHeaders: Headers;
-}) {
+}): Promise<DocumentCollaborationContext> {
   const identity = await getDocumentCollaborationIdentity(options.requestHeaders);
   if (!identity) {
     throw new Error('permission-denied');
@@ -42,8 +43,9 @@ export async function authenticateDocumentCollaborationConnection(options: {
   return {
     ...identity,
     ...access,
+    accessValidatedAt: Date.now(),
     documentId,
-  } satisfies DocumentCollaborationContext;
+  };
 }
 
 export async function revalidateDocumentCollaborationConnection(

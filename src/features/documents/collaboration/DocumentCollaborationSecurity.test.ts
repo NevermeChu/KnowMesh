@@ -85,7 +85,7 @@ describe('document collaboration security', () => {
         documentName: `document:${context.documentId}`,
         requestHeaders: new Headers(),
       }),
-    ).resolves.toStrictEqual(context);
+    ).resolves.toStrictEqual({ ...context, accessValidatedAt: expect.any(Number) });
   });
 
   it('invalidates revoked sessions before permission lookup', async () => {

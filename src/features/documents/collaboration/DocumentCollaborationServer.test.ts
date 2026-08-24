@@ -171,9 +171,11 @@ describe('document collaboration server', () => {
       expect(provider.unsyncedChanges).toBeGreaterThan(0);
     });
     expect(server.hocuspocus.documents.get(room)?.getText('test').toJSON()).toBe('');
-    expect(
-      metrics.snapshot({ activeConnections: 1, activeDocuments: 1 }).readOnlyWriteRejections,
-    ).toBeGreaterThan(0);
+    await vi.waitFor(() => {
+      expect(
+        metrics.snapshot({ activeConnections: 1, activeDocuments: 1 }).readOnlyWriteRejections,
+      ).toBeGreaterThan(0);
+    });
 
     provider.destroy();
     websocketProvider.destroy();
