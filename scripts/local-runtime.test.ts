@@ -40,14 +40,19 @@ describe('local runtime collaboration orchestration', () => {
     });
 
     expect(commands.collaboration).toMatchObject({
+      args: ['--import=tsx', expect.stringMatching(/scripts[\\/]collaboration-server\.ts$/u)],
       command: 'node',
       ipc: true,
       name: 'Hocuspocus',
     });
-    expect(commands.collaboration.args.at(-1)).toMatch(/scripts[\\/]collaboration-server\.ts$/u);
     expect(commands.application).toMatchObject({
       args: [expect.stringMatching(/next[\\/]dist[\\/]bin[\\/]next$/u), 'dev'],
       command: 'node',
+      env: {
+        KNOWMESH_WINDOWS_CHILD_PRELOAD: expect.stringMatching(
+          /scripts\/windows-hide-child-process\.ts$/u,
+        ),
+      },
       name: 'Next.js',
     });
     expect(commands.collaboration.args).not.toContain('--env-file=.env');
