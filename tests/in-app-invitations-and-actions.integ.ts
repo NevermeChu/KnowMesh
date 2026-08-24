@@ -20,6 +20,12 @@ import * as schema from '@/models/Schema';
 import { createTestPGlite, executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
 
 vi.mock('server-only', () => ({}));
+vi.mock(import('@/features/emails/server/SendWorkspaceInvitationEmail'), () => ({
+  sendWorkspaceInvitationEmail: vi.fn(),
+}));
+vi.mock(import('@/utils/Helpers'), () => ({
+  getBaseUrl: () => 'http://localhost:3008',
+}));
 vi.mock('next/headers', () => ({
   headers: async () => await Promise.resolve(new Headers()),
 }));
