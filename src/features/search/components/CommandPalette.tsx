@@ -502,11 +502,12 @@ export function CommandPalette(props?: { currentUserId?: string }) {
         try {
           const data = await searchWorkspaceContent({
             filter: filter === 'all' ? undefined : filter,
+            pageSize: 15,
             query: trimmedQuery,
           });
 
           if (searchRequestId.current === currentReqId) {
-            setResults(data);
+            setResults(data.items);
             setIsSearching(false);
             setSelectedIndex(0);
           }

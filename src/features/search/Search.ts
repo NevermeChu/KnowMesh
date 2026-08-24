@@ -12,6 +12,15 @@ export type SearchResultItem = {
   workspaceName: string;
 };
 
+export type SearchResults = {
+  hasMore: boolean;
+  items: SearchResultItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+};
+
 /**
  * Extracts all plain text recursively from a ProseMirror document tree.
  *

@@ -2,10 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { searchWorkspaceContent } from './SearchWorkspaceContent';
 
 const state = vi.hoisted(() => {
-  const limit = vi.fn<() => Promise<unknown[]>>();
+  const offset = vi.fn<() => Promise<unknown[]>>();
+  const limit = vi.fn<() => { offset: typeof offset }>(() => ({ offset }));
   const orderBy = vi.fn<() => { limit: typeof limit }>(() => ({ limit }));
-  const where = vi.fn<() => { orderBy: typeof orderBy }>(() => ({ orderBy }));
-  const selectJoin3 = vi.fn<() => { where: typeof where }>(() => ({ where }));
+  const countWhere = vi.fn<() => Promise<unknown[]>>();
+  const dataWhere = vi.fn<() => { orderBy: typeof orderBy }>(() => ({ orderBy }));
+  let selectCallCount = 0;
+
+  const selectJoin3 = vi.fn<() => { where: typeof dataWhere | typeof countWhere }>(() => {
+    if (selectCallCount === 1) {
+      return { where: countWhere };
+    }
+    return { where: dataWhere };
+  });
   const selectJoin2 = vi.fn<() => { innerJoin: typeof selectJoin3 }>(() => ({
     innerJoin: selectJoin3,
   }));
@@ -15,21 +24,28 @@ const state = vi.hoisted(() => {
   const selectFrom = vi.fn<() => { innerJoin: typeof selectJoin1 }>(() => ({
     innerJoin: selectJoin1,
   }));
-  const select = vi.fn<() => { from: typeof selectFrom }>(() => ({
-    from: selectFrom,
-  }));
+  const select = vi.fn<() => { from: typeof selectFrom }>(() => {
+    selectCallCount += 1;
+    return { from: selectFrom };
+  });
   const requireUser = vi.fn<() => Promise<{ id: string }>>();
+  const resetSelectCallCount = () => {
+    selectCallCount = 0;
+  };
 
   return {
+    countWhere,
+    dataWhere,
     limit,
+    offset,
     orderBy,
     requireUser,
+    resetSelectCallCount,
     select,
     selectFrom,
     selectJoin1,
     selectJoin2,
     selectJoin3,
-    where,
   };
 });
 
@@ -46,12 +62,15 @@ vi.mock('@/libs/DB', () => ({
 describe(searchWorkspaceContent, () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    state.resetSelectCallCount();
     state.requireUser.mockResolvedValue({ id: 'user_1' });
-    state.limit.mockResolvedValue([]);
+    state.countWhere.mockResolvedValue([{ count: 0 }]);
+    state.offset.mockResolvedValue([]);
   });
 
-  it('searches documents using indexed searchText and returns mapped results with snippets', async () => {
-    state.limit.mockResolvedValueOnce([
+  it('searches documents with pagination and returns mapped results with snippets', async () => {
+    state.countWhere.mockResolvedValueOnce([{ count: 25 }]);
+    state.offset.mockResolvedValueOnce([
       {
         documentId: 'doc_2',
         projectId: 'project_1',
@@ -65,18 +84,38 @@ describe(searchWorkspaceContent, () => {
       },
     ]);
 
-    const results = await searchWorkspaceContent({ query: 'paragraph' });
+    const results = await searchWorkspaceContent({
+      page: 1,
+      pageSize: 20,
+      query: 'paragraph',
+    });
 
-    expect(results).toHaveLength(1);
-    expect(results[0]?.documentId).toBe('doc_2');
-    expect(results[0]?.snippet).toContain('paragraph');
-    expect(results[0]?.title).toBe('文档二');
-    expect(state.select).toHaveBeenCalledOnce();
+    expect(results).toMatchObject({
+      hasMore: true,
+      page: 1,
+      pageSize: 20,
+      totalCount: 25,
+      totalPages: 2,
+    });
+    expect(results.items).toHaveLength(1);
+    expect(results.items[0]).toMatchObject({
+      documentId: 'doc_2',
+      snippet: expect.stringContaining('paragraph'),
+      title: '文档二',
+    });
+    expect(state.select).toHaveBeenCalledTimes(2);
   });
 
-  it('returns empty array when query is whitespace', async () => {
+  it('returns empty result object when query is whitespace', async () => {
     const results = await searchWorkspaceContent({ query: '   ' });
-    expect(results).toStrictEqual([]);
+    expect(results).toStrictEqual({
+      hasMore: false,
+      items: [],
+      page: 1,
+      pageSize: 20,
+      totalCount: 0,
+      totalPages: 0,
+    });
     expect(state.select).not.toHaveBeenCalled();
   });
 });

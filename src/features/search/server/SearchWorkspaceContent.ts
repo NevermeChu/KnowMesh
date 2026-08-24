@@ -11,28 +11,42 @@ import {
 } from '@/models/Schema';
 import { escapeSqlLikePattern } from '@/utils/SqlPattern';
 import { extractSnippet } from '../Search';
-import type { SearchFilter, SearchResultItem } from '../Search';
+import type { SearchFilter, SearchResults } from '../Search';
+
+const DEFAULT_PAGE_SIZE = 20;
 
 export type SearchWorkspaceOptions = {
   filter?: SearchFilter;
+  page?: number;
+  pageSize?: number;
   query: string;
 };
 
 /**
  * Searches documents across user's accessible projects and workspaces by matching
- * title or document plain text content, sorted with weighted relevance scoring.
+ * title or document plain text content, sorted with weighted relevance scoring and pagination.
  *
- * @param options - Search keyword and optional workspace filter.
- * @returns Filtered and sorted search results with contextual snippets.
+ * @param options - Search keyword, optional workspace filter, page, and pageSize.
+ * @returns Filtered and sorted search results with contextual snippets and pagination metadata.
  */
 export async function searchWorkspaceContent(
   options: SearchWorkspaceOptions,
-): Promise<SearchResultItem[]> {
+): Promise<SearchResults> {
   const { id: userId } = await requireUser();
   const trimmedQuery = options.query.trim();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = Math.max(1, Math.min(100, options.pageSize ?? DEFAULT_PAGE_SIZE));
+  const offset = (page - 1) * pageSize;
 
   if (!trimmedQuery) {
-    return [];
+    return {
+      hasMore: false,
+      items: [],
+      page,
+      pageSize,
+      totalCount: 0,
+      totalPages: 0,
+    };
   }
 
   const escapedQuery = escapeSqlLikePattern(trimmedQuery);
@@ -60,33 +74,54 @@ export async function searchWorkspaceContent(
     END
   `;
 
-  const rows = await db
-    .select({
-      documentId: documentsSchema.id,
-      projectId: projectsSchema.id,
-      projectName: projectsSchema.name,
-      searchText: documentsSchema.searchText,
-      title: documentsSchema.title,
-      updatedAt: documentsSchema.updatedAt,
-      workspaceId: workspacesSchema.id,
-      workspaceKind: workspacesSchema.kind,
-      workspaceName: workspacesSchema.name,
-    })
-    .from(documentsSchema)
-    .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
-    .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
-    .innerJoin(
-      projectMembersSchema,
-      and(
-        eq(projectMembersSchema.projectId, projectsSchema.id),
-        eq(projectMembersSchema.userId, userId),
-      ),
-    )
-    .where(and(...whereConditions))
-    .orderBy(desc(scoreSql), desc(documentsSchema.updatedAt))
-    .limit(30);
+  const [countResult, rows] = await Promise.all([
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+      })
+      .from(documentsSchema)
+      .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
+      .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
+      .innerJoin(
+        projectMembersSchema,
+        and(
+          eq(projectMembersSchema.projectId, projectsSchema.id),
+          eq(projectMembersSchema.userId, userId),
+        ),
+      )
+      .where(and(...whereConditions)),
+    db
+      .select({
+        documentId: documentsSchema.id,
+        projectId: projectsSchema.id,
+        projectName: projectsSchema.name,
+        searchText: documentsSchema.searchText,
+        title: documentsSchema.title,
+        updatedAt: documentsSchema.updatedAt,
+        workspaceId: workspacesSchema.id,
+        workspaceKind: workspacesSchema.kind,
+        workspaceName: workspacesSchema.name,
+      })
+      .from(documentsSchema)
+      .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
+      .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
+      .innerJoin(
+        projectMembersSchema,
+        and(
+          eq(projectMembersSchema.projectId, projectsSchema.id),
+          eq(projectMembersSchema.userId, userId),
+        ),
+      )
+      .where(and(...whereConditions))
+      .orderBy(desc(scoreSql), desc(documentsSchema.updatedAt))
+      .limit(pageSize)
+      .offset(offset),
+  ]);
 
-  return rows.map((row) => ({
+  const totalCount = countResult[0]?.count ?? 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  const items = rows.map((row) => ({
     documentId: row.documentId,
     projectId: row.projectId,
     projectName: row.projectName,
@@ -97,4 +132,13 @@ export async function searchWorkspaceContent(
     workspaceKind: row.workspaceKind,
     workspaceName: row.workspaceName,
   }));
+
+  return {
+    hasMore: offset + items.length < totalCount,
+    items,
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+  };
 }

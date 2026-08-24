@@ -1,12 +1,13 @@
 'use client';
 
-import { FileText, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { escapeRegularExpression } from '@/utils/RegularExpression';
-import type { SearchFilter, SearchResultItem } from '../Search';
+import type { SearchFilter, SearchResults } from '../Search';
 
 const filterLabels: { label: string; value: SearchFilter }[] = [
   { label: '全部空间', value: 'all' },
@@ -53,15 +54,17 @@ function HighlightedText(props: { query: string; text: string }) {
 }
 
 /**
- * Renders search results or corresponding empty states.
+ * Renders search results, pagination controls, or corresponding empty states.
  *
- * @param props - Search state and result items.
+ * @param props - Search state, result items, and pagination callback.
  * @returns The search content block.
  */
 function SearchResultsSection(props: {
   hasSearched: boolean;
   initialQuery: string;
-  results: SearchResultItem[];
+  isPending: boolean;
+  onPageChange: (page: number) => void;
+  results: SearchResults;
 }) {
   if (!props.hasSearched) {
     return (
@@ -75,7 +78,7 @@ function SearchResultsSection(props: {
     );
   }
 
-  if (props.results.length === 0) {
+  if (props.results.items.length === 0) {
     return (
       <div className="mt-12">
         <EmptyState
@@ -89,12 +92,20 @@ function SearchResultsSection(props: {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs font-medium text-ink-faint">
-        找到 <span className="font-semibold text-ink">{props.results.length}</span> 篇相关文档
-      </p>
+      <div className="flex items-center justify-between text-xs font-medium text-ink-faint">
+        <p>
+          找到 <span className="font-semibold text-ink">{props.results.totalCount}</span> 篇相关文档
+          {props.results.totalPages > 1 && (
+            <span>
+              {' '}
+              · 第 {props.results.page} / {props.results.totalPages} 页
+            </span>
+          )}
+        </p>
+      </div>
 
       <ul className="divide-y divide-line-soft rounded-xl border border-line bg-card shadow-card">
-        {props.results.map((result) => (
+        {props.results.items.map((result) => (
           <li key={result.documentId}>
             <Link
               href={`/${result.workspaceKind === 'personal' ? 'personal' : 'collaboration'}?project=${result.projectId}&document=${result.documentId}`}
@@ -138,20 +149,57 @@ function SearchResultsSection(props: {
           </li>
         ))}
       </ul>
+
+      {props.results.totalPages > 1 && (
+        <nav
+          aria-label="搜索结果分页"
+          className="flex items-center justify-between border-t border-line-soft pt-4"
+        >
+          <p className="text-xs text-ink-muted">
+            显示第 {(props.results.page - 1) * props.results.pageSize + 1} -{' '}
+            {Math.min(props.results.page * props.results.pageSize, props.results.totalCount)} 条，共{' '}
+            {props.results.totalCount} 条
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={props.results.page <= 1 || props.isPending}
+              onClick={() => {
+                props.onPageChange(props.results.page - 1);
+              }}
+              size="sm"
+              type="button"
+            >
+              <ChevronLeft aria-hidden="true" className="size-4" strokeWidth={1.8} />
+              上一页
+            </Button>
+            <Button
+              disabled={props.results.page >= props.results.totalPages || props.isPending}
+              onClick={() => {
+                props.onPageChange(props.results.page + 1);
+              }}
+              size="sm"
+              type="button"
+            >
+              下一页
+              <ChevronRight aria-hidden="true" className="size-4" strokeWidth={1.8} />
+            </Button>
+          </div>
+        </nav>
+      )}
     </div>
   );
 }
 
 /**
- * Interactive search interface component supporting keyword query, scope filter, and direct navigation.
+ * Interactive search interface component supporting keyword query, scope filter, pagination, and direct navigation.
  *
- * @param props - Current query, filter, and search results.
+ * @param props - Current query, filter, and paginated search results.
  * @returns The search UI.
  */
 export function SearchInterface(props: {
   initialFilter: SearchFilter;
   initialQuery: string;
-  results: SearchResultItem[];
+  results: SearchResults;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -159,7 +207,7 @@ export function SearchInterface(props: {
   const [filter, setFilter] = useState<SearchFilter>(props.initialFilter);
   const [isPending, startTransition] = useTransition();
 
-  const updateSearchUrl = (nextQuery: string, nextFilter: SearchFilter) => {
+  const updateSearchUrl = (nextQuery: string, nextFilter: SearchFilter, nextPage = 1) => {
     const params = new URLSearchParams(searchParams.toString());
 
     if (nextQuery.trim()) {
@@ -174,6 +222,12 @@ export function SearchInterface(props: {
       params.delete('filter');
     }
 
+    if (nextPage > 1) {
+      params.set('page', String(nextPage));
+    } else {
+      params.delete('page');
+    }
+
     startTransition(() => {
       router.replace(`/search${params.toString() ? `?${params.toString()}` : ''}`);
     });
@@ -181,17 +235,21 @@ export function SearchInterface(props: {
 
   const handleQuerySubmit = (event: React.SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    updateSearchUrl(query, filter);
+    updateSearchUrl(query, filter, 1);
   };
 
   const handleFilterChange = (nextFilter: SearchFilter) => {
     setFilter(nextFilter);
-    updateSearchUrl(query, nextFilter);
+    updateSearchUrl(query, nextFilter, 1);
   };
 
   const handleClear = () => {
     setQuery('');
-    updateSearchUrl('', filter);
+    updateSearchUrl('', filter, 1);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    updateSearchUrl(query, filter, nextPage);
   };
 
   const hasSearched = props.initialQuery.trim().length > 0;
@@ -252,6 +310,8 @@ export function SearchInterface(props: {
       <SearchResultsSection
         hasSearched={hasSearched}
         initialQuery={props.initialQuery}
+        isPending={isPending}
+        onPageChange={handlePageChange}
         results={props.results}
       />
     </div>
