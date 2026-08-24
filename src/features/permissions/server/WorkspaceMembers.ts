@@ -174,10 +174,14 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
         tokenHash,
         workspaceId: invitationInput.workspaceId,
       })
+      .onConflictDoNothing({
+        target: [workspaceInvitationsSchema.workspaceId, workspaceInvitationsSchema.email],
+        where: sql`${workspaceInvitationsSchema.acceptedAt} is null and ${workspaceInvitationsSchema.revokedAt} is null`,
+      })
       .returning({ id: workspaceInvitationsSchema.id });
 
     if (!createdInvitation) {
-      throw new Error('工作区邀请创建失败');
+      throw new Error('该邮箱已有待处理的工作区邀请');
     }
 
     await recordAuditLog(transaction, {
@@ -277,6 +281,22 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
   }
 
   await db.transaction(async (transaction) => {
+    const [acceptedInvitation] = await transaction
+      .update(workspaceInvitationsSchema)
+      .set({ acceptedAt: now, acceptedById: userId })
+      .where(
+        and(
+          eq(workspaceInvitationsSchema.id, invitation.id),
+          isNull(workspaceInvitationsSchema.acceptedAt),
+          isNull(workspaceInvitationsSchema.revokedAt),
+        ),
+      )
+      .returning({ id: workspaceInvitationsSchema.id });
+
+    if (!acceptedInvitation) {
+      throw new Error('邀请无效、已过期或已被撤销');
+    }
+
     const [workspace] = await transaction
       .select({ name: workspacesSchema.name })
       .from(workspacesSchema)
@@ -291,10 +311,6 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
       .insert(workspaceMembersSchema)
       .values({ role: 'viewer', userId, workspaceId: invitation.workspaceId })
       .onConflictDoNothing();
-    await transaction
-      .update(workspaceInvitationsSchema)
-      .set({ acceptedAt: now, acceptedById: userId })
-      .where(eq(workspaceInvitationsSchema.id, invitation.id));
     await createNotification(transaction, {
       actorUserId: userId,
       body: `${getWorkspaceInvitationInviterName(user)} 已接受加入“${workspace.name}”的邀请。`,

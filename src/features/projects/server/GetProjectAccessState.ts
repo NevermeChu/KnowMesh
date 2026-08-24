@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { db } from '@/libs/DB';
@@ -20,6 +20,7 @@ export async function getProjectAccessState(projectId: string) {
         and(
           eq(projectInvitationsSchema.projectId, projectId),
           eq(projectInvitationsSchema.userId, userId),
+          gt(projectInvitationsSchema.expiresAt, new Date()),
         ),
       )
       .limit(1),

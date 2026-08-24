@@ -30,6 +30,8 @@ import type {
 } from '../MemberSchema';
 import { authorizeProject } from './ProjectAuthorization';
 
+const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+
 async function authorizeProjectMemberMutation(input: ProjectMemberMutationInput) {
   const { id: userId } = await requireUser();
   const memberInput = projectMemberMutationSchema.parse(input);
@@ -91,6 +93,7 @@ export async function inviteProjectMember(input: ProjectInvitationInput) {
     const [invitation] = await transaction
       .insert(projectInvitationsSchema)
       .values({
+        expiresAt: new Date(Date.now() + INVITATION_LIFETIME_MS),
         invitedById: userId,
         projectId: memberInput.projectId,
         userId: memberInput.memberUserId,
@@ -163,12 +166,17 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
         ),
       )
       .returning({
+        expiresAt: projectInvitationsSchema.expiresAt,
         invitedById: projectInvitationsSchema.invitedById,
         projectId: projectInvitationsSchema.projectId,
       });
 
     if (!invitation) {
       throw new Error('项目邀请不存在');
+    }
+
+    if (invitation.expiresAt <= new Date()) {
+      throw new Error('项目邀请已过期');
     }
 
     await transaction
