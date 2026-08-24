@@ -20,6 +20,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   // Reporter to use. See https://playwright.dev/docs/test-reporters
   reporter: process.env.CI ? 'github' : 'list',
+  // Local Turbopack cold compilation and Windows Chromium are unstable under parallel startup.
+  workers: process.env.CI ? undefined : 1,
 
   expect: {
     // Set timeout for async expect matchers

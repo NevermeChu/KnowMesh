@@ -20,6 +20,6 @@ export default defineConfig({
     env: loadEnv('', process.cwd(), ''),
     // Each integration file boots an embedded PostgreSQL (WASM); too many
     // concurrent forks exhaust memory and kill workers mid-run.
-    maxWorkers: 4,
+    maxWorkers: 2,
   },
 });
