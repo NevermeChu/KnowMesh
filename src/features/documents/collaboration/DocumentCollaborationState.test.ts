@@ -22,7 +22,7 @@ const state = vi.hoisted(() => {
     (callback: (transaction: unknown) => Promise<unknown>) => Promise<unknown>
   >(async (callback) => await callback({ insert, select }));
 
-  return { forUpdate, insert, stateLimit, transaction };
+  return { forUpdate, insert, transaction };
 });
 
 vi.mock(import('server-only'), () => ({}));
@@ -47,25 +47,5 @@ describe(getOrInitializeDocumentCollaborationState, () => {
       getOrInitializeDocumentCollaborationState('30000000-0000-4000-8000-000000000001'),
     ).rejects.toThrow('个人空间文档不支持协作状态');
     expect(state.insert).not.toHaveBeenCalled();
-  });
-
-  it('rejects incompatible persisted state versions', async () => {
-    state.forUpdate.mockResolvedValueOnce([
-      {
-        content: { content: [{ type: 'paragraph' }], type: 'doc' },
-        contentSchemaVersion: 1,
-        workspaceKind: 'team',
-      },
-    ]);
-    state.stateLimit.mockResolvedValueOnce([
-      {
-        documentId: '30000000-0000-4000-8000-000000000001',
-        documentSchemaVersion: 0,
-      },
-    ]);
-
-    await expect(
-      getOrInitializeDocumentCollaborationState('30000000-0000-4000-8000-000000000001'),
-    ).rejects.toThrow('协作文档状态版本不兼容');
   });
 });

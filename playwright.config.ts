@@ -65,7 +65,9 @@ export default defineConfig({
       ? [
           {
             name: 'firefox',
-            testIgnore: 'DocumentCollaboration.e2e.ts',
+            // Homepage/auth markup and collaboration WebSocket are covered on
+            // chromium; firefox only re-runs the cross-browser-relevant specs.
+            testIgnore: ['DocumentCollaboration.e2e.ts', 'Sanity.e2e.ts'],
             use: { ...devices['Desktop Firefox'] },
           },
         ]

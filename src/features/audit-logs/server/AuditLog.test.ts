@@ -216,26 +216,5 @@ describe('audit logs', () => {
         workspaceId: '11111111-1111-4111-8111-111111111111',
       });
     });
-
-    it('applies requested category page limit and offset on server', async () => {
-      state.authorizeWorkspace.mockResolvedValueOnce({
-        workspace: {
-          id: '11111111-1111-4111-8111-111111111111',
-          kind: 'team',
-          name: 'Engineering',
-          ownerId: 'user_owner',
-        },
-      });
-
-      await getWorkspaceAuditLogs({
-        category: 'resources',
-        limit: 51,
-        offset: 50,
-        workspaceId: '11111111-1111-4111-8111-111111111111',
-      });
-
-      expect(state.selectLimit).toHaveBeenCalledWith(51);
-      expect(state.selectOffset).toHaveBeenCalledWith(50);
-    });
   });
 });

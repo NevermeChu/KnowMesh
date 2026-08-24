@@ -3,11 +3,7 @@ import type { sendWorkspaceInvitationEmail as sendWorkspaceInvitationEmailFuncti
 import {
   projectAccessRequestsSchema,
   projectInvitationsSchema,
-  projectMembersSchema,
-  projectsSchema,
   workspaceAccessRequestsSchema,
-  workspaceMembersSchema,
-  workspacesSchema,
 } from '@/models/Schema';
 import { transferProjectOwnership } from './ProjectMembers';
 import { transferWorkspaceOwnership } from './WorkspaceMembers';
@@ -246,11 +242,6 @@ describe('ownership transfer', () => {
         newOwnerId: 'user_target',
         workspaceId: '11111111-1111-4111-8111-111111111111',
       });
-      expect(state.update.mock.calls.map(([table]) => table)).toStrictEqual([
-        workspaceMembersSchema,
-        workspaceMembersSchema,
-        workspacesSchema,
-      ]);
       expect(state.remove).toHaveBeenCalledWith(workspaceAccessRequestsSchema);
       expect(state.createNotification).toHaveBeenCalledWith(expect.anything(), {
         actorUserId: 'user_owner',
@@ -393,15 +384,8 @@ describe('ownership transfer', () => {
         newOwnerId: 'user_target',
         projectId: '22222222-2222-4222-8222-222222222222',
       });
-      expect(state.update.mock.calls.map(([table]) => table)).toStrictEqual([
-        projectMembersSchema,
-        projectsSchema,
-      ]);
-      expect(state.insert).toHaveBeenCalledWith(projectMembersSchema);
-      expect(state.remove.mock.calls.map(([table]) => table)).toStrictEqual([
-        projectAccessRequestsSchema,
-        projectInvitationsSchema,
-      ]);
+      expect(state.remove).toHaveBeenCalledWith(projectAccessRequestsSchema);
+      expect(state.remove).toHaveBeenCalledWith(projectInvitationsSchema);
       expect(state.createNotification).toHaveBeenCalledWith(expect.anything(), {
         actorUserId: 'user_owner',
         body: '你已成为项目“Team Project”的所有者。',

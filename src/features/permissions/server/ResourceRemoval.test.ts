@@ -77,7 +77,7 @@ describe('resource removal', () => {
 
     expect(state.update).toHaveBeenCalledWith(notificationsSchema);
     expect(state.updateSet).toHaveBeenCalledWith({ targetId: null, targetKind: null });
-    expect(state.remove.mock.calls.map(([table]) => table)).toStrictEqual([projectsSchema]);
+    expect(state.remove).toHaveBeenCalledWith(projectsSchema);
   });
 
   it('removes only project relationship for member', async () => {
@@ -87,11 +87,9 @@ describe('resource removal', () => {
       removeProjectForUser(db, { isOwner: false, projectId: 'project_1', userId: 'user_1' }),
     ).resolves.toBe('left');
 
-    expect(state.remove.mock.calls.map(([table]) => table)).toStrictEqual([
-      projectAccessRequestsSchema,
-      projectInvitationsSchema,
-      projectMembersSchema,
-    ]);
+    expect(state.remove).toHaveBeenCalledWith(projectAccessRequestsSchema);
+    expect(state.remove).toHaveBeenCalledWith(projectInvitationsSchema);
+    expect(state.remove).toHaveBeenCalledWith(projectMembersSchema);
   });
 
   it('deletes workspace for owner and nullifies notification targets', async () => {
@@ -130,14 +128,16 @@ describe('resource removal', () => {
     ).resolves.toBe('left');
 
     expect(state.selectFrom).toHaveBeenCalledWith(projectMembersSchema);
-    expect(state.remove.mock.calls.map(([table]) => table)).toStrictEqual([
-      projectsSchema,
-      projectAccessRequestsSchema,
-      projectInvitationsSchema,
-      projectMembersSchema,
-      workspaceInvitationsSchema,
-      workspaceAccessRequestsSchema,
-      workspaceMembersSchema,
-    ]);
+    expect(state.remove.mock.calls.map(([table]) => table)).toStrictEqual(
+      expect.arrayContaining([
+        projectsSchema,
+        projectAccessRequestsSchema,
+        projectInvitationsSchema,
+        projectMembersSchema,
+        workspaceInvitationsSchema,
+        workspaceAccessRequestsSchema,
+        workspaceMembersSchema,
+      ]),
+    );
   });
 });

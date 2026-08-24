@@ -18,5 +18,8 @@ export default defineConfig({
     include: ['src/**/*.test.{js,ts,tsx}', 'scripts/**/*.test.ts', 'tests/**/*.integ.ts'],
     reporters: ['default', process.env.CI ? 'github-actions' : {}],
     env: loadEnv('', process.cwd(), ''),
+    // Each integration file boots an embedded PostgreSQL (WASM); too many
+    // concurrent forks exhaust memory and kill workers mid-run.
+    maxWorkers: 4,
   },
 });

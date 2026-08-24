@@ -377,106 +377,46 @@ test.describe('team document collaboration', () => {
     }
   });
 
-  test('disconnects an active editor after project role downgrade', async ({
-    baseURL,
-    browser,
-  }) => {
-    test.setTimeout(60_000);
-    if (!baseURL) {
-      throw new Error('Playwright base URL is unavailable');
-    }
-
-    const context = await createAuthenticatedContext({
-      baseURL,
-      browser,
-      sessionToken: editorSessionToken,
-    });
-
-    try {
-      const page = await context.newPage();
-      await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
-      await expect(page.locator('.ProseMirror[contenteditable="true"]')).toBeVisible();
-      const invalidatedConnections = await readInvalidatedConnections();
-
-      await pool.query(`
+  const revocationScenarios = [
+    {
+      name: 'project role downgrade',
+      revokeSql: `
         UPDATE project_members
         SET role = 'viewer'
         WHERE project_id = '${projectId}' AND user_id = '${editorUserId}'
-      `);
-
-      await expectCollaborationRevoked(page, invalidatedConnections);
-    } finally {
-      await context.close();
-    }
-  });
-
-  test('disconnects an active editor after workspace membership removal', async ({
-    baseURL,
-    browser,
-  }) => {
-    test.setTimeout(60_000);
-    if (!baseURL) {
-      throw new Error('Playwright base URL is unavailable');
-    }
-
-    const context = await createAuthenticatedContext({
-      baseURL,
-      browser,
-      sessionToken: editorSessionToken,
-    });
-
-    try {
-      const page = await context.newPage();
-      await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
-      await expect(page.getByText('已同步', { exact: true })).toBeVisible();
-      await expect(page.locator('.ProseMirror[contenteditable="true"]')).toBeVisible();
-      const invalidatedConnections = await readInvalidatedConnections();
-
-      await pool.query(`
-        DELETE FROM workspace_members
-        WHERE workspace_id = '${workspaceId}' AND user_id = '${editorUserId}'
-      `);
-
-      await expectCollaborationRevoked(page, invalidatedConnections);
-    } finally {
-      await pool.query(`
-        INSERT INTO workspace_members (workspace_id, user_id, role)
-        VALUES ('${workspaceId}', '${editorUserId}', 'editor')
-        ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role
-      `);
-      await pool.query(`
+      `,
+      restoreSqls: [
+        `
         INSERT INTO project_members (project_id, user_id, role)
         VALUES ('${projectId}', '${editorUserId}', 'editor')
         ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role
-      `);
-      await context.close();
-    }
-  });
-
-  test('disconnects an active editor after session revocation', async ({ baseURL, browser }) => {
-    test.setTimeout(60_000);
-    if (!baseURL) {
-      throw new Error('Playwright base URL is unavailable');
-    }
-
-    const context = await createAuthenticatedContext({
-      baseURL,
-      browser,
-      sessionToken: editorSessionToken,
-    });
-
-    try {
-      const page = await context.newPage();
-      await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
-      await expect(page.getByText('已同步', { exact: true })).toBeVisible();
-      await expect(page.locator('.ProseMirror[contenteditable="true"]')).toBeVisible();
-      const invalidatedConnections = await readInvalidatedConnections();
-
-      await pool.query(`DELETE FROM "session" WHERE id = '${editorSessionId}'`);
-
-      await expectCollaborationRevoked(page, invalidatedConnections);
-    } finally {
-      await pool.query(`
+      `,
+      ],
+    },
+    {
+      name: 'workspace membership removal',
+      revokeSql: `
+        DELETE FROM workspace_members
+        WHERE workspace_id = '${workspaceId}' AND user_id = '${editorUserId}'
+      `,
+      restoreSqls: [
+        `
+        INSERT INTO workspace_members (workspace_id, user_id, role)
+        VALUES ('${workspaceId}', '${editorUserId}', 'editor')
+        ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role
+      `,
+        `
+        INSERT INTO project_members (project_id, user_id, role)
+        VALUES ('${projectId}', '${editorUserId}', 'editor')
+        ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role
+      `,
+      ],
+    },
+    {
+      name: 'session revocation',
+      revokeSql: `DELETE FROM "session" WHERE id = '${editorSessionId}'`,
+      restoreSqls: [
+        `
         INSERT INTO "session" (id, expires_at, token, user_id)
         VALUES (
           '${editorSessionId}',
@@ -488,8 +428,44 @@ test.describe('team document collaboration', () => {
           expires_at = EXCLUDED.expires_at,
           token = EXCLUDED.token,
           user_id = EXCLUDED.user_id
-      `);
-      await context.close();
-    }
-  });
+      `,
+      ],
+    },
+  ];
+
+  const registerRevocationScenario = (scenario: (typeof revocationScenarios)[number]) => {
+    test(`disconnects an active editor after ${scenario.name}`, async ({ baseURL, browser }) => {
+      test.setTimeout(60_000);
+      if (!baseURL) {
+        throw new Error('Playwright base URL is unavailable');
+      }
+
+      const context = await createAuthenticatedContext({
+        baseURL,
+        browser,
+        sessionToken: editorSessionToken,
+      });
+
+      try {
+        const page = await context.newPage();
+        await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
+        await expect(page.getByText('已同步', { exact: true })).toBeVisible();
+        await expect(page.locator('.ProseMirror[contenteditable="true"]')).toBeVisible();
+        const invalidatedConnections = await readInvalidatedConnections();
+
+        await pool.query(scenario.revokeSql);
+
+        await expectCollaborationRevoked(page, invalidatedConnections);
+      } finally {
+        for (const restoreSql of scenario.restoreSqls) {
+          await pool.query(restoreSql);
+        }
+        await context.close();
+      }
+    });
+  };
+
+  for (const scenario of revocationScenarios) {
+    registerRevocationScenario(scenario);
+  }
 });
