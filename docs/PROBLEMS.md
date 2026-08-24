@@ -1156,3 +1156,69 @@ CI/CD 是在已有服务器上逐步演进出来的 release 更新流程，首�
 - 先列举并测试 workflow 实际需要的特权操作，将服务器端发布逻辑收敛为 root-owned、不可由部署用户修改的 helper，再让 sudoers 只允许调用该入口和必要的只读诊断。
 - 核对 Azure NSG 后只开放预期的 22、80 和 443；保持 3000、1234、1235 和 5432 仅监听 loopback，并在保留可信救援路径后关闭直接 root SSH 登录。
 - 版本化并逐项验证 Next.js systemd 加固参数；修改 sudoers、SSH 或防火墙时必须保留独立会话和回滚手段，避免把服务器锁死。
+
+## 71. 站内通知与控制台待办不可达且邀请接受硬依赖邮件 Token
+
+### 问题
+
+用户在站内通知中心或控制台收到工作区邀请、权限申请等通知与待办时，无法直接就地接受或审批，也不能直达对应权限弹窗；工作区邀请过去只能通过外部邮件链接中的明文 Token 才能接受，站内用户由于数据库只存 tokenHash 而处于“看得见却无法加入”的状态。
+
+### 根因
+
+1. 工作区邀请接受接口过去仅支持校验 `token` 哈希，未提供面向站内已认证用户的邀请接受机制。
+2. 待办事项与通知查询接口未提供申请人姓名、邮箱与关联资源 ID（`workspaceId` / `projectId` / `memberUserId`），导致界面只能静态展示或跳转到粗粒度的工作区/项目协同页。
+3. 侧边栏权限总览弹窗缺少全局事件与 URL Query 深度唤起能力，操作完成后通知也未在同一事务中同步标读。
+
+### 解决方法
+
+1. 新增双轨认证模型：外轨保留基于邮件 Token 的 `acceptWorkspaceInvitation`，内轨新增基于当前已登录账号的 `acceptWorkspaceInvitationInApp` 与 `declineWorkspaceInvitationInApp`。
+2. 扩充 `GetPendingApprovals`、`GetPendingInvitations`、`GetWorkspaceInvitation` 与通知查询，返回申请人姓名、邮箱及目标资源标识，并在 `/invitations/accept` 支持 `?workspace=` 深度链接。
+3. 引入全局 `openPermissionOverviewModal` 事件分发与 URL Query 直达（`?managePermissions=`），并在通知卡片和控制台待办挂载“接受/忽略/批准/拒绝”就地操作按钮与深度直达链接。
+4. 在邀请处理和权限审批事务中自动同步标记对应通知已读，确保状态完全一致。
+
+## 72. 文档全文检索基于 JSONB 全表扫描且存在假阳性
+
+### 问题
+
+文档全文检索过去在 SQL 层面执行 `content::text ILIKE %query%`，导致在数据库端将每篇文档的 ProseMirror JSON 树完整转为字符串扫描；并且会命中 JSON 属性名（如 `"type": "paragraph"`, `"attrs"` 等），导致前 30 条返回大量假阳性行，再由 Node.js 内存反序列化和二次过滤，造成严重 I/O、内存浪费与有效结果截断。
+
+### 根因
+
+1. `documents` 表过去仅存储 `content` JSONB 字段，未建立独立的纯文本投影列与索引。
+2. 检索 Action 直接传输和解析整棵 ProseMirror AST 树，查询性能随文档体积线性劣化。
+
+### 解决方法
+
+1. 在 `documents` 表新增 `search_text text NOT NULL DEFAULT ''` 列并建立专用索引（`documents_search_text_idx`）。
+2. 在单人保存（`UpdateDocument`）与团队协同防抖落库（`DocumentCollaborationPersistence`）时，自动从 ProseMirror 树提取并持久化纯文本至 `search_text`。
+3. 改造 `searchWorkspaceContent`，直接在 SQL 层匹配 `title` 与 `search_text`，不再读取和在内存中反序列化 `content` JSONB，彻底消除了假阳性命中与 Node.js 内存开销。
+
+## 73. 模糊搜索前置通配符导致 B-Tree 索引失效
+
+### 问题
+
+`searchWorkspaceContent` 针对 `documents.title` 与 `documents.search_text` 使用 `ILIKE '%query%'` 模糊匹配，原 `documents_search_text_idx` B-Tree 索引由于前置 `%` 通配符无法被优化器使用，且 `title` 缺少索引，导致数据库始终执行全表顺序扫描（Sequential Scan），在高并发搜索或文档规模扩大时占用大量 CPU 与 I/O。
+
+### 根因
+
+PostgreSQL 标准 B-Tree 索引仅支持前缀匹配或精确比较，不支持两端带有通配符的子串模糊检索与不区分大小写的模式匹配。
+
+### 解决方法
+
+- 引入 PostgreSQL `pg_trgm` 扩展，为 `documents.search_text` 与 `documents.title` 分别创建基于 `gin_trgm_ops` 操作符类的 GIN 倒排索引（`documents_search_text_trgm_idx` 与 `documents_title_trgm_idx`）。
+- 移除原无效的 B-Tree 索引 `documents_search_text_idx`，消除文档保存时的冗余 B-Tree 维护开销。
+- 保持上层 `ILIKE` 查询语句与权限逻辑不变，利用 GIN Trigram 倒排索引将全表顺序扫描转为位图索引扫描（Bitmap Index Scan）。
+
+## 74. 协作光标高频变化会放大房间 Awareness 广播
+
+### 问题
+
+协作编辑器过去会把每次本地光标或选区位置变化立即写入 Awareness；同一房间的协作者越多，服务端广播和客户端光标重绘的扇出成本越高。
+
+### 根因
+
+Tiptap CollaborationCaret 直接调用房间 Awareness 的 `setLocalStateField('cursor', value)`，当前客户端没有在正文 Yjs update 之外单独合并瞬时光标状态。
+
+### 解决方法
+
+客户端为 `cursor` Awareness 字段增加 50ms 固定窗口，只提交窗口内最后一个位置；身份字段继续立即发送，`null` 移除立即清空待发送位置并广播，正文 Yjs update、服务端身份净化与授权路径保持不变。
