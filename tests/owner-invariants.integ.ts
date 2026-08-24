@@ -26,7 +26,18 @@ describe('database membership and owner invariants', () => {
       VALUES ('20000000-0000-4000-8000-000000000010', 'legacy_owner', 'owner');
     `);
 
-    await executeMigrations(database, migrationFiles.slice(10));
+    await executeMigrations(database, migrationFiles.slice(10, 20));
+
+    await database.exec(`
+      INSERT INTO "user" (id, name, email)
+      VALUES
+        ('legacy_owner', 'Legacy Owner', 'legacy_owner@example.com'),
+        ('user_owner', 'Owner', 'owner@example.com'),
+        ('other_owner', 'Other Owner', 'other_owner@example.com'),
+        ('outside_user', 'Outside User', 'outside_user@example.com');
+    `);
+
+    await executeMigrations(database, migrationFiles.slice(20));
   }, 30_000);
 
   afterAll(async () => {

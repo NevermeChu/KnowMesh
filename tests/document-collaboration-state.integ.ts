@@ -21,6 +21,10 @@ describe('document collaboration state persistence', () => {
     database = createTestPGlite();
     await executeMigrations(database, migrationFiles);
     await database.exec(`
+      INSERT INTO "user" (id, name, email, email_verified)
+      VALUES
+        ('owner', 'Owner', 'owner@example.com', true),
+        ('${viewerId}', 'Viewer', 'viewer@example.com', true);
       INSERT INTO workspaces (id, kind, name, owner_id)
       VALUES ('${workspaceId}', 'team', 'Team', 'owner');
       INSERT INTO workspace_members (workspace_id, user_id, role)
@@ -29,8 +33,6 @@ describe('document collaboration state persistence', () => {
       VALUES ('${projectId}', '${workspaceId}', 'Project', 'owner');
       INSERT INTO project_members (project_id, workspace_id, user_id, role)
       VALUES ('${projectId}', '${workspaceId}', 'owner', 'owner');
-      INSERT INTO "user" (id, name, email, email_verified)
-      VALUES ('${viewerId}', 'Viewer', 'viewer@example.com', true);
       INSERT INTO "session" (id, token, expires_at, user_id)
       VALUES ('collaboration-session', 'collaboration-token', NOW() + INTERVAL '1 day', '${viewerId}');
       INSERT INTO workspace_members (workspace_id, user_id, role)

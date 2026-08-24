@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   customType,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -62,8 +63,8 @@ export const userSchema = pgTable(
     email: text('email').notNull(),
     emailVerified: boolean('email_verified').default(false).notNull(),
     image: text('image'),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -75,10 +76,10 @@ export const sessionSchema = pgTable(
   'session',
   {
     id: text('id').primaryKey(),
-    expiresAt: timestamp('expires_at', { mode: 'date' }).notNull(),
+    expiresAt: timestamp('expires_at', { mode: 'date', withTimezone: true }).notNull(),
     token: text('token').notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -107,12 +108,18 @@ export const accountSchema = pgTable(
     accessToken: text('access_token'),
     refreshToken: text('refresh_token'),
     idToken: text('id_token'),
-    accessTokenExpiresAt: timestamp('access_token_expires_at', { mode: 'date' }),
-    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { mode: 'date' }),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
     scope: text('scope'),
     password: text('password'),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -129,9 +136,9 @@ export const verificationSchema = pgTable(
     id: text('id').primaryKey(),
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
-    expiresAt: timestamp('expires_at', { mode: 'date' }).notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    expiresAt: timestamp('expires_at', { mode: 'date', withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -143,15 +150,19 @@ export const notificationsSchema = pgTable(
   'notifications',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    recipientUserId: varchar('recipient_user_id', { length: 255 }).notNull(),
-    actorUserId: varchar('actor_user_id', { length: 255 }),
+    recipientUserId: varchar('recipient_user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
+    actorUserId: varchar('actor_user_id', { length: 255 }).references(() => userSchema.id, {
+      onDelete: 'set null',
+    }),
     type: notificationTypeEnum('type').notNull(),
     title: varchar('title', { length: 120 }).notNull(),
     body: varchar('body', { length: 320 }).notNull(),
     targetKind: notificationTargetKindEnum('target_kind'),
     targetId: uuid('target_id'),
-    readAt: timestamp('read_at', { mode: 'date' }),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    readAt: timestamp('read_at', { mode: 'date', withTimezone: true }),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     check(
@@ -169,10 +180,12 @@ export const userPreferencesSchema = pgTable(
   'user_preferences',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
     theme: userThemePreferenceEnum('theme').notNull().default('system'),
     contentWidth: integer('content_width').notNull().default(80),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -186,12 +199,14 @@ export const workspacesSchema = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     kind: workspaceKindEnum('kind').notNull(),
     name: varchar('name', { length: 80 }).notNull(),
-    ownerId: varchar('owner_id', { length: 255 }).notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    ownerId: varchar('owner_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex('workspaces_personal_owner_idx')
@@ -206,9 +221,11 @@ export const workspaceMembersSchema = pgTable(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
     role: projectMemberRoleEnum('role').notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.workspaceId, table.userId] }),
@@ -228,14 +245,23 @@ export const workspaceInvitationsSchema = pgTable(
       .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
     email: varchar('email', { length: 320 }).notNull(),
     tokenHash: varchar('token_hash', { length: 64 }).notNull(),
-    invitedById: varchar('invited_by_id', { length: 255 }).notNull(),
-    acceptedById: varchar('accepted_by_id', { length: 255 }),
-    acceptedAt: timestamp('accepted_at', { mode: 'date' }),
-    revokedAt: timestamp('revoked_at', { mode: 'date' }),
-    expiresAt: timestamp('expires_at', { mode: 'date' }).notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    invitedById: varchar('invited_by_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
+    acceptedById: varchar('accepted_by_id', { length: 255 }).references(() => userSchema.id, {
+      onDelete: 'cascade',
+    }),
+    acceptedAt: timestamp('accepted_at', { mode: 'date', withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { mode: 'date', withTimezone: true }),
+    expiresAt: timestamp('expires_at', { mode: 'date', withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('workspace_invitations_token_hash_idx').on(table.tokenHash)],
+  (table) => [
+    uniqueIndex('workspace_invitations_token_hash_idx').on(table.tokenHash),
+    uniqueIndex('workspace_invitations_pending_workspace_email_idx')
+      .on(table.workspaceId, table.email)
+      .where(sql`${table.acceptedAt} is null and ${table.revokedAt} is null`),
+  ],
 );
 
 export const workspaceAccessRequestsSchema = pgTable(
@@ -244,9 +270,11 @@ export const workspaceAccessRequestsSchema = pgTable(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
     requestedRole: projectMemberRoleEnum('requested_role').notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })],
 );
@@ -260,11 +288,11 @@ export const projectsSchema = pgTable(
       .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 80 }).notNull(),
     ownerId: varchar('owner_id', { length: 255 }).notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     foreignKey({
@@ -282,9 +310,11 @@ export const projectMembersSchema = pgTable(
   {
     projectId: uuid('project_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
     role: projectMemberRoleEnum('role').notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.projectId, table.userId] }),
@@ -311,9 +341,14 @@ export const projectInvitationsSchema = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projectsSchema.id, { onDelete: 'cascade' }),
-    userId: varchar('user_id', { length: 255 }).notNull(),
-    invitedById: varchar('invited_by_id', { length: 255 }).notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
+    invitedById: varchar('invited_by_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { mode: 'date', withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.projectId, table.userId] })],
 );
@@ -324,9 +359,11 @@ export const projectAccessRequestsSchema = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projectsSchema.id, { onDelete: 'cascade' }),
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
     requestedRole: projectMemberRoleEnum('requested_role').notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.projectId, table.userId] })],
 );
@@ -338,21 +375,29 @@ export const documentsSchema = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projectsSchema.id, { onDelete: 'cascade' }),
+    parentId: uuid('parent_id'),
     title: varchar('title', { length: 200 }).notNull(),
+    sortOrder: doublePrecision('sort_order').default(0).notNull(),
     content: jsonb('content').$type<DocumentContent>().default(EMPTY_DOCUMENT_CONTENT).notNull(),
     contentSchemaVersion: integer('content_schema_version')
       .default(DOCUMENT_CONTENT_SCHEMA_VERSION)
       .notNull(),
     searchText: text('search_text').default('').notNull(),
     createdById: varchar('created_by_id', { length: 255 }).notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' })
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    foreignKey({
+      columns: [table.parentId],
+      foreignColumns: [table.id],
+      name: 'documents_parent_id_fk',
+    }).onDelete('cascade'),
     index('documents_project_updated_idx').on(table.projectId, table.updatedAt),
+    index('documents_project_parent_sort_idx').on(table.projectId, table.parentId, table.sortOrder),
     index('documents_search_text_trgm_idx').using('gin', table.searchText.op('gin_trgm_ops')),
     index('documents_title_trgm_idx').using('gin', table.title.op('gin_trgm_ops')),
   ],
@@ -364,8 +409,10 @@ export const documentCollaborationStatesSchema = pgTable('document_collaboration
     .references(() => documentsSchema.id, { onDelete: 'cascade' }),
   state: bytea('state').notNull(),
   documentSchemaVersion: integer('document_schema_version').notNull(),
-  initializedAt: timestamp('initialized_at', { mode: 'date' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'date' })
+  initializedAt: timestamp('initialized_at', { mode: 'date', withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
@@ -378,7 +425,7 @@ export const starredDocumentsSchema = pgTable(
     documentId: uuid('document_id')
       .notNull()
       .references(() => documentsSchema.id, { onDelete: 'cascade' }),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.documentId] }),
@@ -400,7 +447,7 @@ export const auditLogsSchema = pgTable(
     metadata: jsonb('metadata').$type<AuditLogMetadata>().default({}).notNull(),
     ipAddress: varchar('ip_address', { length: 128 }),
     userAgent: text('user_agent'),
-    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('audit_logs_workspace_created_idx').on(table.workspaceId, table.createdAt.desc()),

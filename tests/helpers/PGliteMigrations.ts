@@ -32,6 +32,8 @@ export const migrationFiles = [
   '0023_document_collaboration_invalidation.sql',
   '0024_add-document-search-text.sql',
   '0025_add-trgm-search-indexes.sql',
+  '0026_remarkable_edwin_jarvis.sql',
+  '0027_woozy_magus.sql',
 ] as const;
 
 export function createTestPGlite(options?: ConstructorParameters<typeof PGlite>[0]) {

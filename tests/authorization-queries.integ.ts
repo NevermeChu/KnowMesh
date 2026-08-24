@@ -19,6 +19,14 @@ describe('authorization queries', () => {
 
     await database.transaction(async (transaction) => {
       await transaction.query(`
+        INSERT INTO "user" (id, name, email)
+        VALUES
+          ('user_owner', 'Owner', 'owner@example.com'),
+          ('user_editor', 'Editor', 'editor@example.com'),
+          ('user_viewer', 'Viewer', 'viewer@example.com'),
+          ('user_workspace_only', 'Workspace Only', 'workspace_only@example.com')
+      `);
+      await transaction.query(`
         INSERT INTO workspaces (id, kind, name, owner_id)
         VALUES ('10000000-0000-4000-8000-000000000100', 'team', 'Authorization Team', 'user_owner')
       `);

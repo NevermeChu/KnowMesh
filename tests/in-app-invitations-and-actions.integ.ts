@@ -382,10 +382,10 @@ describe('in-app invitations and direct actions', () => {
     const projectId2 = '20000000-0000-4000-8000-000000000202';
 
     await database.query(`
-      INSERT INTO project_invitations (project_id, user_id, invited_by_id)
+      INSERT INTO project_invitations (project_id, user_id, invited_by_id, expires_at)
       VALUES
-        ('${projectId1}', 'user_invitee', 'user_owner'),
-        ('${projectId2}', 'user_invitee', 'user_owner')
+        ('${projectId1}', 'user_invitee', 'user_owner', now() + interval '7 days'),
+        ('${projectId2}', 'user_invitee', 'user_owner', now() + interval '7 days')
     `);
 
     await database.query(`
