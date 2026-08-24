@@ -13,6 +13,7 @@ export const getNotifications = cache(async (): Promise<NotificationItem[]> => {
 
   return await db
     .select({
+      actorUserId: notificationsSchema.actorUserId,
       body: notificationsSchema.body,
       createdAt: notificationsSchema.createdAt,
       id: notificationsSchema.id,

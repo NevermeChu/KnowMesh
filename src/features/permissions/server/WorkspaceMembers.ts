@@ -28,7 +28,9 @@ import {
 } from '@/models/Schema';
 import { getBaseUrl } from '@/utils/Helpers';
 import {
+  acceptWorkspaceInvitationInAppSchema,
   acceptWorkspaceInvitationSchema,
+  declineWorkspaceInvitationInAppSchema,
   inviteWorkspaceMemberSchema,
   revokeWorkspaceInvitationSchema,
   transferWorkspaceOwnershipSchema,
@@ -37,7 +39,9 @@ import {
   workspaceAccessReviewSchema,
 } from '../MemberSchema';
 import type {
+  AcceptWorkspaceInvitationInAppInput,
   AcceptWorkspaceInvitationInput,
+  DeclineWorkspaceInvitationInAppInput,
   InviteWorkspaceMemberInput,
   RevokeWorkspaceInvitationInput,
   TransferWorkspaceOwnershipInput,
@@ -309,10 +313,142 @@ export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitation
       targetKind: 'member',
       workspaceId: invitation.workspaceId,
     });
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: now })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.targetId, invitation.workspaceId),
+          eq(notificationsSchema.type, 'workspace_invited'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
   });
 
   revalidatePath('/(workspace)', 'layout');
   return { workspaceId: invitation.workspaceId };
+}
+
+export async function acceptWorkspaceInvitationInApp(input: AcceptWorkspaceInvitationInAppInput) {
+  const user = await requireUser();
+  const userId = user.id;
+  const invitationInput = acceptWorkspaceInvitationInAppSchema.parse(input);
+  const now = new Date();
+
+  await db.transaction(async (transaction) => {
+    const [invitation] = await transaction
+      .select()
+      .from(workspaceInvitationsSchema)
+      .where(
+        and(
+          eq(workspaceInvitationsSchema.workspaceId, invitationInput.workspaceId),
+          eq(sql`lower(${workspaceInvitationsSchema.email})`, user.email.toLowerCase()),
+          isNull(workspaceInvitationsSchema.acceptedAt),
+          isNull(workspaceInvitationsSchema.revokedAt),
+          gt(workspaceInvitationsSchema.expiresAt, now),
+        ),
+      )
+      .for('update')
+      .limit(1);
+
+    if (!invitation) {
+      throw new Error('邀请无效、已过期或已被处理');
+    }
+
+    const [workspace] = await transaction
+      .select({ name: workspacesSchema.name })
+      .from(workspacesSchema)
+      .where(eq(workspacesSchema.id, invitation.workspaceId))
+      .limit(1);
+
+    if (!workspace) {
+      throw new Error('工作区不存在');
+    }
+
+    await transaction
+      .insert(workspaceMembersSchema)
+      .values({ role: 'viewer', userId, workspaceId: invitation.workspaceId })
+      .onConflictDoNothing();
+    await transaction
+      .update(workspaceInvitationsSchema)
+      .set({ acceptedAt: now, acceptedById: userId })
+      .where(eq(workspaceInvitationsSchema.id, invitation.id));
+    await createNotification(transaction, {
+      actorUserId: userId,
+      body: `${getWorkspaceInvitationInviterName(user)} 已接受加入“${workspace.name}”的邀请。`,
+      recipientUserId: invitation.invitedById,
+      target: { id: invitation.workspaceId, kind: 'workspace' },
+      title: '工作区邀请已接受',
+      type: 'workspace_invitation_accepted',
+    });
+    await recordAuditLog(transaction, {
+      action: 'workspace_invitation_accepted',
+      actorUserId: userId,
+      metadata: {
+        resourceName: workspace.name,
+      },
+      targetId: userId,
+      targetKind: 'member',
+      workspaceId: invitation.workspaceId,
+    });
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: now })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.targetId, invitation.workspaceId),
+          eq(notificationsSchema.type, 'workspace_invited'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+  return { workspaceId: invitationInput.workspaceId };
+}
+
+export async function declineWorkspaceInvitationInApp(input: DeclineWorkspaceInvitationInAppInput) {
+  const user = await requireUser();
+  const userId = user.id;
+  const invitationInput = declineWorkspaceInvitationInAppSchema.parse(input);
+  const now = new Date();
+
+  await db.transaction(async (transaction) => {
+    const [invitation] = await transaction
+      .update(workspaceInvitationsSchema)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(workspaceInvitationsSchema.workspaceId, invitationInput.workspaceId),
+          eq(sql`lower(${workspaceInvitationsSchema.email})`, user.email.toLowerCase()),
+          isNull(workspaceInvitationsSchema.acceptedAt),
+          isNull(workspaceInvitationsSchema.revokedAt),
+          gt(workspaceInvitationsSchema.expiresAt, now),
+        ),
+      )
+      .returning({ id: workspaceInvitationsSchema.id });
+
+    if (!invitation) {
+      throw new Error('邀请无效、已过期或已被处理');
+    }
+
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: now })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.targetId, invitationInput.workspaceId),
+          eq(notificationsSchema.type, 'workspace_invited'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+  return { workspaceId: invitationInput.workspaceId };
 }
 
 export async function revokeWorkspaceInvitation(input: RevokeWorkspaceInvitationInput) {
@@ -547,6 +683,18 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
       targetKind: 'member',
       workspaceId: reviewInput.workspaceId,
     });
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
+          eq(notificationsSchema.targetId, reviewInput.workspaceId),
+          eq(notificationsSchema.type, 'workspace_access_requested'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -599,6 +747,18 @@ export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewI
       targetKind: 'member',
       workspaceId: reviewInput.workspaceId,
     });
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
+          eq(notificationsSchema.targetId, reviewInput.workspaceId),
+          eq(notificationsSchema.type, 'workspace_access_requested'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
   });
 
   revalidatePath('/(workspace)', 'layout');

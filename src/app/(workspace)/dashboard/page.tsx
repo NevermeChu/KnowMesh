@@ -1,13 +1,4 @@
-import {
-  ArrowRight,
-  ChevronRight,
-  FileText,
-  Inbox,
-  Search,
-  ShieldCheck,
-  Star,
-  Users,
-} from 'lucide-react';
+import { ArrowRight, ChevronRight, FileText, Search, Star, Users } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
@@ -18,16 +9,12 @@ import {
   getUnreadNotificationCount,
 } from '@/features/notifications/server/GetNotifications';
 import { getPendingApprovals } from '@/features/permissions/server/GetPendingApprovals';
+import { DashboardPendingItems } from '@/features/workspaces/components/DashboardPendingItems';
 import { getPendingInvitations } from '@/features/workspaces/server/GetPendingInvitations';
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   dateStyle: 'medium',
 });
-
-const requestedRoleLabels: Record<string, string> = {
-  editor: '可编辑',
-  viewer: '只读',
-};
 
 const quickActions = [
   {
@@ -264,51 +251,10 @@ async function PendingItemsSection() {
         待处理事项
       </h2>
       <div className="mt-3 rounded-xl border border-line bg-card p-4 shadow-card">
-        {pendingInvitations.length === 0 && pendingApprovals.length === 0 ? (
-          <p className="text-xs leading-relaxed text-ink-muted">暂无待处理的邀请与协作请求。</p>
-        ) : (
-          <ul className="space-y-3">
-            {pendingInvitations.map((invitation) => (
-              <li key={invitation.workspaceName} className="flex items-start gap-2.5">
-                <Inbox
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-accent"
-                  strokeWidth={1.8}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-medium text-ink">
-                    「{invitation.workspaceName}」邀请你加入
-                  </span>
-                  <span className="mt-0.5 block text-[11px] text-ink-faint">
-                    请查收邮件中的邀请链接完成加入。
-                  </span>
-                </span>
-              </li>
-            ))}
-            {pendingApprovals.map((approval) => (
-              <li
-                key={`${approval.kind}-${approval.resourceName}-${approval.createdAt.toISOString()}`}
-                className="flex items-start gap-2.5"
-              >
-                <ShieldCheck
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-accent"
-                  strokeWidth={1.8}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-medium text-ink">
-                    有人申请加入「{approval.resourceName}」
-                  </span>
-                  <span className="mt-0.5 block text-[11px] text-ink-faint">
-                    申请{approval.kind === 'workspace' ? '工作区' : '项目'}
-                    {requestedRoleLabels[approval.requestedRole] ?? approval.requestedRole}
-                    权限
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <DashboardPendingItems
+          pendingApprovals={pendingApprovals}
+          pendingInvitations={pendingInvitations}
+        />
       </div>
     </section>
   );

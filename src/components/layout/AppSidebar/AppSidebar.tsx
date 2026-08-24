@@ -2,10 +2,11 @@
 
 import { Menu, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, useTransition } from 'react';
 import { SettingsMenu, WorkspaceSwitcher } from '@/components/layout/AppSidebar/SidebarMenus';
 import { SidebarPrimaryNavigation } from '@/components/layout/AppSidebar/SidebarPrimaryNavigation';
 import { SidebarWorkspaceNavigation } from '@/components/layout/AppSidebar/SidebarWorkspaceNavigation';
+import { OPEN_PERMISSION_OVERVIEW_EVENT } from '@/components/layout/ShellEvents';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import { CreateProjectDialog } from '@/features/projects/components/CreateProjectDialog';
 import { PermissionOverviewDialog } from '@/features/projects/components/PermissionOverviewDialog';
@@ -99,6 +100,19 @@ function SidebarContent(props: {
  * @param props - Sidebar visibility, sizing, and resize behavior.
  * @returns The responsive application sidebar.
  */
+/**
+ * Type guard to check if an unknown value matches the PermissionOverviewInput shape.
+ *
+ * @param value - Unknown value to validate.
+ * @returns Whether the value is a valid PermissionOverviewInput.
+ */
+function isPermissionOverviewInput(value: unknown): value is PermissionOverviewInput {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  return 'scope' in value && (value.scope === 'workspace' || value.scope === 'project');
+}
+
 export function AppSidebar(props: {
   activeWorkspace: Workspace | null;
   documents: DocumentNavigationItem[];
@@ -148,6 +162,44 @@ export function AppSidebar(props: {
       }
     });
   };
+
+  const handleOpenPermissionEvent = useEffectEvent((input: PermissionOverviewInput) => {
+    openPermissionOverview(input);
+  });
+
+  useEffect(() => {
+    const handleOpenPermissionOverview = (event: Event) => {
+      if (event instanceof CustomEvent && isPermissionOverviewInput(event.detail)) {
+        handleOpenPermissionEvent(event.detail);
+      }
+    };
+
+    window.addEventListener(OPEN_PERMISSION_OVERVIEW_EVENT, handleOpenPermissionOverview);
+    return () => {
+      window.removeEventListener(OPEN_PERMISSION_OVERVIEW_EVENT, handleOpenPermissionOverview);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const manage = params.get('managePermissions');
+    const workspaceId = params.get('workspaceId') ?? props.activeWorkspace?.id;
+    const projectId = params.get('projectId') ?? params.get('project');
+    if (manage === 'workspace' && workspaceId) {
+      handleOpenPermissionEvent({
+        scope: 'workspace',
+        workspaceId,
+      });
+    } else if (manage === 'project' && projectId) {
+      handleOpenPermissionEvent({
+        projectId,
+        scope: 'project',
+      });
+    }
+  }, [pathname, props.activeWorkspace]);
 
   const closeNavigation = () => {
     setIsOpen(false);

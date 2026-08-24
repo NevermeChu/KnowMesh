@@ -1,5 +1,5 @@
 import 'server-only';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
 import { getUserProfiles } from '@/features/users/server/GetUserProfiles';
@@ -15,13 +15,31 @@ import { workspaceInvitationsSchema, workspacesSchema } from '@/models/Schema';
 /**
  * Reads an invitation summary only after matching the current user's verified email.
  *
- * @param options - Raw invitation token from the acceptance URL.
+ * @param options - Raw invitation token or workspace ID for authenticated in-app lookup.
  * @returns The invitation display data or its current terminal status.
  */
 export async function getWorkspaceInvitation(options: {
-  token: string;
+  token?: string;
+  workspaceId?: string;
 }): Promise<WorkspaceInvitationPageData> {
   const user = await requireUser();
+
+  let whereCondition = null;
+  if (options.token) {
+    whereCondition = eq(
+      workspaceInvitationsSchema.tokenHash,
+      hashWorkspaceInvitationToken(options.token),
+    );
+  } else if (options.workspaceId) {
+    whereCondition = and(
+      eq(workspaceInvitationsSchema.workspaceId, options.workspaceId),
+      eq(sql`lower(${workspaceInvitationsSchema.email})`, user.email.toLowerCase()),
+    );
+  }
+
+  if (!whereCondition) {
+    return { status: 'invalid' };
+  }
 
   const [invitation] = await db
     .select({
@@ -34,7 +52,8 @@ export async function getWorkspaceInvitation(options: {
     })
     .from(workspaceInvitationsSchema)
     .innerJoin(workspacesSchema, eq(workspacesSchema.id, workspaceInvitationsSchema.workspaceId))
-    .where(eq(workspaceInvitationsSchema.tokenHash, hashWorkspaceInvitationToken(options.token)))
+    .where(whereCondition)
+    .orderBy(desc(workspaceInvitationsSchema.createdAt))
     .limit(1);
 
   if (!invitation) {

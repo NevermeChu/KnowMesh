@@ -1,12 +1,13 @@
 'use server';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { db } from '@/libs/DB';
 import {
+  notificationsSchema,
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
@@ -205,6 +206,17 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
       targetKind: 'member',
       workspaceId: project.workspaceId,
     });
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.targetId, invitation.projectId),
+          eq(notificationsSchema.type, 'project_invited'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -346,6 +358,18 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
       targetKind: 'member',
       workspaceId: project.workspaceId,
     });
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
+          eq(notificationsSchema.targetId, reviewInput.projectId),
+          eq(notificationsSchema.type, 'project_access_requested'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -403,6 +427,18 @@ export async function rejectProjectAccessRequest(input: ProjectAccessReviewInput
       targetKind: 'member',
       workspaceId: project.workspaceId,
     });
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
+          eq(notificationsSchema.targetId, reviewInput.projectId),
+          eq(notificationsSchema.type, 'project_access_requested'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -605,14 +641,28 @@ export async function rejectProjectInvitation(input: { projectId: string }) {
   const { id: userId } = await requireUser();
   const invitationInput = projectAccessRequestSchema.pick({ projectId: true }).parse(input);
 
-  await db
-    .delete(projectInvitationsSchema)
-    .where(
-      and(
-        eq(projectInvitationsSchema.projectId, invitationInput.projectId),
-        eq(projectInvitationsSchema.userId, userId),
-      ),
-    );
+  await db.transaction(async (transaction) => {
+    await transaction
+      .delete(projectInvitationsSchema)
+      .where(
+        and(
+          eq(projectInvitationsSchema.projectId, invitationInput.projectId),
+          eq(projectInvitationsSchema.userId, userId),
+        ),
+      );
+
+    await transaction
+      .update(notificationsSchema)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.targetId, invitationInput.projectId),
+          eq(notificationsSchema.type, 'project_invited'),
+          isNull(notificationsSchema.readAt),
+        ),
+      );
+  });
 
   revalidatePath('/(workspace)', 'layout');
 }

@@ -59,7 +59,17 @@ export const transferProjectOwnershipSchema = z.object({
   targetUserId: z.string().min(1),
 });
 
+export const acceptWorkspaceInvitationInAppSchema = z.object({ workspaceId: z.uuid() });
+
+export const declineWorkspaceInvitationInAppSchema = z.object({ workspaceId: z.uuid() });
+
 export type AcceptWorkspaceInvitationInput = z.infer<typeof acceptWorkspaceInvitationSchema>;
+export type AcceptWorkspaceInvitationInAppInput = z.infer<
+  typeof acceptWorkspaceInvitationInAppSchema
+>;
+export type DeclineWorkspaceInvitationInAppInput = z.infer<
+  typeof declineWorkspaceInvitationInAppSchema
+>;
 export type InviteWorkspaceMemberInput = z.infer<typeof inviteWorkspaceMemberSchema>;
 export type ProjectMemberMutationInput = z.infer<typeof projectMemberMutationSchema>;
 export type ProjectInvitationInput = z.infer<typeof projectInvitationSchema>;

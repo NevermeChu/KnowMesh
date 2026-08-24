@@ -4,7 +4,10 @@ import { CircleCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { ModalDialogButton } from '@/components/ui/ModalDialog';
-import { acceptWorkspaceInvitation } from '@/features/permissions/server/WorkspaceMembers';
+import {
+  acceptWorkspaceInvitation,
+  acceptWorkspaceInvitationInApp,
+} from '@/features/permissions/server/WorkspaceMembers';
 import type { WorkspaceInvitationPageData } from '@/features/workspaces/WorkspaceInvitation';
 import { workspaceInvitationCopy } from '@/features/workspaces/WorkspaceInvitation';
 
@@ -34,7 +37,8 @@ const invitationStatusMessages = {
 export function AcceptWorkspaceInvitation(props: {
   data: WorkspaceInvitationPageData;
   registrationSucceeded: boolean;
-  token: string;
+  token?: string;
+  workspaceId?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +131,11 @@ export function AcceptWorkspaceInvitation(props: {
                 setError(null);
                 startTransition(async () => {
                   try {
-                    await acceptWorkspaceInvitation({ token: props.token });
+                    if (props.token) {
+                      await acceptWorkspaceInvitation({ token: props.token });
+                    } else if (props.workspaceId) {
+                      await acceptWorkspaceInvitationInApp({ workspaceId: props.workspaceId });
+                    }
                     router.push('/dashboard');
                     router.refresh();
                   } catch {

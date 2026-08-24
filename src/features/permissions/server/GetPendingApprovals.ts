@@ -6,6 +6,7 @@ import { db } from '@/libs/DB';
 import {
   projectAccessRequestsSchema,
   projectsSchema,
+  userSchema,
   workspaceAccessRequestsSchema,
   workspacesSchema,
 } from '@/models/Schema';
@@ -13,7 +14,11 @@ import {
 export type PendingApprovalItem = {
   createdAt: Date;
   kind: 'workspace' | 'project';
+  memberUserId: string;
   requestedRole: string;
+  requesterEmail: string;
+  requesterName: string;
+  resourceId: string;
   resourceName: string;
 };
 
@@ -31,7 +36,11 @@ export const getPendingApprovals = cache(async (limit = 5): Promise<PendingAppro
     db
       .select({
         createdAt: workspaceAccessRequestsSchema.createdAt,
+        memberUserId: workspaceAccessRequestsSchema.userId,
         requestedRole: workspaceAccessRequestsSchema.requestedRole,
+        requesterEmail: userSchema.email,
+        requesterName: userSchema.name,
+        resourceId: workspacesSchema.id,
         resourceName: workspacesSchema.name,
       })
       .from(workspaceAccessRequestsSchema)
@@ -39,17 +48,23 @@ export const getPendingApprovals = cache(async (limit = 5): Promise<PendingAppro
         workspacesSchema,
         eq(workspacesSchema.id, workspaceAccessRequestsSchema.workspaceId),
       )
+      .innerJoin(userSchema, eq(userSchema.id, workspaceAccessRequestsSchema.userId))
       .where(eq(workspacesSchema.ownerId, userId))
       .orderBy(desc(workspaceAccessRequestsSchema.createdAt))
       .limit(limit),
     db
       .select({
         createdAt: projectAccessRequestsSchema.createdAt,
+        memberUserId: projectAccessRequestsSchema.userId,
         requestedRole: projectAccessRequestsSchema.requestedRole,
+        requesterEmail: userSchema.email,
+        requesterName: userSchema.name,
+        resourceId: projectsSchema.id,
         resourceName: projectsSchema.name,
       })
       .from(projectAccessRequestsSchema)
       .innerJoin(projectsSchema, eq(projectsSchema.id, projectAccessRequestsSchema.projectId))
+      .innerJoin(userSchema, eq(userSchema.id, projectAccessRequestsSchema.userId))
       .where(eq(projectsSchema.ownerId, userId))
       .orderBy(desc(projectAccessRequestsSchema.createdAt))
       .limit(limit),

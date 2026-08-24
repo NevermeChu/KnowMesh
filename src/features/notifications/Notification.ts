@@ -21,6 +21,7 @@ export type NotificationType = (typeof notificationTypes)[number];
 export type NotificationTargetKind = (typeof notificationTargetKinds)[number];
 
 export type NotificationItem = {
+  actorUserId?: string | null;
   body: string;
   createdAt: Date;
   id: string;
@@ -32,6 +33,7 @@ export type NotificationItem = {
 };
 
 export type RealtimeNotificationItem = {
+  actorUserId?: string | null;
   body: string;
   createdAt: string;
   id: string;
