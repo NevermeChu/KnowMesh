@@ -56,6 +56,8 @@
 
 启用功能开关后的 Team 文档使用按文档隔离的 Hocuspocus Provider 和 Y.Doc。客户端和服务端 transformer 必须统一把正文存放在名为 `content` 的 Y.XmlFragment；加载早期版本写入的 `default` 字段时，服务端会在读取二进制状态后转换为 canonical `content` 状态。客户端必须完成首次 Yjs 同步后才创建 Tiptap，不把服务端传入的 JSON 再次写入 Y.Doc；Team 正文更新只进入 Collaboration 扩展，StarterKit Undo/Redo 在该模式关闭，标题仍由 `updateDocument` 保存。文档组件只在协作编辑器挂载期间创建 WebSocket；卸载时先销毁房间 Provider、发送关闭消息，再销毁外层传输，避免路由切换遗留连接。界面区分连接、同步、离线、失败、已同步和 viewer 只读状态；文档连接关闭、底层断线或认证失败会立即冻结正文，认证失败也会撤销基于旧页面权限的标题编辑入口。重新认证后只有服务端返回 `read-write` scope 且页面授权仍允许写入时才恢复编辑。在线成员、远端光标与选区来自服务端净化后的 Awareness，成员列表按用户 ID 防御性去重。
 
+客户端用 50ms 固定窗口合并本地光标与选区位置，只发送窗口内最后一次 `cursor` 状态；用户身份、Presence 移除和 Yjs 正文更新不经过该限流，失焦或卸载时立即清除远端光标。
+
 Team 文档不会进入 JSON 正文写入。功能开关关闭时，服务端对所有 Team 文档返回 `collaborative-readonly` 模式，页面直接读取当前 `documents.content` 快照，不建立 Provider，也不允许正文编辑或调用 `updateDocument(content)`；标题仍按独立的 `document.update` 授权保存。重新启用开关后，已有协作状态的文档继续使用既有 Yjs 权威状态，尚未初始化的文档才从经过验证的 JSON 快照首次初始化。
 
 Provider 报告本地未同步正文更新后，界面保持“保存中”直到协作服务完成 Yjs 状态与 JSON 投影的事务写入；服务通过房间内无状态消息反馈成功或失败。持久化失败会显示保存失败但不会启用 JSON 正文写入。首次同步前若服务不可用或认证失败，页面显示服务端读取的只读 JSON 快照；连接恢复并完成首次 Yjs 同步后才重新创建可编辑协作编辑器。Markdown 导出与打印使用当前编辑器内容，搜索继续读取最近一次成功持久化的 `documents.content` 投影，最近文档和收藏只消费文档元数据。

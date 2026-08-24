@@ -14,6 +14,7 @@ import type { Editor } from '@tiptap/react';
 import { useEditor } from '@tiptap/react';
 import { useEffect, useRef, useState } from 'react';
 import { Env } from '@/libs/Env';
+import { throttleDocumentCollaborationCursorAwareness } from '../collaboration/DocumentCollaborationAwarenessThrottle';
 import { parseDocumentCollaborationPersistenceMessage } from '../collaboration/DocumentCollaborationPersistenceMessage';
 import { getDocumentCollaborationRoom } from '../collaboration/DocumentCollaborationRoom';
 import type { Document } from '../Document';
@@ -74,6 +75,13 @@ function CollaborativeDocumentEditorContent(props: {
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [wordCount, setWordCount] = useState(0);
   const registeredEditor = useRef<Editor | null>(null);
+  useEffect(
+    () =>
+      provider.awareness
+        ? throttleDocumentCollaborationCursorAwareness(provider.awareness)
+        : undefined,
+    [provider],
+  );
   useHocuspocusEvent('stateless', (data) => {
     const message = parseDocumentCollaborationPersistenceMessage(data.payload);
     if (message) {
