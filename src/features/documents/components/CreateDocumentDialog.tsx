@@ -14,6 +14,7 @@ import { createDocumentSchema } from '../DocumentSchema';
 import { createDocument } from '../server/CreateDocument';
 
 export function CreateDocumentDialog(props: {
+  parentDocument?: { id: string; title: string };
   projectId: string;
   projectName: string;
   onClose: () => void;
@@ -22,6 +23,10 @@ export function CreateDocumentDialog(props: {
   const [error, setError] = useState<string>();
   const [title, setTitle] = useState('');
   const [isPending, startTransition] = useTransition();
+
+  const description = props.parentDocument
+    ? `文件将创建在 ${props.projectName} 的「${props.parentDocument.title}」下`
+    : `文件将创建在${props.projectName}中`;
 
   return (
     <ModalDialog
@@ -35,15 +40,19 @@ export function CreateDocumentDialog(props: {
     >
       <ModalDialogHeader
         closeButton={{ ariaLabel: '关闭', isDisabled: isPending, onClick: props.onClose }}
-        description={`文件将创建在${props.projectName}中`}
-        title="新建文件"
+        description={description}
+        title={props.parentDocument ? '新建子文件' : '新建文件'}
         titleId="create-document-title"
       />
       <form
         onSubmit={(event) => {
           event.preventDefault();
           setError(undefined);
-          const result = createDocumentSchema.safeParse({ projectId: props.projectId, title });
+          const result = createDocumentSchema.safeParse({
+            parentId: props.parentDocument?.id,
+            projectId: props.projectId,
+            title,
+          });
 
           if (!result.success) {
             setError(result.error.issues[0]?.message ?? '文件名无效');

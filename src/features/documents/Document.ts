@@ -26,17 +26,30 @@ export type DocumentContent = DocumentNode & {
 };
 
 export type Document = {
+  breadcrumbs?: DocumentBreadcrumbItem[];
   content: DocumentContent;
   contentSchemaVersion: number;
   createdAt: Date;
   id: string;
   isStarred?: boolean;
+  parentId: string | null;
   projectId: string;
+  projectName?: string;
+  sortOrder: number;
   title: string;
   updatedAt: Date;
 };
 
-export type DocumentNavigationItem = Pick<Document, 'id' | 'projectId' | 'title'>;
+export type DocumentNavigationItem = Pick<
+  Document,
+  'id' | 'parentId' | 'projectId' | 'sortOrder' | 'title'
+>;
+
+export type DocumentBreadcrumbItem = {
+  href: string;
+  id: string;
+  title: string;
+};
 
 export const EMPTY_DOCUMENT_CONTENT: DocumentContent = {
   content: [{ type: 'paragraph' }],

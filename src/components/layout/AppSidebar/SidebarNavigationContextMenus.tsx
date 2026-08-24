@@ -1,10 +1,12 @@
-'use client';
-
-import { FilePlus, Settings } from 'lucide-react';
+import { ArrowRightLeft, FilePlus, Settings } from 'lucide-react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { ContextMenuItem } from '@/components/ui/ContextMenu';
 import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
-import type { NavigationContextMenu, WorkspaceProject } from './SidebarWorkspaceNavigationTypes';
+import type {
+  NavigationContextMenu,
+  WorkspaceDocument,
+  WorkspaceProject,
+} from './SidebarWorkspaceNavigationTypes';
 
 /**
  * Renders project and document navigation menus.
@@ -15,7 +17,12 @@ import type { NavigationContextMenu, WorkspaceProject } from './SidebarWorkspace
 export function SidebarNavigationContextMenus(props: {
   contextMenu: NavigationContextMenu | null;
   onClose: () => void;
+  onCreateChildDocument: (
+    project: WorkspaceProject,
+    parentDocument: { id: string; label: string },
+  ) => void;
   onCreateDocument: (project: WorkspaceProject) => void;
+  onMoveDocument: (project: WorkspaceProject, document: WorkspaceDocument) => void;
   onOpenPermissionOverview: (input: PermissionOverviewInput) => void;
 }) {
   const contextMenuItems: ContextMenuItem[] = (() => {
@@ -25,24 +32,51 @@ export function SidebarNavigationContextMenus(props: {
 
     const { target } = props.contextMenu;
 
+    if (target.kind === 'project') {
+      return [
+        {
+          icon: <Settings aria-hidden="true" className="size-3.5" strokeWidth={1.8} />,
+          label: '管理项目',
+          onSelect: () => {
+            props.onOpenPermissionOverview({ projectId: target.project.id, scope: 'project' });
+          },
+        },
+        {
+          disabled: !target.project.permissions.includes('document.create'),
+          icon: <FilePlus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />,
+          label: '新建文件',
+          onSelect: () => {
+            props.onCreateDocument(target.project);
+          },
+        },
+      ];
+    }
+
     return [
       {
         icon: <Settings aria-hidden="true" className="size-3.5" strokeWidth={1.8} />,
-        label: target.kind === 'project' ? '管理项目' : '管理文件',
+        label: '管理文件',
         onSelect: () => {
-          if (target.kind === 'project') {
-            props.onOpenPermissionOverview({ projectId: target.project.id, scope: 'project' });
-          } else {
-            props.onOpenPermissionOverview({ documentId: target.document.id, scope: 'document' });
-          }
+          props.onOpenPermissionOverview({ documentId: target.document.id, scope: 'document' });
         },
       },
       {
         disabled: !target.project.permissions.includes('document.create'),
         icon: <FilePlus aria-hidden="true" className="size-3.5" strokeWidth={1.8} />,
-        label: '新建文件',
+        label: '新建子文件',
         onSelect: () => {
-          props.onCreateDocument(target.project);
+          props.onCreateChildDocument(target.project, {
+            id: target.document.id,
+            label: target.document.label,
+          });
+        },
+      },
+      {
+        disabled: !target.project.permissions.includes('document.update'),
+        icon: <ArrowRightLeft aria-hidden="true" className="size-3.5" strokeWidth={1.8} />,
+        label: '移动文件',
+        onSelect: () => {
+          props.onMoveDocument(target.project, target.document);
         },
       },
     ];

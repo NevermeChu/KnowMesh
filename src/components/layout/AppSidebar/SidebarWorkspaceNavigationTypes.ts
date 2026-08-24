@@ -2,10 +2,13 @@ import type { LucideIcon } from 'lucide-react';
 import type { Permission } from '@/features/permissions/Permission';
 import type { ProjectArea } from '@/features/projects/Project';
 
-type WorkspaceDocument = {
+export type WorkspaceDocument = {
+  children?: WorkspaceDocument[];
   href: string;
   id: string;
   label: string;
+  parentId: string | null;
+  sortOrder: number;
 };
 
 export type WorkspaceProject = {

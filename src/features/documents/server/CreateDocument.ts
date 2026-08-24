@@ -1,5 +1,6 @@
 'use server';
 
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
@@ -17,16 +18,53 @@ export async function createDocument(input: CreateDocumentInput) {
     userId,
   });
 
+  if (documentInput.parentId) {
+    const [parentDocument] = await db
+      .select({ id: documentsSchema.id })
+      .from(documentsSchema)
+      .where(
+        and(
+          eq(documentsSchema.id, documentInput.parentId),
+          eq(documentsSchema.projectId, authorization.project.id),
+        ),
+      )
+      .limit(1);
+
+    if (!parentDocument) {
+      throw new Error('指定的父文档不存在或不属于当前项目');
+    }
+  }
+
+  const [latestSibling] = await db
+    .select({ sortOrder: documentsSchema.sortOrder })
+    .from(documentsSchema)
+    .where(
+      and(
+        eq(documentsSchema.projectId, authorization.project.id),
+        documentInput.parentId
+          ? eq(documentsSchema.parentId, documentInput.parentId)
+          : isNull(documentsSchema.parentId),
+      ),
+    )
+    .orderBy(desc(documentsSchema.sortOrder))
+    .limit(1);
+
+  const sortOrder = (latestSibling?.sortOrder ?? 0) + 1000;
+
   const [document] = await db
     .insert(documentsSchema)
     .values({
       createdById: userId,
+      parentId: documentInput.parentId ?? null,
       projectId: authorization.project.id,
+      sortOrder,
       title: documentInput.title,
     })
     .returning({
       id: documentsSchema.id,
+      parentId: documentsSchema.parentId,
       projectId: documentsSchema.projectId,
+      sortOrder: documentsSchema.sortOrder,
       title: documentsSchema.title,
     });
 

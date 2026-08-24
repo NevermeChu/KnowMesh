@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectPermissionDecision } from '@/features/permissions/PermissionPolicy';
 import { db } from '@/libs/DB';
@@ -74,12 +74,14 @@ export async function getWorkspaceNavigation(options: { workspaceId: string }) {
   const documents = await db
     .select({
       id: documentsSchema.id,
+      parentId: documentsSchema.parentId,
       projectId: documentsSchema.projectId,
+      sortOrder: documentsSchema.sortOrder,
       title: documentsSchema.title,
     })
     .from(documentsSchema)
     .where(inArray(documentsSchema.projectId, documentProjectIds))
-    .orderBy(desc(documentsSchema.updatedAt));
+    .orderBy(asc(documentsSchema.sortOrder), desc(documentsSchema.updatedAt));
 
   return { documents, projects };
 }

@@ -1,11 +1,12 @@
 import 'server-only';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
 import { Env } from '@/libs/Env';
 import { documentsSchema, starredDocumentsSchema } from '@/models/Schema';
+import type { DocumentBreadcrumbItem } from '../Document';
 import { getDocumentEditorMode } from '../DocumentEditorMode';
 
 export async function getProjectDocuments(options: {
@@ -29,15 +30,19 @@ export async function getProjectDocuments(options: {
     .select({
       createdAt: documentsSchema.createdAt,
       id: documentsSchema.id,
+      parentId: documentsSchema.parentId,
+      sortOrder: documentsSchema.sortOrder,
       title: documentsSchema.title,
       updatedAt: documentsSchema.updatedAt,
     })
     .from(documentsSchema)
     .where(eq(documentsSchema.projectId, options.projectId))
-    .orderBy(desc(documentsSchema.updatedAt));
+    .orderBy(asc(documentsSchema.sortOrder), desc(documentsSchema.updatedAt));
 
   const documents = documentMetadata.map((document) => ({
     id: document.id,
+    parentId: document.parentId,
+    sortOrder: document.sortOrder,
     title: document.title,
   }));
   const selectedMetadata = options.documentId
@@ -62,6 +67,31 @@ export async function getProjectDocuments(options: {
       selectedDocument: null,
       selectedDocumentTitle: selectedMetadata.title,
     };
+  }
+
+  const areaHref = options.workspaceKind === 'personal' ? '/personal' : '/collaboration';
+  const breadcrumbs: DocumentBreadcrumbItem[] = [];
+  const metadataById = new Map(documentMetadata.map((doc) => [doc.id, doc]));
+  let currentParentId = selectedMetadata.parentId;
+  const visited = new Set<string>();
+
+  while (currentParentId) {
+    if (visited.has(currentParentId)) {
+      break;
+    }
+    visited.add(currentParentId);
+
+    const parent = metadataById.get(currentParentId);
+    if (!parent) {
+      break;
+    }
+
+    breadcrumbs.unshift({
+      href: `${areaHref}?project=${options.projectId}&document=${parent.id}`,
+      id: parent.id,
+      title: parent.title,
+    });
+    currentParentId = parent.parentId;
   }
 
   const [[selectedContent], [starredRecord]] = await Promise.all([
@@ -102,9 +132,11 @@ export async function getProjectDocuments(options: {
       : null,
     selectedDocument: selectedContent
       ? {
+          breadcrumbs,
           content: selectedContent.content,
           contentSchemaVersion: selectedContent.contentSchemaVersion,
           projectId: selectedContent.projectId,
+          projectName: authorization.project.name,
           ...selectedMetadata,
           isStarred: Boolean(starredRecord),
         }
