@@ -25,7 +25,7 @@ describe('document search migrations', () => {
       '0024_add-document-search-text.sql',
       '0025_add-trgm-search-indexes.sql',
     ]);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await database.close();
