@@ -5,6 +5,7 @@ import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { removeProjectForUser } from '@/features/permissions/server/ResourceRemoval';
+import { requireProjectPermissionInTransaction } from '@/features/permissions/server/RevalidateProjectPermission';
 import { db } from '@/libs/DB';
 import { deleteProjectSchema } from '../ProjectMutationSchema';
 import type { DeleteProjectInput } from '../ProjectMutationSchema';
@@ -18,6 +19,13 @@ export async function deleteOrLeaveProject(input: DeleteProjectInput) {
     userId,
   });
   const operation = await db.transaction(async (transaction) => {
+    await requireProjectPermissionInTransaction({
+      permission: 'project.read',
+      projectId: authorization.project.id,
+      transaction,
+      userId,
+    });
+
     const result = await removeProjectForUser(transaction, {
       isOwner: authorization.project.ownerId === userId,
       projectId: authorization.project.id,
