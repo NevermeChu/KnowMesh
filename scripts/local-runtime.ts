@@ -12,6 +12,7 @@ export type RuntimeMode = 'build-local' | 'dev' | 'playwright-dev' | 'playwright
 type Command = {
   args: string[];
   command: string;
+  env?: Record<string, string>;
   ipc?: boolean;
   name: string;
 };
@@ -41,7 +42,9 @@ type RuntimeSignal = {
 const DATABASE_HOST = '127.0.0.1';
 const DATABASE_PORT = 5432;
 const STARTUP_TIMEOUT_MS = 60_000;
-const SHUTDOWN_TIMEOUT_MS = 2000;
+// Must comfortably exceed the embedded PostgreSQL checkpoint time; a forced
+// kill before checkpointing has corrupted local data directories twice.
+const SHUTDOWN_TIMEOUT_MS = 15_000;
 const COLLABORATION_HEALTH_REQUEST_TIMEOUT_MS = 1000;
 const COLLABORATION_SHUTDOWN_TIMEOUT_MS = 17_000;
 
@@ -58,7 +61,7 @@ export const createCommands = (options: {
   });
   const databasePackage = fileURLToPath(import.meta.resolve('@electric-sql/pglite-socket'));
   const nextCliPath = fileURLToPath(import.meta.resolve('next/dist/bin/next'));
-  const tsxCliPath = fileURLToPath(import.meta.resolve('tsx/cli'));
+  const windowsChildPreloadPath = resolve(options.cwd, 'scripts/windows-hide-child-process.ts');
   const databaseArgs = [
     resolve(dirname(databasePackage), 'scripts/server.js'),
     '-m',
@@ -72,7 +75,7 @@ export const createCommands = (options: {
   }
 
   const applicationCommand = options.mode === 'playwright-start' ? 'start' : 'dev';
-  const collaborationArgs = [tsxCliPath];
+  const collaborationArgs = ['--import=tsx'];
   if (existsSync(resolve(options.cwd, '.env'))) {
     collaborationArgs.push('--env-file=.env');
   }
@@ -82,6 +85,9 @@ export const createCommands = (options: {
     application: {
       args: [nextCliPath, applicationCommand],
       command: options.nodePath,
+      env: {
+        KNOWMESH_WINDOWS_CHILD_PRELOAD: pathToFileURL(windowsChildPreloadPath).href,
+      },
       name: 'Next.js',
     },
     build: npmCommand('Next.js build', 'build:next'),
@@ -113,7 +119,7 @@ export const createSpawnOptions = (options: {
   return {
     cwd: options.cwd,
     detached,
-    env: process.env,
+    env: { ...process.env, ...options.command.env },
     shell: false,
     stdio,
     windowsHide: options.platform === 'win32',
