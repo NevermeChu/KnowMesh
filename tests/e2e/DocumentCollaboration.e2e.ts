@@ -378,42 +378,53 @@ test.describe('team document collaboration', () => {
   });
 
   const revocationScenarios = [
-    {
-      name: 'project role downgrade',
-      revokeSql: `
-        UPDATE project_members
-        SET role = 'viewer'
-        WHERE project_id = '${projectId}' AND user_id = '${editorUserId}'
-      `,
-      restoreSqls: [
-        `
-        INSERT INTO project_members (project_id, user_id, role)
-        VALUES ('${projectId}', '${editorUserId}', 'editor')
-        ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role
-      `,
-      ],
-    },
-    {
-      name: 'workspace membership removal',
-      revokeSql: `
-        DELETE FROM workspace_members
-        WHERE workspace_id = '${workspaceId}' AND user_id = '${editorUserId}'
-      `,
-      restoreSqls: [
-        `
-        INSERT INTO workspace_members (workspace_id, user_id, role)
-        VALUES ('${workspaceId}', '${editorUserId}', 'editor')
-        ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role
-      `,
-        `
-        INSERT INTO project_members (project_id, user_id, role)
-        VALUES ('${projectId}', '${editorUserId}', 'editor')
-        ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role
-      `,
-      ],
-    },
-    {
-      name: 'session revocation',
+    { name: 'project role downgrade' },
+    { name: 'workspace membership removal' },
+    { name: 'session revocation' },
+  ] as const;
+
+  // SQL must be built at test time: fixture IDs are regenerated in beforeEach,
+  // after this describe body has already executed.
+  function buildScenarioQueries(scenarioName: string) {
+    if (scenarioName === 'project role downgrade') {
+      return {
+        revokeSql: `
+          UPDATE project_members
+          SET role = 'viewer'
+          WHERE project_id = '${projectId}' AND user_id = '${editorUserId}'
+        `,
+        restoreSqls: [
+          `
+          INSERT INTO project_members (project_id, user_id, role)
+          VALUES ('${projectId}', '${editorUserId}', 'editor')
+          ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role
+        `,
+        ],
+      };
+    }
+
+    if (scenarioName === 'workspace membership removal') {
+      return {
+        revokeSql: `
+          DELETE FROM workspace_members
+          WHERE workspace_id = '${workspaceId}' AND user_id = '${editorUserId}'
+        `,
+        restoreSqls: [
+          `
+          INSERT INTO workspace_members (workspace_id, user_id, role)
+          VALUES ('${workspaceId}', '${editorUserId}', 'editor')
+          ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role
+        `,
+          `
+          INSERT INTO project_members (project_id, user_id, role)
+          VALUES ('${projectId}', '${editorUserId}', 'editor')
+          ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role
+        `,
+        ],
+      };
+    }
+
+    return {
       revokeSql: `DELETE FROM "session" WHERE id = '${editorSessionId}'`,
       restoreSqls: [
         `
@@ -430,8 +441,8 @@ test.describe('team document collaboration', () => {
           user_id = EXCLUDED.user_id
       `,
       ],
-    },
-  ];
+    };
+  }
 
   const registerRevocationScenario = (scenario: (typeof revocationScenarios)[number]) => {
     test(`disconnects an active editor after ${scenario.name}`, async ({ baseURL, browser }) => {
@@ -445,6 +456,7 @@ test.describe('team document collaboration', () => {
         browser,
         sessionToken: editorSessionToken,
       });
+      const { revokeSql, restoreSqls } = buildScenarioQueries(scenario.name);
 
       try {
         const page = await context.newPage();
@@ -453,11 +465,11 @@ test.describe('team document collaboration', () => {
         await expect(page.locator('.ProseMirror[contenteditable="true"]')).toBeVisible();
         const invalidatedConnections = await readInvalidatedConnections();
 
-        await pool.query(scenario.revokeSql);
+        await pool.query(revokeSql);
 
         await expectCollaborationRevoked(page, invalidatedConnections);
       } finally {
-        for (const restoreSql of scenario.restoreSqls) {
+        for (const restoreSql of restoreSqls) {
           await pool.query(restoreSql);
         }
         await context.close();
