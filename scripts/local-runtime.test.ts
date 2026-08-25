@@ -9,6 +9,7 @@ import {
   runRuntime,
 } from './local-runtime';
 import type { RuntimeOperations } from './local-runtime';
+import { createHiddenSpawnOptions } from './windows-hide-child-process';
 
 function createChild(options?: { connected?: boolean; pid?: number }) {
   const child = new ChildProcess();
@@ -46,7 +47,11 @@ describe('local runtime collaboration orchestration', () => {
       name: 'Hocuspocus',
     });
     expect(commands.application).toMatchObject({
-      args: [expect.stringMatching(/next[\\/]dist[\\/]bin[\\/]next$/u), 'dev'],
+      args: [
+        expect.stringMatching(/^--import=file:.*windows-hide-child-process\.ts$/u),
+        expect.stringMatching(/next[\\/]dist[\\/]bin[\\/]next$/u),
+        'dev',
+      ],
       command: 'node',
       env: {
         KNOWMESH_WINDOWS_CHILD_PRELOAD: expect.stringMatching(
@@ -72,10 +77,45 @@ describe('local runtime collaboration orchestration', () => {
     expect(
       createSpawnOptions({ command: commands.migration, cwd: 'D:/KnowMesh', platform: 'win32' }),
     ).toMatchObject({ detached: false, windowsHide: true });
+    expect(createHiddenSpawnOptions({ windowsHide: false })).toMatchObject({ windowsHide: true });
   });
 
   it('forces the complete Windows process tree to exit', () => {
     expect(createWindowsTerminationArgs(123)).toStrictEqual(['/PID', '123', '/T', '/F']);
+  });
+
+  it('rejects occupied ports before starting services', async () => {
+    const spawnProcess = vi.fn<RuntimeOperations['spawnProcess']>(() => createChild());
+    const terminateRuntimeProcesses =
+      vi.fn<NonNullable<RuntimeOperations['terminateRuntimeProcesses']>>();
+    const operations: RuntimeOperations = {
+      assertRuntimePortsAvailable: async () => {
+        await Promise.reject(new Error('Next.js port 3000 is already in use'));
+      },
+      spawnProcess,
+      terminateRuntimeProcesses,
+      terminateProcess: async () => {
+        await Promise.resolve();
+      },
+      waitForCollaborationReady: async () => {
+        await Promise.resolve();
+      },
+      waitForPort: async () => {
+        await Promise.resolve();
+      },
+    };
+
+    await expect(
+      runRuntime({
+        collaborationEnabled: true,
+        manageDatabase: true,
+        mode: 'dev',
+        operations,
+      }),
+    ).rejects.toThrow('Next.js port 3000 is already in use');
+
+    expect(spawnProcess).not.toHaveBeenCalled();
+    expect(terminateRuntimeProcesses).not.toHaveBeenCalled();
   });
 
   it('starts collaboration after migration and before Next.js', async () => {

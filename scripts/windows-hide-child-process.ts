@@ -2,6 +2,12 @@ import childProcess from 'node:child_process';
 import process from 'node:process';
 
 const preloadUrl = process.env.KNOWMESH_WINDOWS_CHILD_PRELOAD;
+const originalSpawn = childProcess.spawn.bind(childProcess);
+
+export const createHiddenSpawnOptions = (options: childProcess.SpawnOptions = {}) => ({
+  ...options,
+  windowsHide: true,
+});
 
 const isArgumentList = (
   value: readonly string[] | childProcess.ForkOptions | undefined,
@@ -17,6 +23,21 @@ const createForkStdio = (options: childProcess.ForkOptions): childProcess.SpawnO
 };
 
 if (process.platform === 'win32' && preloadUrl) {
+  Object.defineProperty(childProcess, 'spawn', {
+    configurable: true,
+    value: (
+      command: string,
+      argsOrOptions?: readonly string[] | childProcess.SpawnOptions,
+      options?: childProcess.SpawnOptions,
+    ) => {
+      const spawnArgs = isArgumentList(argsOrOptions) ? argsOrOptions : [];
+      const spawnOptions = isArgumentList(argsOrOptions) ? (options ?? {}) : (argsOrOptions ?? {});
+
+      return originalSpawn(command, [...spawnArgs], createHiddenSpawnOptions(spawnOptions));
+    },
+    writable: true,
+  });
+
   Object.defineProperty(childProcess, 'fork', {
     configurable: true,
     value: (
@@ -35,11 +56,10 @@ if (process.platform === 'win32' && preloadUrl) {
         ...spawnOptions
       } = forkOptions;
 
-      return childProcess.spawn(executable, [...execArgs, modulePath.toString(), ...forkArgs], {
-        ...spawnOptions,
+      return originalSpawn(executable, [...execArgs, modulePath.toString(), ...forkArgs], {
+        ...createHiddenSpawnOptions(spawnOptions),
         shell: false,
         stdio: createForkStdio(forkOptions),
-        windowsHide: true,
       });
     },
     writable: true,

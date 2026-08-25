@@ -23,6 +23,10 @@ type ProcessResult = {
 };
 
 export type RuntimeOperations = {
+  assertRuntimePortsAvailable?: (options: {
+    collaborationEnabled: boolean;
+    manageDatabase: boolean;
+  }) => Promise<void>;
   spawnProcess: (command: Command) => ChildProcess;
   terminateProcess: (child: ChildProcess, timeoutMs?: number) => Promise<void>;
   terminateRuntimeProcesses?: (children: {
@@ -62,6 +66,7 @@ export const createCommands = (options: {
   const databasePackage = fileURLToPath(import.meta.resolve('@electric-sql/pglite-socket'));
   const nextCliPath = fileURLToPath(import.meta.resolve('next/dist/bin/next'));
   const windowsChildPreloadPath = resolve(options.cwd, 'scripts/windows-hide-child-process.ts');
+  const windowsChildPreloadUrl = pathToFileURL(windowsChildPreloadPath).href;
   const databaseArgs = [
     resolve(dirname(databasePackage), 'scripts/server.js'),
     '-m',
@@ -83,10 +88,10 @@ export const createCommands = (options: {
 
   return {
     application: {
-      args: [nextCliPath, applicationCommand],
+      args: [`--import=${windowsChildPreloadUrl}`, nextCliPath, applicationCommand],
       command: options.nodePath,
       env: {
-        KNOWMESH_WINDOWS_CHILD_PRELOAD: pathToFileURL(windowsChildPreloadPath).href,
+        KNOWMESH_WINDOWS_CHILD_PRELOAD: windowsChildPreloadUrl,
       },
       name: 'Next.js',
     },
@@ -182,6 +187,9 @@ export const runRuntime = async (options: {
   const cleanup = async () => {
     cleanupPromise ??= (async () => {
       if (options.operations.terminateRuntimeProcesses) {
+        if (!(applicationChild || collaborationChild || databaseChild)) {
+          return;
+        }
         await options.operations.terminateRuntimeProcesses({
           application: applicationChild,
           collaboration: collaborationChild,
@@ -222,6 +230,11 @@ export const runRuntime = async (options: {
   };
 
   try {
+    await options.operations.assertRuntimePortsAvailable?.({
+      collaborationEnabled: options.collaborationEnabled,
+      manageDatabase: options.manageDatabase,
+    });
+
     if (options.manageDatabase) {
       const database = start(commands.database);
       databaseChild = database.child;
@@ -301,6 +314,52 @@ export const createSystemOperations = (options: {
   cwd: string;
   platform: NodeJS.Platform;
 }): RuntimeOperations => {
+  const assertPortAvailable = async (name: string, port: number) => {
+    const { promise, reject, resolve: resolvePort } = Promise.withResolvers<null>();
+    const socket = connect({ host: DATABASE_HOST, port });
+    socket.setTimeout(1000);
+    socket.once('connect', () => {
+      socket.destroy();
+      reject(new Error(`${name} port ${port} is already in use`));
+    });
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      socket.destroy();
+      if (error.code === 'ECONNREFUSED') {
+        resolvePort(null);
+        return;
+      }
+      reject(error);
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      reject(new Error(`Timed out while checking ${name} port ${port}`));
+    });
+    await promise;
+  };
+
+  const assertRuntimePortsAvailable = async (runtimeOptions: {
+    collaborationEnabled: boolean;
+    manageDatabase: boolean;
+  }) => {
+    const ports = [
+      { name: 'Next.js', port: Number(process.env.PORT ?? '3000') },
+      ...(runtimeOptions.collaborationEnabled
+        ? [
+            { name: 'Hocuspocus', port: Number(process.env.COLLABORATION_PORT ?? '1234') },
+            {
+              name: 'Hocuspocus health',
+              port: Number(process.env.COLLABORATION_HEALTH_PORT ?? '1235'),
+            },
+          ]
+        : []),
+      ...(runtimeOptions.manageDatabase ? [{ name: 'PGlite', port: DATABASE_PORT }] : []),
+    ];
+
+    for (const port of ports) {
+      await assertPortAvailable(port.name, port.port);
+    }
+  };
+
   const spawnProcess = (command: Command) => {
     const child = spawn(
       command.command,
@@ -507,6 +566,7 @@ export const createSystemOperations = (options: {
   };
 
   return {
+    assertRuntimePortsAvailable,
     spawnProcess,
     terminateProcess,
     ...(options.platform === 'win32' ? { terminateRuntimeProcesses } : {}),
