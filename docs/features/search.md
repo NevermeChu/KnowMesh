@@ -22,7 +22,7 @@
 3. 正文纯文本包含查询词，权重 10。
 4. 相同权重按文档更新时间倒序。
 
-数据库直接基于 `search_text` 与 `title` 列检索，并利用 PostgreSQL `pg_trgm` 扩展建立 GIN 三元组倒排索引（`documents_search_text_trgm_idx` 与 `documents_title_trgm_idx`）加速 `ILIKE` 模糊匹配，彻底避免全表扫描。系统在单人保存（`UpdateDocument`）与团队协同落库（`DocumentCollaborationPersistence`）时自动从 ProseMirror AST 提取并投影纯文本，彻底消除了检索时在数据库端全表序列化 JSON 以及在 Node.js 内存中反序列化 JSON 的开销，同时杜绝了匹配 JSON 结构标签词的假阳性干扰。数据库查询直接返回匹配的 `searchText`，服务端围绕首次匹配位置生成最长 140 个字符的上下文片段。
+数据库直接基于 `search_text` 与 `title` 列检索，并利用 PostgreSQL `pg_trgm` 扩展建立 GIN 三元组倒排索引（`documents_search_text_trgm_idx` 与 `documents_title_trgm_idx`），使查询规划器可以为适合的 `ILIKE` 模糊匹配选择索引；具体是否使用索引仍由查询模式、统计信息和数据规模决定。系统在单人保存（`UpdateDocument`）与团队协同落库（`DocumentCollaborationPersistence`）时自动从 ProseMirror AST 提取并投影纯文本，因此搜索查询不再在数据库端序列化整棵 JSON，也不在 Node.js 中反序列化全部候选正文，并避免匹配 JSON 结构标签词。数据库查询直接返回匹配的 `searchText`，服务端围绕首次匹配位置生成最长 140 个字符的上下文片段。
 
 `/search` 直接等待 Server Action 返回。`CommandPalette` 在输入停止 180ms 后调用同一 Action，并使用递增请求编号丢弃晚到的旧结果，避免较早查询覆盖较新的输入。
 

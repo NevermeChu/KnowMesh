@@ -208,3 +208,4 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - [ADR 0011：使用事务性 PostgreSQL 通知驱动跨进程 SSE](../adr/0011-use-postgresql-notify-for-realtime-delivery.md)
 - [ADR 0012：Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照](../adr/0012-use-yjs-for-team-document-collaboration.md)
 - [ADR 0014：使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口](../adr/0014-use-browser-yjs-replicas-for-crash-recovery.md)
+- [ADR 0015：按节点加载文档导航树](../adr/0015-lazy-load-document-navigation.md)

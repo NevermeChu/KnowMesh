@@ -6,7 +6,7 @@
 
 ## 领域模型
 
-文档属于一个项目，标题与内容分别存储。`documents.content` 的权威格式是版本化的 ProseMirror JSON，当前版本为 `1`；Markdown 不是持久化格式。当前支持从 ProseMirror JSON 转换后导出 Markdown，尚未实现 Markdown 导入。
+文档属于一个项目，标题与内容分别存储。`documents.content` 使用版本化的 ProseMirror JSON，当前版本为 `1`；它是 Personal 正文的权威持久化状态，也是 Team Yjs 权威状态经过验证的派生投影。Markdown 不是持久化格式。当前支持从 ProseMirror JSON 转换后导出 Markdown，尚未实现 Markdown 导入。
 
 当前内容根节点必须为 `doc`。应用在 Server Action 写入前验证递归节点、marks、attrs 和文本均为可序列化 JSON，并使用与编辑器相同的 Tiptap Starter Kit Schema 拒绝未知或嵌套关系无效的节点。
 
@@ -132,6 +132,7 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0012：Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照](../adr/0012-use-yjs-for-team-document-collaboration.md)
 - [ADR 0014：使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口](../adr/0014-use-browser-yjs-replicas-for-crash-recovery.md)
+- [ADR 0015：按节点加载文档导航树](../adr/0015-lazy-load-document-navigation.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0006：分离 Workspace 结构发现与 Project 内容访问](../adr/0006-separate-workspace-discovery-from-project-content-access.md)

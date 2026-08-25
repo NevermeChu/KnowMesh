@@ -1,8 +1,11 @@
 # KnowMesh 文档实时协作写作实施计划
 
-状态：In Progress（阶段 0–6 已实现；真实 PostgreSQL CI、生产双服务部署与公网 WSS Upgrade 已通过，真实登录双会话业务验收和阶段 7 尚未完成）
+状态：Historical implementation plan（阶段 0–6 已实现；阶段 7 的真实登录双会话业务验收尚未完成）
 
-本文规划现有 Tiptap 文档编辑器从单人自动保存迁移到实时协作写作的实施路径。计划只覆盖文档正文协作、在线成员和光标、权限、持久化、部署与验证；当前实现事实仍以代码、Schema、迁移和当前状态文档为准。
+> [!NOTE]
+> 本文保留协作能力的实施顺序、阶段验收和历史基线，不再作为当前实现说明。当前事实以代码、Schema、迁移、[`features/documents.md`](features/documents.md)、[`architecture/rendering-and-data-flow.md`](architecture/rendering-and-data-flow.md) 以及 ADR 0012/0014 为准。
+
+本文规划 Tiptap 文档编辑器从单人自动保存迁移到实时协作写作的实施路径。计划覆盖文档正文协作、在线成员和光标、权限、持久化、部署与验证。
 
 ## 1. 目标
 
@@ -44,15 +47,15 @@
 - 用户可见的版本历史、快照浏览、差异比较和恢复版本。
 - 文档标题的实时协作；标题继续通过现有 Server Action 保存。
 - 文档级独立 ACL；正文权限继续完全继承 Project 直接成员能力。
-- 长期离线编辑队列和 IndexedDB 持久化；第一阶段只依赖 Provider 断线缓存与重连同步。
+- 长期离线编辑队列；后续实现增加的 IndexedDB 只承担已授权重连后的崩溃恢复，不开放断线继续编辑。
 - 端到端加密；服务端必须能够验证、投影和持久化正文状态。
 - 多实例 Hocuspocus、Redis 广播和跨区域部署；第一阶段保持单实例。
 - SSE 通知通道改造；现有 SSE 继续只承担低频站内通知。
 - Personal Workspace 文档协作；Personal 文档继续使用现有单人写入路径。
 
-## 3. 当前基线
+## 3. 实施前基线（历史）
 
-当前文档编辑流程为：
+实施开始前的文档编辑流程为：
 
 ```text
 Server Component 读取 documents.content
@@ -63,13 +66,13 @@ Server Component 读取 documents.content
   → 覆盖 documents.content JSONB
 ```
 
-当前约束：
+当时的约束：
 
 - `documents.content` 是版本化 ProseMirror JSON，当前由 `content_schema_version` 标识 Schema 版本。
 - `documentExtensions` 同时定义客户端编辑器和服务端 JSON 校验使用的节点集合。
 - 正文读取和写入必须经过 Project 直接成员关系；Workspace 结构发现能力不能授予正文访问。
 - `updateDocument` 同时承担标题和正文保存，正文请求虽然串行发送，但不同浏览器之间仍是后写覆盖。
-- 当前没有 Yjs 状态、双向实时通道、冲突合并或离线队列。
+- 当时没有 Yjs 状态、双向实时通道、冲突合并或离线队列。
 - 现有 Accepted ADR 0002 明确把 ProseMirror JSON 定义为权威持久化格式；将 Team 文档改为以 Yjs 二进制作为正文权威状态前，必须新增 ADR 替代该范围内的决策，不能静默修改 ADR 0002 的历史内容。Personal 文档继续遵守 ADR 0002 的 JSON 权威模型。
 
 ## 4. 核心设计决策
@@ -454,7 +457,7 @@ Personal 文档继续显示当前保存中、已保存和保存失败状态，�
 - 远端光标、选区、用户名和离线状态正确更新。
 - viewer 能看到实时更新但不能修改正文。
 - editor 被降级或移除后，当前页面失去写入能力。
-- 浏览器断线编辑、恢复网络并重连后不重复内容。
+- 浏览器断线后立即只读，恢复网络并重新授权后不重复内容。
 - 协作服务重启后客户端重连并恢复正文。
 - 文档切换、返回和多标签页不会串用 Y.Doc。
 - callout、details、task list、链接和代码块跨客户端保持一致。

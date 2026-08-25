@@ -63,10 +63,10 @@
 └─ /notifications 已读操作与跨页同步
 
 偏好业务
-├─ 用户级 user_preferences 主题
+├─ 用户级 user_preferences 主题与内容宽度
 ├─ 根布局 cookie 镜像 + 内联脚本防闪烁
 ├─ 全站语义颜色 token（亮/暗两套）
-└─ /settings/preferences 主题卡片
+└─ /settings/preferences 主题卡片 + ContentToolbar 宽度选择
 ```
 
 ## 文档类型

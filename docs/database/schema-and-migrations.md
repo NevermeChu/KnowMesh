@@ -64,7 +64,7 @@
 - `(workspace_id, user_id)` 复合外键指向 `workspace_members(workspace_id, user_id)`，保证 Project 成员一定是同一 Workspace 的成员；移除 Workspace 成员时由数据库级联清理其项目成员关系。
 - 角色为 `owner`、`editor` 或 `viewer`。
 - 每个 Project 至多存在一条 `role = owner` 的成员记录；延迟约束触发器在事务提交时验证它必须与 `projects.owner_id` 一致。
-- 联合主键以 `project_id` 开头，支持当前按项目进行的授权、成员读取和清理查询；当前没有从 `user_id` 开始扫描项目成员的查询，因此不保留反向索引。
+- 联合主键以 `project_id` 开头，支持按项目进行的授权、成员读取和清理查询；`(user_id, project_id)` 反向索引支持从当前用户出发过滤其可读取项目，例如全文搜索和最近文档查询。
 - 包含成员关系创建时间。
 - `project_invitations` 保存对已有 Workspace 成员的待接受项目邀请；接受后以 viewer 写入 `project_members`。
 - `project_access_requests` 保存非项目成员申请 viewer 或 Project viewer 申请 editor 的待审批状态。
@@ -108,7 +108,9 @@
 
 - UUID 主键；每个用户最多一行，`user_id` 唯一索引既是 upsert 冲突目标也是读取隔离条件。
 - `theme` 为 `light`、`dark`、`system` 枚举，默认 `system`。
+- `content_width` 为整数，当前应用只写入 `60`、`70`、`80` 或 `90`，默认 `80`；数据库不使用检查约束限制该集合，读取侧会把越界值回退为默认值。
 - 偏好是主题持久化真相源；根布局渲染读取的是 Server Action 同步写入的 `knowmesh-theme` cookie 镜像，不查询本表。
+- `updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
 - Better Auth 删除账户前的业务清理流程删除该用户的偏好行。
 
 ### `starred_documents`

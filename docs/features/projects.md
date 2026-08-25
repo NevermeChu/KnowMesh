@@ -140,3 +140,4 @@ KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，�
 - [数据库与迁移](../database/schema-and-migrations.md)
 - [文档业务](documents.md)
 - [ADR 0008：统一按 owner 删除资源、按 member 退出资源](../adr/0008-delete-owned-resources-on-account-removal.md)
+- [ADR 0015：按节点加载文档导航树](../adr/0015-lazy-load-document-navigation.md)

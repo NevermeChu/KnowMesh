@@ -52,7 +52,7 @@ PostgreSQL / 本地 PGlite
 
 ## 当前工作区外壳
 
-`src/app/(workspace)/layout.tsx` 是 Server Component，先解析当前用户可访问的活动 Workspace，再读取该 Workspace 的项目和文档导航数据，并把安全、可序列化的数据传给 `AppShell`。
+`src/app/(workspace)/layout.tsx` 是 Server Component，先解析当前用户可访问的活动 Workspace，再读取 Personal Workspace 与可选活动 Team Workspace 的项目导航数据，并把安全、可序列化的数据传给 `AppShell`。共享布局不预读项目中的文档树。
 
 `AppShell` 是 Client Component，负责：
 
@@ -64,7 +64,7 @@ PostgreSQL / 本地 PGlite
 
 左上角切换器选择真实 Workspace。个人区域始终读取当前有效用户的 Personal Workspace；协作区域只在活动 Workspace 为 Team 时显示。两个区域复用同一项目与文档实现，但不是 Project 数据字段。
 
-个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端读取项目和文档导航元数据，全局侧边栏按项目显示文档；页面 Server Component 按当前成员关系读取所选文档。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。Personal 文档正文以 ProseMirror JSON 通过 Server Action 自动保存，Team 文档在启用协作时通过 Hocuspocus/Yjs 实时协同并持久化二进制状态与 JSONB 派生快照。
+个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端只读取项目导航元数据；项目或文档节点首次展开时，侧边栏通过重新鉴权的 Server Action 分页读取直接子节点，直接访问深层文档时只注入有界祖先路径。页面 Server Component 按当前成员关系读取所选文档正文。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。Personal 文档正文以 ProseMirror JSON 通过 Server Action 自动保存，Team 文档在启用协作时通过 Hocuspocus/Yjs 实时协同并持久化二进制状态与 JSONB 派生快照。
 
 ## 当前页面状态
 
@@ -124,4 +124,5 @@ PostgreSQL / 本地 PGlite
 - [ADR 0004](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0008](../adr/0008-delete-owned-resources-on-account-removal.md)
 - [ADR 0009](../adr/0009-use-better-auth-for-local-identity.md)
+- [ADR 0015](../adr/0015-lazy-load-document-navigation.md)
 - [系统偏好设置](../features/preferences.md)

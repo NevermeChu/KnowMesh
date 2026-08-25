@@ -1,5 +1,8 @@
 # KnowMesh 基于 SSE 的实时站内通知技术设计方案
 
+> [!WARNING]
+> 这是 PostgreSQL 事务通知接入前的历史技术方案，其中的代码片段、性能目标和实施路线不描述当前实现。当前通知行为以 [`features/notifications.md`](features/notifications.md)、[`architecture/rendering-and-data-flow.md`](architecture/rendering-and-data-flow.md) 和 [`adr/0011-use-postgresql-notify-for-realtime-delivery.md`](adr/0011-use-postgresql-notify-for-realtime-delivery.md) 为准。
+
 本文档基于此前的技术讨论，整理了一份面向 KnowMesh 的**轻量级、零外部依赖、无打扰（Zero-Interruption）**的实时站内通知方案。
 
 ---
@@ -198,7 +201,7 @@ export async function GET() {
 }
 ```
 
-### 4.3 业务写入点集成 ([`CreateNotification.ts`](file:///D:/Project/Git%20Repository/KnowMesh/src/features/notifications/server/CreateNotification.ts))
+### 4.3 业务写入点集成 ([`CreateNotification.ts`](../src/features/notifications/server/CreateNotification.ts))
 在数据库插入成功后，向总线触发广播：
 
 ```ts
@@ -291,7 +294,7 @@ export function useRealtimeUnreadCount() {
 ```
 
 ### 5.2 消费组件局部对接
-1. **侧边栏通知入口** ([`SidebarMenus.tsx`](file:///D:/Project/Git%20Repository/KnowMesh/src/components/layout/AppSidebar/SidebarMenus.tsx))：
+1. **侧边栏通知入口** ([`SidebarMenus.tsx`](../src/components/layout/AppSidebar/SidebarMenus.tsx))：
    - 提取 `<NotificationSidebarBadge />` 独立小组件，通过 `useRealtimeUnreadCount()` 订阅未读数。
    - **效果**：通知到达时，**仅重绘这个小 Badge 的数字文本**，主内容区、编辑器、导航树完全不参与任何 React 渲染。
 2. **轻量浮窗提示 (Toast)**：
