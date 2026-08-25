@@ -95,7 +95,7 @@ Next.js 与 Hocuspocus ───────────────→ 本机 P
 
 不要把 `/etc/knowmesh.env`、数据库连接串、SSH 私钥或真实用户数据复制到文档、Issue、Actions 日志或聊天记录。
 
-release 目录以 40 位 Git SHA 命名，但 artifact 内目前没有独立的 `REVISION` 文件或签名。版本来源依赖 GitHub workflow 和目录名；服务器不能仅从 release 内容独立证明其 commit 身份。后续应在构建时写入只读 revision marker。
+release 目录以 40 位 Git SHA 命名，artifact 根目录同时包含内容为同一 SHA 的 `REVISION` 文件。打包和服务器解压阶段都会校验 marker 与预期 release ID 完全一致，使服务器可以从 release 内容独立核对 commit 身份。
 
 ## 什么情况下会部署
 
@@ -104,13 +104,13 @@ release 目录以 40 位 Git SHA 命名，但 artifact 内目前没有独立的 
 | 操作 | 运行检查 | 部署生产 |
 | --- | --- | --- |
 | push `main` | 是 | 是 |
-| push `feature/permissions` | 是 | 是；这是正式开放前的临时规则 |
+| push `feature/permissions` | 是 | 否 |
 | 向 `main` 提交 Pull Request | 是 | 否 |
 | Actions 页面手动运行 `CI` | 是 | 是，部署所选分支的当前 SHA |
 | Actions 页面手动运行 `Release` | 只构建 artifact | 否 |
 | commit message 包含 `[skip ci]` | GitHub 跳过 push workflow | 否 |
 
-`feature/permissions` 目前和 `main` 一样会直接覆盖 `thisme.icu`。功能分支部署规则不会自动合并分支；项目正式开放前应删除这条例外，只允许 `main` 自动部署。
+只有 `main` push 或明确的手动 workflow 运行会覆盖 `thisme.icu`；功能分支 push 只运行检查，不部署生产。
 
 deploy job 使用 `production-deployment` 并发组且不取消进行中的部署，所以两个生产发布不会同时切换 `current`。
 
@@ -156,6 +156,7 @@ Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。deploy job �
 - 自包含的 `collaboration-server.cjs`。
 - `deploy/systemd/knowmesh-collaboration.service`。
 - `deploy/nginx/` 下的两个协作代理片段。
+- `REVISION`，保存构建该 artifact 的完整 Git SHA。
 
 打包前会删除 `.next/standalone/.env*`，所以生产密钥不会进入 artifact。CI workflow 同时把压缩 artifact 保存 14 天，便于审计或人工恢复。
 
@@ -169,7 +170,7 @@ Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。deploy job �
 2. `ssh-keyscan` 获取服务器 ED25519 host key，并与 workflow 中固定的 SHA-256 指纹比较。指纹不一致立即停止，不能静默接受陌生主机。
 3. artifact 通过 `scp` 上传到服务器 `/tmp/knowmesh-release-<SHA>.tgz`。
 4. SSH 以部署用户登录，再通过非交互 `sudo -n bash` 执行服务器端发布脚本。
-5. 压缩包先解到 `/srv/knowmesh-app/releases/.<SHA>.staging`，逐项检查关键文件，再重命名为 `/srv/knowmesh-app/releases/<SHA>`。
+5. 压缩包先解到 `/srv/knowmesh-app/releases/.<SHA>.staging`，逐项检查关键文件并校验 `REVISION`，再重命名为 `/srv/knowmesh-app/releases/<SHA>`。
 6. 检查 `/etc/knowmesh.env` 可读、Node.js 可执行，以及 GitHub 与服务器的协作开关一致。
 7. 新 release 中的迁移程序读取 `/etc/knowmesh.env`，对生产 PostgreSQL 执行尚未执行的迁移。
 8. 记录旧 release，用临时链接加 `mv -Tf` 原子切换 `/srv/knowmesh-app/current`。
@@ -572,7 +573,6 @@ workflow 不会继续启动新 Next.js，并会回滚。检查协作服务日志
 - 将 `knowmesh.service`、完整 Nginx 站点和首次 bootstrap 收入版本控制。
 - 收紧 SSH 与网络边界；`PermitRootLogin` 当前允许 root 公钥登录，UFW inactive，Azure NSG 规则未确认。
 - 为 Next.js unit 增加与协作 unit 相称的 systemd 沙箱，并验证应用确实不需要被移除的权限。
-- 为 artifact 增加 revision marker，使服务器可以独立核对 release 身份。
 
 这些是“系统能部署”与“系统可长期可靠运营”之间的差别。生产实际开放前至少要完成数据库备份和恢复演练、确认云侧防火墙、收紧部署 sudoers，并建立监控告警。安全加固必须先验证现有 GitHub 部署仍能执行必要操作，不能直接删除权限导致无法发布或回滚。
 

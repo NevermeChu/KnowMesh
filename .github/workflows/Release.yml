@@ -45,6 +45,7 @@ jobs:
           cp -r .next/static/. .next/standalone/.next/static/
           cp -r migrations/. .next/standalone/migrations/
           cp -r deploy/. .next/standalone/deploy/
+          printf '%s\n' "${GITHUB_SHA}" > .next/standalone/REVISION
           rm -f .next/standalone/.env*
           test -f .next/standalone/server.js
           test -f .next/standalone/migrate-production.cjs
@@ -52,6 +53,7 @@ jobs:
           test -f .next/standalone/deploy/systemd/knowmesh-collaboration.service
           test -f .next/standalone/deploy/nginx/knowmesh-websocket-map.conf
           test -f .next/standalone/deploy/nginx/knowmesh-collaboration-location.conf
+          test "$(cat .next/standalone/REVISION)" = "${GITHUB_SHA}"
 
       - name: Upload production artifact
         uses: actions/upload-artifact@v7

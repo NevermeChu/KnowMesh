@@ -152,8 +152,7 @@ jobs:
     name: Deploy production
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/feature/permissions')
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [build, static, unit, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -217,6 +216,7 @@ jobs:
           cp -r .next/static/. .next/standalone/.next/static/
           cp -r migrations/. .next/standalone/migrations/
           cp -r deploy/. .next/standalone/deploy/
+          printf '%s\n' "${GITHUB_SHA}" > .next/standalone/REVISION
           rm -f .next/standalone/.env*
           test -f .next/standalone/server.js
           test -f .next/standalone/migrate-production.cjs
@@ -227,6 +227,7 @@ jobs:
           test -f .next/standalone/deploy/systemd/knowmesh-collaboration.service
           test -f .next/standalone/deploy/nginx/knowmesh-websocket-map.conf
           test -f .next/standalone/deploy/nginx/knowmesh-collaboration-location.conf
+          test "$(cat .next/standalone/REVISION)" = "${GITHUB_SHA}"
           tar -C .next/standalone -czf "${RUNNER_TEMP}/knowmesh-release-${GITHUB_SHA}.tgz" .
 
       - name: Retain production artifact
@@ -336,6 +337,7 @@ jobs:
             test -f "${staging_dir}/deploy/systemd/knowmesh-collaboration.service"
             test -f "${staging_dir}/deploy/nginx/knowmesh-websocket-map.conf"
             test -f "${staging_dir}/deploy/nginx/knowmesh-collaboration-location.conf"
+            test "$(cat "${staging_dir}/REVISION")" = "${release_id}"
             chown -R thisme:thisme "${staging_dir}"
             mv -- "${staging_dir}" "${release_dir}"
           fi
@@ -349,6 +351,7 @@ jobs:
           test -f "${release_dir}/deploy/systemd/knowmesh-collaboration.service"
           test -f "${release_dir}/deploy/nginx/knowmesh-websocket-map.conf"
           test -f "${release_dir}/deploy/nginx/knowmesh-collaboration-location.conf"
+          test "$(cat "${release_dir}/REVISION")" = "${release_id}"
           test -r "${environment_file}"
           test -x "${node_binary}"
 
