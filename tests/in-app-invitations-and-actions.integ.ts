@@ -9,6 +9,7 @@ import type {
   rejectProjectInvitation as rejectProjectInvitationType,
 } from '@/features/permissions/server/ProjectMembers';
 import type {
+  acceptWorkspaceInvitation as acceptWorkspaceInvitationType,
   acceptWorkspaceInvitationInApp as acceptWorkspaceInvitationInAppType,
   approveWorkspaceAccessRequest as approveWorkspaceAccessRequestType,
   declineWorkspaceInvitationInApp as declineWorkspaceInvitationInAppType,
@@ -34,6 +35,7 @@ vi.mock('next/cache', () => ({
 }));
 
 let database: PGlite;
+let acceptWorkspaceInvitation: typeof acceptWorkspaceInvitationType;
 let acceptWorkspaceInvitationInApp: typeof acceptWorkspaceInvitationInAppType;
 let declineWorkspaceInvitationInApp: typeof declineWorkspaceInvitationInAppType;
 let approveWorkspaceAccessRequest: typeof approveWorkspaceAccessRequestType;
@@ -69,6 +71,7 @@ describe('in-app invitations and direct actions', () => {
 
     const workspaceMembersModule = await import('@/features/permissions/server/WorkspaceMembers');
     ({
+      acceptWorkspaceInvitation,
       acceptWorkspaceInvitationInApp,
       approveWorkspaceAccessRequest,
       declineWorkspaceInvitationInApp,
@@ -109,7 +112,8 @@ describe('in-app invitations and direct actions', () => {
         VALUES
           ('10000000-0000-4000-8000-000000000201', 'team', 'Test Workspace 1', 'user_owner'),
           ('10000000-0000-4000-8000-000000000202', 'team', 'Test Workspace 2', 'user_owner'),
-          ('10000000-0000-4000-8000-000000000203', 'team', 'Test Workspace 3', 'user_owner')
+          ('10000000-0000-4000-8000-000000000203', 'team', 'Test Workspace 3', 'user_owner'),
+          ('10000000-0000-4000-8000-000000000204', 'team', 'Test Workspace 4', 'user_owner')
       `);
 
       await transaction.query(`
@@ -117,7 +121,8 @@ describe('in-app invitations and direct actions', () => {
         VALUES
           ('10000000-0000-4000-8000-000000000201', 'user_owner', 'owner'),
           ('10000000-0000-4000-8000-000000000202', 'user_owner', 'owner'),
-          ('10000000-0000-4000-8000-000000000203', 'user_owner', 'owner')
+          ('10000000-0000-4000-8000-000000000203', 'user_owner', 'owner'),
+          ('10000000-0000-4000-8000-000000000204', 'user_owner', 'owner')
       `);
 
       await transaction.query(`
@@ -187,6 +192,36 @@ describe('in-app invitations and direct actions', () => {
       `SELECT read_at FROM notifications WHERE id = '50000000-0000-4000-8000-000000000201'`,
     );
     expect(notifResult.rows[0]?.read_at).not.toBeNull();
+  });
+
+  it('accepts workspace invitation through its bearer token', async () => {
+    currentUser = {
+      email: 'invitee@knowmesh.test',
+      id: 'user_invitee',
+      name: 'Invitee User',
+    };
+    const workspaceId = '10000000-0000-4000-8000-000000000204';
+    const token = 'workspace-invitation-token-00000001';
+    const { hashWorkspaceInvitationToken } =
+      await import('@/features/permissions/server/WorkspaceInvitationToken');
+
+    await database.query(`
+      INSERT INTO workspace_invitations (id, workspace_id, email, token_hash, invited_by_id, expires_at)
+      VALUES (
+        '40000000-0000-4000-8000-000000000204',
+        '${workspaceId}',
+        'invitee@knowmesh.test',
+        '${hashWorkspaceInvitationToken(token)}',
+        'user_owner',
+        NOW() + INTERVAL '7 days'
+      )
+    `);
+
+    await expect(acceptWorkspaceInvitation({ token })).resolves.toEqual({ workspaceId });
+    const memberResult = await database.query<{ role: string }>(
+      `SELECT role FROM workspace_members WHERE workspace_id = '${workspaceId}' AND user_id = 'user_invitee'`,
+    );
+    expect(memberResult.rows).toEqual([{ role: 'viewer' }]);
   });
 
   it('declines workspace invitation in-app and auto-marks notification as read', async () => {

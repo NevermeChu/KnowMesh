@@ -17,62 +17,65 @@ export async function syncPendingWorkspaceInvitations(userId: string, emailAddre
 
   const normalizedEmails = emailAddresses.map((email) => email.toLowerCase());
 
-  const pendingInvitations = await db
-    .select({
-      id: workspaceInvitationsSchema.id,
-      invitedById: workspaceInvitationsSchema.invitedById,
-      workspaceId: workspaceInvitationsSchema.workspaceId,
-      workspaceName: workspacesSchema.name,
-    })
-    .from(workspaceInvitationsSchema)
-    .innerJoin(workspacesSchema, eq(workspacesSchema.id, workspaceInvitationsSchema.workspaceId))
-    .where(
-      and(
-        inArray(sql`lower(${workspaceInvitationsSchema.email})`, normalizedEmails),
-        isNull(workspaceInvitationsSchema.acceptedAt),
-        isNull(workspaceInvitationsSchema.revokedAt),
-        gt(workspaceInvitationsSchema.expiresAt, new Date()),
-      ),
-    );
+  await db.transaction(async (transaction) => {
+    const pendingInvitations = await transaction
+      .select({
+        id: workspaceInvitationsSchema.id,
+        invitedById: workspaceInvitationsSchema.invitedById,
+        workspaceId: workspaceInvitationsSchema.workspaceId,
+        workspaceName: workspacesSchema.name,
+      })
+      .from(workspaceInvitationsSchema)
+      .innerJoin(workspacesSchema, eq(workspacesSchema.id, workspaceInvitationsSchema.workspaceId))
+      .where(
+        and(
+          inArray(sql`lower(${workspaceInvitationsSchema.email})`, normalizedEmails),
+          isNull(workspaceInvitationsSchema.acceptedAt),
+          isNull(workspaceInvitationsSchema.revokedAt),
+          gt(workspaceInvitationsSchema.expiresAt, new Date()),
+        ),
+      );
 
-  if (pendingInvitations.length === 0) {
-    return;
-  }
-
-  const existingNotifications = await db
-    .select({ targetId: notificationsSchema.targetId })
-    .from(notificationsSchema)
-    .where(
-      and(
-        eq(notificationsSchema.recipientUserId, userId),
-        eq(notificationsSchema.type, 'workspace_invited'),
-        eq(notificationsSchema.targetKind, 'workspace'),
-      ),
-    );
-
-  const existingWorkspaceIds = new Set(
-    existingNotifications.map((notification) => notification.targetId).filter(Boolean),
-  );
-
-  const processedWorkspaceIds = new Set<string>();
-
-  for (const invitation of pendingInvitations) {
-    if (
-      existingWorkspaceIds.has(invitation.workspaceId) ||
-      processedWorkspaceIds.has(invitation.workspaceId)
-    ) {
-      continue;
+    if (pendingInvitations.length === 0) {
+      return;
     }
 
-    processedWorkspaceIds.add(invitation.workspaceId);
+    const existingNotifications = await transaction
+      .select({ targetId: notificationsSchema.targetId })
+      .from(notificationsSchema)
+      .where(
+        and(
+          eq(notificationsSchema.recipientUserId, userId),
+          eq(notificationsSchema.type, 'workspace_invited'),
+          eq(notificationsSchema.targetKind, 'workspace'),
+        ),
+      );
 
-    await createNotification(db, {
-      actorUserId: invitation.invitedById,
-      body: `你收到了加入工作区“${invitation.workspaceName}”的邀请。`,
-      recipientUserId: userId,
-      target: { id: invitation.workspaceId, kind: 'workspace' },
-      title: '收到工作区邀请',
-      type: 'workspace_invited',
-    });
-  }
+    const existingWorkspaceIds = new Set(
+      existingNotifications.map((notification) => notification.targetId).filter(Boolean),
+    );
+
+    const processedWorkspaceIds = new Set<string>();
+
+    for (const invitation of pendingInvitations) {
+      if (
+        existingWorkspaceIds.has(invitation.workspaceId) ||
+        processedWorkspaceIds.has(invitation.workspaceId)
+      ) {
+        continue;
+      }
+
+      processedWorkspaceIds.add(invitation.workspaceId);
+
+      await createNotification(transaction, {
+        actorUserId: invitation.invitedById,
+        body: `你收到了加入工作区“${invitation.workspaceName}”的邀请。`,
+        ignoreConflict: true,
+        recipientUserId: userId,
+        target: { id: invitation.workspaceId, kind: 'workspace' },
+        title: '收到工作区邀请',
+        type: 'workspace_invited',
+      });
+    }
+  });
 }

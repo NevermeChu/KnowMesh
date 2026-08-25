@@ -9,7 +9,6 @@ import { db } from '@/libs/DB';
 import { notificationsSchema } from '@/models/Schema';
 
 function revalidateNotifications() {
-  revalidatePath('/(workspace)', 'layout');
   revalidatePath('/notifications');
 }
 

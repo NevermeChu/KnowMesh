@@ -2,11 +2,14 @@
 
 import { randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorkspaceInvitationEmail';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
+import { markRelatedNotificationsRead } from '@/features/notifications/server/MarkRelatedNotificationsRead';
+import { MEMBER_INVITATION_LIFETIME_MS } from '@/features/permissions/MemberInvitation';
 import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
 import {
   formatWorkspaceInvitationExpiration,
@@ -50,8 +53,6 @@ import type {
   WorkspaceAccessReviewInput,
 } from '../MemberSchema';
 import { authorizeWorkspace } from './WorkspaceAuthorization';
-
-const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function notifyExistingWorkspaceInvitee(options: {
   actorUserId: string;
@@ -163,7 +164,7 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
 
   const token = randomBytes(32).toString('base64url');
   const tokenHash = hashWorkspaceInvitationToken(token);
-  const expiresAt = new Date(Date.now() + INVITATION_LIFETIME_MS);
+  const expiresAt = new Date(Date.now() + MEMBER_INVITATION_LIFETIME_MS);
   const invitation = await db.transaction(async (transaction) => {
     const [createdInvitation] = await transaction
       .insert(workspaceInvitationsSchema)
@@ -256,110 +257,19 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
   return invitation;
 }
 
-export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitationInput) {
-  const user = await requireUser();
-  const userId = user.id;
-  const invitationInput = acceptWorkspaceInvitationSchema.parse(input);
+async function acceptWorkspaceInvitationByCondition(options: {
+  invalidMessage: string;
+  user: { email: string; id: string; name: string };
+  where: SQL;
+}) {
   const now = new Date();
-  const [invitation] = await db
-    .select()
-    .from(workspaceInvitationsSchema)
-    .where(
-      and(
-        eq(
-          workspaceInvitationsSchema.tokenHash,
-          hashWorkspaceInvitationToken(invitationInput.token),
-        ),
-        isNull(workspaceInvitationsSchema.acceptedAt),
-        isNull(workspaceInvitationsSchema.revokedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!invitation || invitation.expiresAt <= now || user.email.toLowerCase() !== invitation.email) {
-    throw new Error('邀请无效、已过期或与当前账号邮箱不匹配');
-  }
-
-  await db.transaction(async (transaction) => {
-    const [acceptedInvitation] = await transaction
-      .update(workspaceInvitationsSchema)
-      .set({ acceptedAt: now, acceptedById: userId })
-      .where(
-        and(
-          eq(workspaceInvitationsSchema.id, invitation.id),
-          isNull(workspaceInvitationsSchema.acceptedAt),
-          isNull(workspaceInvitationsSchema.revokedAt),
-        ),
-      )
-      .returning({ id: workspaceInvitationsSchema.id });
-
-    if (!acceptedInvitation) {
-      throw new Error('邀请无效、已过期或已被撤销');
-    }
-
-    const [workspace] = await transaction
-      .select({ name: workspacesSchema.name })
-      .from(workspacesSchema)
-      .where(eq(workspacesSchema.id, invitation.workspaceId))
-      .limit(1);
-
-    if (!workspace) {
-      throw new Error('工作区不存在');
-    }
-
-    await transaction
-      .insert(workspaceMembersSchema)
-      .values({ role: 'viewer', userId, workspaceId: invitation.workspaceId })
-      .onConflictDoNothing();
-    await createNotification(transaction, {
-      actorUserId: userId,
-      body: `${getWorkspaceInvitationInviterName(user)} 已接受加入“${workspace.name}”的邀请。`,
-      recipientUserId: invitation.invitedById,
-      target: { id: invitation.workspaceId, kind: 'workspace' },
-      title: '工作区邀请已接受',
-      type: 'workspace_invitation_accepted',
-    });
-    await recordAuditLog(transaction, {
-      action: 'workspace_invitation_accepted',
-      actorUserId: userId,
-      metadata: {
-        resourceName: workspace.name,
-      },
-      targetId: userId,
-      targetKind: 'member',
-      workspaceId: invitation.workspaceId,
-    });
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: now })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.targetId, invitation.workspaceId),
-          eq(notificationsSchema.type, 'workspace_invited'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
-  });
-
-  revalidatePath('/(workspace)', 'layout');
-  return { workspaceId: invitation.workspaceId };
-}
-
-export async function acceptWorkspaceInvitationInApp(input: AcceptWorkspaceInvitationInAppInput) {
-  const user = await requireUser();
-  const userId = user.id;
-  const invitationInput = acceptWorkspaceInvitationInAppSchema.parse(input);
-  const now = new Date();
-
-  await db.transaction(async (transaction) => {
+  return await db.transaction(async (transaction) => {
     const [invitation] = await transaction
       .select()
       .from(workspaceInvitationsSchema)
       .where(
         and(
-          eq(workspaceInvitationsSchema.workspaceId, invitationInput.workspaceId),
-          eq(sql`lower(${workspaceInvitationsSchema.email})`, user.email.toLowerCase()),
+          options.where,
           isNull(workspaceInvitationsSchema.acceptedAt),
           isNull(workspaceInvitationsSchema.revokedAt),
           gt(workspaceInvitationsSchema.expiresAt, now),
@@ -368,8 +278,23 @@ export async function acceptWorkspaceInvitationInApp(input: AcceptWorkspaceInvit
       .for('update')
       .limit(1);
 
-    if (!invitation) {
-      throw new Error('邀请无效、已过期或已被处理');
+    if (!invitation || invitation.email !== options.user.email.toLowerCase()) {
+      throw new Error(options.invalidMessage);
+    }
+
+    const [acceptedInvitation] = await transaction
+      .update(workspaceInvitationsSchema)
+      .set({ acceptedAt: now, acceptedById: options.user.id })
+      .where(
+        and(
+          eq(workspaceInvitationsSchema.id, invitation.id),
+          isNull(workspaceInvitationsSchema.acceptedAt),
+          isNull(workspaceInvitationsSchema.revokedAt),
+        ),
+      )
+      .returning({ id: workspaceInvitationsSchema.id });
+    if (!acceptedInvitation) {
+      throw new Error(options.invalidMessage);
     }
 
     const [workspace] = await transaction
@@ -384,15 +309,11 @@ export async function acceptWorkspaceInvitationInApp(input: AcceptWorkspaceInvit
 
     await transaction
       .insert(workspaceMembersSchema)
-      .values({ role: 'viewer', userId, workspaceId: invitation.workspaceId })
+      .values({ role: 'viewer', userId: options.user.id, workspaceId: invitation.workspaceId })
       .onConflictDoNothing();
-    await transaction
-      .update(workspaceInvitationsSchema)
-      .set({ acceptedAt: now, acceptedById: userId })
-      .where(eq(workspaceInvitationsSchema.id, invitation.id));
     await createNotification(transaction, {
-      actorUserId: userId,
-      body: `${getWorkspaceInvitationInviterName(user)} 已接受加入“${workspace.name}”的邀请。`,
+      actorUserId: options.user.id,
+      body: `${getWorkspaceInvitationInviterName(options.user)} 已接受加入“${workspace.name}”的邀请。`,
       recipientUserId: invitation.invitedById,
       target: { id: invitation.workspaceId, kind: 'workspace' },
       title: '工作区邀请已接受',
@@ -400,29 +321,52 @@ export async function acceptWorkspaceInvitationInApp(input: AcceptWorkspaceInvit
     });
     await recordAuditLog(transaction, {
       action: 'workspace_invitation_accepted',
-      actorUserId: userId,
+      actorUserId: options.user.id,
       metadata: {
         resourceName: workspace.name,
       },
-      targetId: userId,
+      targetId: options.user.id,
       targetKind: 'member',
       workspaceId: invitation.workspaceId,
     });
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: now })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.targetId, invitation.workspaceId),
-          eq(notificationsSchema.type, 'workspace_invited'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      readAt: now,
+      recipientUserId: options.user.id,
+      targetId: invitation.workspaceId,
+      type: 'workspace_invited',
+    });
+    return invitation.workspaceId;
+  });
+}
+
+export async function acceptWorkspaceInvitation(input: AcceptWorkspaceInvitationInput) {
+  const user = await requireUser();
+  const invitationInput = acceptWorkspaceInvitationSchema.parse(input);
+  const workspaceId = await acceptWorkspaceInvitationByCondition({
+    invalidMessage: '邀请无效、已过期或与当前账号邮箱不匹配',
+    user,
+    where: eq(
+      workspaceInvitationsSchema.tokenHash,
+      hashWorkspaceInvitationToken(invitationInput.token),
+    ),
   });
 
   revalidatePath('/(workspace)', 'layout');
-  return { workspaceId: invitationInput.workspaceId };
+  return { workspaceId };
+}
+
+export async function acceptWorkspaceInvitationInApp(input: AcceptWorkspaceInvitationInAppInput) {
+  const user = await requireUser();
+  const invitationInput = acceptWorkspaceInvitationInAppSchema.parse(input);
+  const workspaceId = await acceptWorkspaceInvitationByCondition({
+    invalidMessage: '邀请无效、已过期或已被处理',
+    user,
+    where: sql`${workspaceInvitationsSchema.workspaceId} = ${invitationInput.workspaceId}
+      and lower(${workspaceInvitationsSchema.email}) = ${user.email.toLowerCase()}`,
+  });
+
+  revalidatePath('/(workspace)', 'layout');
+  return { workspaceId };
 }
 
 export async function declineWorkspaceInvitationInApp(input: DeclineWorkspaceInvitationInAppInput) {
@@ -450,17 +394,12 @@ export async function declineWorkspaceInvitationInApp(input: DeclineWorkspaceInv
       throw new Error('邀请无效、已过期或已被处理');
     }
 
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: now })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.targetId, invitationInput.workspaceId),
-          eq(notificationsSchema.type, 'workspace_invited'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      readAt: now,
+      recipientUserId: userId,
+      targetId: invitationInput.workspaceId,
+      type: 'workspace_invited',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -699,18 +638,12 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
       targetKind: 'member',
       workspaceId: reviewInput.workspaceId,
     });
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
-          eq(notificationsSchema.targetId, reviewInput.workspaceId),
-          eq(notificationsSchema.type, 'workspace_access_requested'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      actorUserId: reviewInput.memberUserId,
+      recipientUserId: userId,
+      targetId: reviewInput.workspaceId,
+      type: 'workspace_access_requested',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -763,18 +696,12 @@ export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewI
       targetKind: 'member',
       workspaceId: reviewInput.workspaceId,
     });
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
-          eq(notificationsSchema.targetId, reviewInput.workspaceId),
-          eq(notificationsSchema.type, 'workspace_access_requested'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      actorUserId: reviewInput.memberUserId,
+      recipientUserId: userId,
+      targetId: reviewInput.workspaceId,
+      type: 'workspace_access_requested',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');

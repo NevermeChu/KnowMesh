@@ -1,13 +1,14 @@
 'use server';
 
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
+import { markRelatedNotificationsRead } from '@/features/notifications/server/MarkRelatedNotificationsRead';
+import { MEMBER_INVITATION_LIFETIME_MS } from '@/features/permissions/MemberInvitation';
 import { db } from '@/libs/DB';
 import {
-  notificationsSchema,
   projectAccessRequestsSchema,
   projectInvitationsSchema,
   projectMembersSchema,
@@ -29,8 +30,6 @@ import type {
   TransferProjectOwnershipInput,
 } from '../MemberSchema';
 import { authorizeProject } from './ProjectAuthorization';
-
-const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function authorizeProjectMemberMutation(input: ProjectMemberMutationInput) {
   const { id: userId } = await requireUser();
@@ -93,7 +92,7 @@ export async function inviteProjectMember(input: ProjectInvitationInput) {
     const [invitation] = await transaction
       .insert(projectInvitationsSchema)
       .values({
-        expiresAt: new Date(Date.now() + INVITATION_LIFETIME_MS),
+        expiresAt: new Date(Date.now() + MEMBER_INVITATION_LIFETIME_MS),
         invitedById: userId,
         projectId: memberInput.projectId,
         userId: memberInput.memberUserId,
@@ -214,17 +213,11 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
       targetKind: 'member',
       workspaceId: project.workspaceId,
     });
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.targetId, invitation.projectId),
-          eq(notificationsSchema.type, 'project_invited'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      recipientUserId: userId,
+      targetId: invitation.projectId,
+      type: 'project_invited',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -366,18 +359,12 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
       targetKind: 'member',
       workspaceId: project.workspaceId,
     });
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
-          eq(notificationsSchema.targetId, reviewInput.projectId),
-          eq(notificationsSchema.type, 'project_access_requested'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      actorUserId: reviewInput.memberUserId,
+      recipientUserId: userId,
+      targetId: reviewInput.projectId,
+      type: 'project_access_requested',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -435,18 +422,12 @@ export async function rejectProjectAccessRequest(input: ProjectAccessReviewInput
       targetKind: 'member',
       workspaceId: project.workspaceId,
     });
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.actorUserId, reviewInput.memberUserId),
-          eq(notificationsSchema.targetId, reviewInput.projectId),
-          eq(notificationsSchema.type, 'project_access_requested'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      actorUserId: reviewInput.memberUserId,
+      recipientUserId: userId,
+      targetId: reviewInput.projectId,
+      type: 'project_access_requested',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');
@@ -604,47 +585,6 @@ export async function removeProjectMember(input: ProjectMemberMutationInput) {
   return membership;
 }
 
-export async function revokeProjectInvitation(input: ProjectInvitationInput) {
-  const invitationInput = projectInvitationSchema.parse(input);
-  const { authorization, memberInput, userId } = await authorizeProjectMemberMutation({
-    ...invitationInput,
-    role: 'viewer',
-  });
-
-  const revoked = await db.transaction(async (transaction) => {
-    const [revokedInvitation] = await transaction
-      .delete(projectInvitationsSchema)
-      .where(
-        and(
-          eq(projectInvitationsSchema.projectId, memberInput.projectId),
-          eq(projectInvitationsSchema.userId, memberInput.memberUserId),
-        ),
-      )
-      .returning({ userId: projectInvitationsSchema.userId });
-
-    if (!revokedInvitation) {
-      throw new Error('邀请不存在或已处理');
-    }
-
-    await recordAuditLog(transaction, {
-      action: 'project_invitation_revoked',
-      actorUserId: userId,
-      metadata: {
-        resourceName: authorization.project.name,
-        targetUserId: memberInput.memberUserId,
-      },
-      targetId: memberInput.memberUserId,
-      targetKind: 'invitation',
-      workspaceId: authorization.project.workspaceId,
-    });
-
-    return revokedInvitation;
-  });
-
-  revalidatePath('/(workspace)', 'layout');
-  return revoked;
-}
-
 export async function rejectProjectInvitation(input: { projectId: string }) {
   const { id: userId } = await requireUser();
   const invitationInput = projectAccessRequestSchema.pick({ projectId: true }).parse(input);
@@ -659,17 +599,11 @@ export async function rejectProjectInvitation(input: { projectId: string }) {
         ),
       );
 
-    await transaction
-      .update(notificationsSchema)
-      .set({ readAt: new Date() })
-      .where(
-        and(
-          eq(notificationsSchema.recipientUserId, userId),
-          eq(notificationsSchema.targetId, invitationInput.projectId),
-          eq(notificationsSchema.type, 'project_invited'),
-          isNull(notificationsSchema.readAt),
-        ),
-      );
+    await markRelatedNotificationsRead(transaction, {
+      recipientUserId: userId,
+      targetId: invitationInput.projectId,
+      type: 'project_invited',
+    });
   });
 
   revalidatePath('/(workspace)', 'layout');

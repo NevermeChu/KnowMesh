@@ -1,3 +1,4 @@
+/* oxlint-disable promise/prefer-await-to-callbacks -- Drizzle transactions are callback-based. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationsSchema } from '@/models/Schema';
 import { syncPendingWorkspaceInvitations } from './SyncPendingInvitations';
@@ -36,19 +37,25 @@ const state = vi.hoisted(() => {
       };
     }),
   }));
+  const transaction = vi.fn<
+    (callback: (transaction: { select: typeof select }) => Promise<void>) => Promise<void>
+  >(async (callback) => {
+    await callback({ select });
+  });
 
   return {
     createNotification,
     invitationsWhere,
     notificationsWhere,
     select,
+    transaction,
   };
 });
 
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial database mock isolates query.
 vi.mock('@/libs/DB', () => ({
   db: {
-    select: state.select,
+    transaction: state.transaction,
   },
 }));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Notification delivery is verified through mock.
@@ -61,6 +68,7 @@ function expectWorkspaceInviteNotification() {
     expect.anything(),
     expect.objectContaining({
       body: '你收到了加入工作区“Team Alpha”的邀请。',
+      ignoreConflict: true,
       recipientUserId: 'user_new',
       target: { id: 'workspace_1', kind: 'workspace' },
       title: '收到工作区邀请',
@@ -81,12 +89,6 @@ describe(syncPendingWorkspaceInvitations, () => {
       },
     ]);
     state.notificationsWhere.mockResolvedValue([]);
-  });
-
-  it('creates workspace_invited notification for active pending invitations', async () => {
-    await syncPendingWorkspaceInvitations('user_new', ['new@example.com']);
-
-    expectWorkspaceInviteNotification();
   });
 
   it('skips notification creation if workspace_invited notification already exists', async () => {

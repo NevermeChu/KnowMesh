@@ -7,6 +7,7 @@ import { notificationBroadcaster } from './NotificationBroadcaster';
 import { getRealtimeNotification } from './NotificationRealtimeQueries';
 
 const NOTIFICATION_CHANNEL = 'knowmesh_notifications';
+const MAX_RETRY_DELAY_MS = 30_000;
 const RETRY_DELAY_MS = 1000;
 
 const notificationSignalSchema = z.discriminatedUnion('kind', [
@@ -39,6 +40,7 @@ declare global {
 export class NotificationDatabaseSubscriber {
   private client: PoolClient | null = null;
   private retryTimer: NodeJS.Timeout | null = null;
+  private retryAttempt = 0;
   private startPromise: Promise<void> | null = null;
 
   /**
@@ -59,18 +61,33 @@ export class NotificationDatabaseSubscriber {
   private async connect() {
     const client = await db.$client.connect();
     this.client = client;
+    client.on('end', this.handleConnectionEnd);
     client.on('error', this.handleConnectionError);
     client.on('notification', NotificationDatabaseSubscriber.handleNotification);
     await client.query(`LISTEN ${NOTIFICATION_CHANNEL}`);
+    this.retryAttempt = 0;
   }
 
   private readonly handleConnectionError = () => {
+    this.handleConnectionLost();
+  };
+
+  private readonly handleConnectionEnd = () => {
+    this.handleConnectionLost();
+  };
+
+  private handleConnectionLost() {
     this.resetConnection();
-    this.retryTimer ??= setTimeout(() => {
+    if (this.retryTimer) {
+      return;
+    }
+    const retryDelay = Math.min(RETRY_DELAY_MS * 2 ** this.retryAttempt, MAX_RETRY_DELAY_MS);
+    this.retryAttempt += 1;
+    this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       void this.restart();
-    }, RETRY_DELAY_MS);
-  };
+    }, retryDelay);
+  }
 
   private static readonly handleNotification = (message: Notification) => {
     if (message.channel !== NOTIFICATION_CHANNEL || !message.payload) {
@@ -127,6 +144,7 @@ export class NotificationDatabaseSubscriber {
 
   private resetConnection() {
     if (this.client) {
+      this.client.off('end', this.handleConnectionEnd);
       this.client.off('error', this.handleConnectionError);
       this.client.off('notification', NotificationDatabaseSubscriber.handleNotification);
       this.client.release(true);

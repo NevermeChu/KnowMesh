@@ -62,7 +62,10 @@ export function RealtimeNotificationProvider(props: {
   }, [props.initialUnreadCount]);
 
   useEffect(() => {
-    let eventSource: EventSource | null = new EventSource('/api/realtime/notifications');
+    let eventSource: EventSource | null = null;
+    let reconnectAttempt = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
 
     const handleNewNotification = (event: MessageEvent<string>) => {
       const parsed = parseJson(event.data);
@@ -103,10 +106,41 @@ export function RealtimeNotificationProvider(props: {
       }
     };
 
-    eventSource.addEventListener('notification:new', handleNewNotification);
-    eventSource.addEventListener('notification:count_sync', handleCountSync);
+    const connect = () => {
+      if (stopped) {
+        return;
+      }
+
+      eventSource = new EventSource('/api/realtime/notifications');
+      eventSource.addEventListener('notification:new', handleNewNotification);
+      eventSource.addEventListener('notification:count_sync', handleCountSync);
+      eventSource.addEventListener('open', () => {
+        reconnectAttempt = 0;
+      });
+      eventSource.addEventListener('error', () => {
+        if (!eventSource || eventSource.readyState !== EventSource.CLOSED || reconnectTimer) {
+          return;
+        }
+
+        eventSource.close();
+        eventSource = null;
+        const delay = Math.min(1000 * 2 ** reconnectAttempt, 30_000);
+        reconnectAttempt += 1;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, delay);
+      });
+    };
+
+    connect();
 
     return () => {
+      stopped = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       if (eventSource) {
         eventSource.removeEventListener('notification:new', handleNewNotification);
         eventSource.removeEventListener('notification:count_sync', handleCountSync);
@@ -140,13 +174,4 @@ export function RealtimeNotificationProvider(props: {
 export function useRealtimeUnreadCount() {
   const context = useContext(RealtimeNotificationContext);
   return context?.unreadCount ?? 0;
-}
-
-/**
- * Hook to access real-time notification state and mutations.
- *
- * @returns Real-time notification context value.
- */
-export function useRealtimeNotifications() {
-  return useContext(RealtimeNotificationContext);
 }

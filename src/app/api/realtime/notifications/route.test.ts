@@ -1,25 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AuthenticatedUser } from '@/features/auth/server/CurrentUser';
+import type { AuthenticatedSession } from '@/features/auth/server/CurrentUser';
 import { notificationBroadcaster } from '@/features/notifications/server/NotificationBroadcaster';
 import { GET } from './route';
 
 const state = vi.hoisted(() => {
-  const requireUser = vi.fn<() => Promise<AuthenticatedUser>>();
+  const requireAuthenticatedSession = vi.fn<() => Promise<AuthenticatedSession>>();
   const getUnreadNotificationCountForUser = vi.fn<() => Promise<number>>();
+  const isSessionActive = vi.fn<() => Promise<boolean>>();
   const start = vi.fn<() => Promise<void>>();
-  return { getUnreadNotificationCountForUser, requireUser, start };
+  return { getUnreadNotificationCountForUser, isSessionActive, requireAuthenticatedSession, start };
 });
 
-const authenticatedUser: AuthenticatedUser = {
-  email: 'user@example.com',
-  emailVerified: true,
-  id: 'user-1',
-  image: null,
-  name: 'User',
+const authenticatedSession: AuthenticatedSession = {
+  sessionId: 'session-1',
+  user: {
+    email: 'user@example.com',
+    emailVerified: true,
+    id: 'user-1',
+    image: null,
+    name: 'User',
+  },
 };
 
 vi.mock(import('server-only'), () => ({}));
-vi.mock(import('@/features/auth/server/CurrentUser'), () => ({ requireUser: state.requireUser }));
+vi.mock(import('@/features/auth/server/CurrentUser'), () => ({
+  requireAuthenticatedSession: state.requireAuthenticatedSession,
+}));
+vi.mock(import('@/features/auth/server/SessionAuthorization'), () => ({
+  isSessionActive: state.isSessionActive,
+}));
 vi.mock(import('@/features/notifications/server/GetNotifications'), () => ({
   getUnreadNotificationCountForUser: state.getUnreadNotificationCountForUser,
 }));
@@ -30,7 +39,7 @@ vi.mock('@/features/notifications/server/NotificationDatabaseSubscriber', () => 
 
 describe(GET, () => {
   it('returns 401 Unauthorized when user is not authenticated', async () => {
-    state.requireUser.mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
+    state.requireAuthenticatedSession.mockRejectedValueOnce(new Error('UNAUTHENTICATED'));
 
     const response = await GET();
 
@@ -40,7 +49,7 @@ describe(GET, () => {
   it('returns 200 OK text/event-stream response for authenticated user', async () => {
     state.start.mockResolvedValueOnce();
     state.getUnreadNotificationCountForUser.mockResolvedValueOnce(3);
-    state.requireUser.mockResolvedValueOnce(authenticatedUser);
+    state.requireAuthenticatedSession.mockResolvedValueOnce(authenticatedSession);
 
     const response = await GET();
 
@@ -71,9 +80,9 @@ describe(GET, () => {
   it('receives published events through the stream', async () => {
     state.start.mockResolvedValueOnce();
     state.getUnreadNotificationCountForUser.mockResolvedValueOnce(0);
-    state.requireUser.mockResolvedValueOnce({
-      ...authenticatedUser,
-      id: 'user-stream-test',
+    state.requireAuthenticatedSession.mockResolvedValueOnce({
+      ...authenticatedSession,
+      user: { ...authenticatedSession.user, id: 'user-stream-test' },
     });
 
     const response = await GET();
@@ -99,5 +108,33 @@ describe(GET, () => {
     expect(decoded).toContain('"unreadCount":5');
 
     await reader.cancel();
+  });
+
+  it('closes stream after session revocation', async () => {
+    vi.useFakeTimers();
+    try {
+      state.start.mockResolvedValueOnce();
+      state.getUnreadNotificationCountForUser.mockResolvedValueOnce(0);
+      state.requireAuthenticatedSession.mockResolvedValueOnce(authenticatedSession);
+      state.isSessionActive.mockResolvedValueOnce(false);
+
+      const response = await GET();
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Reader expected to be defined');
+      }
+      await reader.read();
+      await reader.read();
+
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(reader.read()).resolves.toMatchObject({ done: true });
+      expect(state.isSessionActive).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        userId: 'user-1',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

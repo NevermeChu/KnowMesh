@@ -21,13 +21,14 @@ export async function createNotification(
   input: {
     actorUserId: string | null;
     body: string;
+    ignoreConflict?: boolean;
     recipientUserId: string;
     target: { id: string; kind: NotificationTargetKind } | null;
     title: string;
     type: NotificationType;
   },
 ) {
-  await database.insert(notificationsSchema).values({
+  const insert = database.insert(notificationsSchema).values({
     actorUserId: input.actorUserId,
     body: input.body,
     recipientUserId: input.recipientUserId,
@@ -36,4 +37,11 @@ export async function createNotification(
     title: input.title,
     type: input.type,
   });
+
+  if (input.ignoreConflict) {
+    await insert.onConflictDoNothing();
+    return;
+  }
+
+  await insert;
 }
