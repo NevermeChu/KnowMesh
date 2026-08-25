@@ -14,6 +14,7 @@ const state = vi.hoisted(() => {
     async () => await Promise.resolve({ delete: deleteCookie, get: getCookie }),
   );
   const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
+  const recordAuditLog = vi.fn<() => Promise<void>>();
   const transaction = vi.fn<(callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>>(
     async (callback) => await callback({}),
   );
@@ -26,11 +27,16 @@ const state = vi.hoisted(() => {
     removeWorkspaceForUser,
     requireUser,
     revalidatePath,
+    recordAuditLog,
     transaction,
   };
 });
 
 vi.mock(import('server-only'), () => ({}));
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial audit mock verifies transaction composition.
+vi.mock('@/features/audit-logs/server/RecordAuditLog', () => ({
+  recordAuditLog: state.recordAuditLog,
+}));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial next/cache mock isolates layout revalidation.
 vi.mock('next/cache', () => ({ revalidatePath: state.revalidatePath }));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial next/headers mock isolates cookies.
@@ -128,6 +134,14 @@ describe(deleteOrLeaveWorkspace, () => {
       userId: 'user_1',
       workspaceId,
     });
+    expect(state.recordAuditLog).toHaveBeenCalledWith(expect.anything(), {
+      action: 'workspace_deleted',
+      actorUserId: 'user_1',
+      metadata: { resourceName: '团队工作区' },
+      targetId: workspaceId,
+      targetKind: 'workspace',
+      workspaceId,
+    });
     expect(state.deleteCookie).toHaveBeenCalledWith(ACTIVE_WORKSPACE_COOKIE);
     expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
   });
@@ -154,6 +168,7 @@ describe(deleteOrLeaveWorkspace, () => {
       userId: 'user_1',
       workspaceId,
     });
+    expect(state.recordAuditLog).not.toHaveBeenCalled();
     expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
   });
 });

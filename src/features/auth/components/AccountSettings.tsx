@@ -56,7 +56,11 @@ export function AccountSettings(props: { user: AuthenticatedUser }) {
     });
 
     if (!result.success) {
-      setMessage('账户删除失败，请检查密码后重试');
+      setMessage(
+        result.reason === 'team-workspace-owner'
+          ? '请先转让所有团队工作区的所有权，再删除账户'
+          : '账户删除失败，请检查密码后重试',
+      );
       setIsPending(false);
       return;
     }
@@ -129,8 +133,9 @@ export function AccountSettings(props: { user: AuthenticatedUser }) {
       >
         <h2 className="font-semibold text-danger">删除账户</h2>
         <p className="text-sm leading-6 text-ink-muted">
-          自有 Workspace 和 Project
-          会永久删除；你将退出其他人的协作资源，保留文档中的创建者会被匿名化。
+          Personal Workspace 和其中的 Project
+          会永久删除；你将退出其他人的协作资源，保留文档中的创建者会被匿名化。删除前必须先转让所有
+          Team Workspace 的所有权。
         </p>
         <FormField htmlFor="deletePassword" label="输入当前密码确认" required>
           <Input

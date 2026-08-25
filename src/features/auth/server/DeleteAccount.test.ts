@@ -4,6 +4,9 @@ import { userSchema } from '@/models/Schema';
 import { deleteAccount } from './DeleteAccount';
 
 const state = vi.hoisted(() => {
+  class TeamWorkspaceOwnershipError extends Error {
+    override name = 'TeamWorkspaceOwnershipError';
+  }
   const returning = vi.fn<() => Promise<{ id: string }[]>>();
   const where = vi.fn<() => { returning: typeof returning }>(() => ({ returning }));
   const deleteRow = vi.fn<() => { where: typeof where }>(() => ({ where }));
@@ -24,6 +27,7 @@ const state = vi.hoisted(() => {
     returning,
     transaction,
     transactionDatabase,
+    TeamWorkspaceOwnershipError,
     verifyPassword: vi.fn<() => Promise<{ status: boolean }>>(),
   };
 });
@@ -35,6 +39,7 @@ vi.mock('@/features/auth/server/CurrentUser', () => ({ requireUser: state.requir
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial cleanup mock verifies transaction composition.
 vi.mock('@/features/users/server/DeleteUserData', () => ({
   deleteUserData: state.deleteUserData,
+  TeamWorkspaceOwnershipError: state.TeamWorkspaceOwnershipError,
 }));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial auth API mock isolates password verification.
 vi.mock('@/libs/Auth', () => ({ auth: { api: { verifyPassword: state.verifyPassword } } }));
@@ -56,6 +61,7 @@ describe(deleteAccount, () => {
     );
 
     await expect(deleteAccount({ password: 'wrong-password' })).resolves.toStrictEqual({
+      reason: 'invalid-password',
       success: false,
     });
     expect(state.transaction).not.toHaveBeenCalled();
@@ -75,5 +81,15 @@ describe(deleteAccount, () => {
     state.returning.mockResolvedValue([]);
 
     await expect(deleteAccount({ password: 'current-password' })).rejects.toThrow('账户删除失败');
+  });
+
+  it('rejects deletion while user owns a team workspace', async () => {
+    state.deleteUserData.mockRejectedValueOnce(new state.TeamWorkspaceOwnershipError());
+
+    await expect(deleteAccount({ password: 'current-password' })).resolves.toStrictEqual({
+      reason: 'team-workspace-owner',
+      success: false,
+    });
+    expect(state.deleteRow).not.toHaveBeenCalledWith(userSchema);
   });
 });

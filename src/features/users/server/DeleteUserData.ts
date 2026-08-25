@@ -18,6 +18,13 @@ import {
 
 export const DELETED_USER_ID = 'deleted_user';
 
+export class TeamWorkspaceOwnershipError extends Error {
+  constructor() {
+    super('删除账户前必须转让所有团队工作区的所有权');
+    this.name = 'TeamWorkspaceOwnershipError';
+  }
+}
+
 type UserDataDeletionDatabase = Pick<typeof db, 'delete' | 'select' | 'update'>;
 
 /**
@@ -28,10 +35,18 @@ type UserDataDeletionDatabase = Pick<typeof db, 'delete' | 'select' | 'update'>;
  */
 export async function deleteUserData(database: UserDataDeletionDatabase, userId: string) {
   const workspaces = await database
-    .select({ id: workspacesSchema.id, ownerId: workspacesSchema.ownerId })
+    .select({
+      id: workspacesSchema.id,
+      kind: workspacesSchema.kind,
+      ownerId: workspacesSchema.ownerId,
+    })
     .from(workspaceMembersSchema)
     .innerJoin(workspacesSchema, eq(workspacesSchema.id, workspaceMembersSchema.workspaceId))
     .where(eq(workspaceMembersSchema.userId, userId));
+
+  if (workspaces.some((workspace) => workspace.kind === 'team' && workspace.ownerId === userId)) {
+    throw new TeamWorkspaceOwnershipError();
+  }
 
   for (const workspace of workspaces) {
     await removeWorkspaceForUser(database, {

@@ -11,6 +11,7 @@ let deleteUserData: typeof deleteUserDataFunction;
 
 const ownedWorkspaceId = '10000000-0000-4000-8000-000000000400';
 const joinedWorkspaceId = '10000000-0000-4000-8000-000000000401';
+const teamOwnedWorkspaceId = '10000000-0000-4000-8000-000000000402';
 const ownedProjectId = '20000000-0000-4000-8000-000000000400';
 const sharedProjectId = '20000000-0000-4000-8000-000000000401';
 const otherProjectDocId = '30000000-0000-4000-8000-000000000400';
@@ -41,15 +42,17 @@ describe('user data cleanup', () => {
       await transaction.query(`
         INSERT INTO workspaces (id, kind, name, owner_id)
         VALUES
-          ('${ownedWorkspaceId}', 'team', 'Victim Owned', '${victimId}'),
-          ('${joinedWorkspaceId}', 'team', 'Survivor Owned', '${survivorId}')
+          ('${ownedWorkspaceId}', 'personal', 'Victim Personal', '${victimId}'),
+          ('${joinedWorkspaceId}', 'team', 'Survivor Owned', '${survivorId}'),
+          ('${teamOwnedWorkspaceId}', 'team', 'Victim Team', '${victimId}')
       `);
       await transaction.query(`
         INSERT INTO workspace_members (workspace_id, user_id, role)
         VALUES
           ('${ownedWorkspaceId}', '${victimId}', 'owner'),
           ('${joinedWorkspaceId}', '${survivorId}', 'owner'),
-          ('${joinedWorkspaceId}', '${victimId}', 'editor')
+          ('${joinedWorkspaceId}', '${victimId}', 'editor'),
+          ('${teamOwnedWorkspaceId}', '${victimId}', 'owner')
       `);
       await transaction.query(`
         INSERT INTO projects (id, workspace_id, name, owner_id)
@@ -105,6 +108,31 @@ describe('user data cleanup', () => {
   afterAll(async () => {
     vi.doUnmock('server-only');
     await database.close();
+  });
+
+  it('preserves all data while user owns a team workspace', async () => {
+    await expect(
+      testDb.transaction(async (transaction) => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The PGlite transaction satisfies the deletion database contract used in production.
+        const deletionDatabase = transaction as unknown as Parameters<typeof deleteUserData>[0];
+        await deleteUserData(deletionDatabase, victimId);
+      }),
+    ).rejects.toThrow('删除账户前必须转让所有团队工作区的所有权');
+
+    expect(
+      await count(
+        database,
+        `SELECT count(*) AS n FROM workspaces WHERE id = '${ownedWorkspaceId}'`,
+      ),
+    ).toBe(1);
+    expect(
+      await count(
+        database,
+        `SELECT count(*) AS n FROM workspace_members WHERE workspace_id = '${joinedWorkspaceId}' AND user_id = '${victimId}'`,
+      ),
+    ).toBe(1);
+
+    await database.query(`DELETE FROM workspaces WHERE id = '${teamOwnedWorkspaceId}'`);
   });
 
   it('removes owned resources and exits joined ones atomically', async () => {

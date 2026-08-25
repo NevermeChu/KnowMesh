@@ -5,7 +5,10 @@ import { eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import * as z from 'zod';
 import { requireUser } from '@/features/auth/server/CurrentUser';
-import { deleteUserData } from '@/features/users/server/DeleteUserData';
+import {
+  deleteUserData,
+  TeamWorkspaceOwnershipError,
+} from '@/features/users/server/DeleteUserData';
 import { auth } from '@/libs/Auth';
 import { db } from '@/libs/DB';
 import { userSchema } from '@/models/Schema';
@@ -31,23 +34,31 @@ export async function deleteAccount(input: { password: string }) {
     });
   } catch (error) {
     if (error instanceof APIError) {
-      return { success: false as const };
+      return { reason: 'invalid-password' as const, success: false as const };
     }
 
     throw error;
   }
 
-  await db.transaction(async (transaction) => {
-    await deleteUserData(transaction, user.id);
-    const [deletedUser] = await transaction
-      .delete(userSchema)
-      .where(eq(userSchema.id, user.id))
-      .returning({ id: userSchema.id });
+  try {
+    await db.transaction(async (transaction) => {
+      await deleteUserData(transaction, user.id);
+      const [deletedUser] = await transaction
+        .delete(userSchema)
+        .where(eq(userSchema.id, user.id))
+        .returning({ id: userSchema.id });
 
-    if (!deletedUser) {
-      throw new Error('账户删除失败');
+      if (!deletedUser) {
+        throw new Error('账户删除失败');
+      }
+    });
+  } catch (error) {
+    if (error instanceof TeamWorkspaceOwnershipError) {
+      return { reason: 'team-workspace-owner' as const, success: false as const };
     }
-  });
+
+    throw error;
+  }
 
   return { success: true as const };
 }

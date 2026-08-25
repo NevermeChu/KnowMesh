@@ -37,6 +37,7 @@ function getActionBadgeStyle(action: AuditAction): {
 
   if (
     action === 'project_deleted' ||
+    action === 'workspace_deleted' ||
     action === 'workspace_member_removed' ||
     action === 'project_member_removed' ||
     action === 'workspace_access_rejected' ||
@@ -230,6 +231,12 @@ const actionDescriptions: Record<AuditAction, (metadata: AuditLogMetadata) => Re
       <span className="font-semibold text-ink">
         {meta.targetUserName ?? meta.targetUserEmail ?? '成员'}
       </span>
+    </span>
+  ),
+  workspace_deleted: (meta) => (
+    <span>
+      删除工作区{' '}
+      <span className="font-semibold text-ink">“{meta.resourceName ?? '未知工作区'}”</span>
     </span>
   ),
   workspace_renamed: (meta) => (

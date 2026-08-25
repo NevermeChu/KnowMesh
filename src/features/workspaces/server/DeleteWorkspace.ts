@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { AuthorizationError } from '@/features/permissions/AuthorizationError';
 import { removeWorkspaceForUser } from '@/features/permissions/server/ResourceRemoval';
@@ -29,14 +30,24 @@ export async function deleteOrLeaveWorkspace(input: DeleteWorkspaceInput) {
     throw new AuthorizationError();
   }
 
-  const operation = await db.transaction(
-    async (transaction) =>
-      await removeWorkspaceForUser(transaction, {
-        isOwner,
-        userId,
+  const operation = await db.transaction(async (transaction) => {
+    if (isOwner) {
+      await recordAuditLog(transaction, {
+        action: 'workspace_deleted',
+        actorUserId: userId,
+        metadata: { resourceName: authorization.workspace.name },
+        targetId: authorization.workspace.id,
+        targetKind: 'workspace',
         workspaceId: authorization.workspace.id,
-      }),
-  );
+      });
+    }
+
+    return await removeWorkspaceForUser(transaction, {
+      isOwner,
+      userId,
+      workspaceId: authorization.workspace.id,
+    });
+  });
 
   const cookieStore = await cookies();
   if (cookieStore.get(ACTIVE_WORKSPACE_COOKIE)?.value === authorization.workspace.id) {
