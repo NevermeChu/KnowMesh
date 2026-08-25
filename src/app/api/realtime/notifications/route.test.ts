@@ -110,6 +110,35 @@ describe(GET, () => {
     await reader.cancel();
   });
 
+  it('closes stream when unread events exceed its buffer', async () => {
+    state.start.mockResolvedValueOnce();
+    state.getUnreadNotificationCountForUser.mockResolvedValueOnce(0);
+    state.requireAuthenticatedSession.mockResolvedValueOnce({
+      ...authenticatedSession,
+      user: { ...authenticatedSession.user, id: 'user-backpressure-test' },
+    });
+
+    const response = await GET();
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Reader expected to be defined');
+    }
+
+    for (let unreadCount = 1; unreadCount <= 9; unreadCount += 1) {
+      notificationBroadcaster.publish('user-backpressure-test', {
+        payload: { unreadCount },
+        type: 'notification:count_sync',
+      });
+    }
+
+    let done = false;
+    while (!done) {
+      ({ done } = await reader.read());
+    }
+
+    expect(done).toBeTruthy();
+  });
+
   it('closes stream after session revocation', async () => {
     vi.useFakeTimers();
     try {
