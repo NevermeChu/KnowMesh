@@ -6,7 +6,6 @@ import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
 import { Env } from '@/libs/Env';
 import { documentsSchema, starredDocumentsSchema } from '@/models/Schema';
-import type { DocumentBreadcrumbItem } from '../Document';
 import { getDocumentEditorMode } from '../DocumentEditorMode';
 import { getDocumentNavigationPath } from './GetDocumentNavigation';
 
@@ -64,15 +63,6 @@ export async function getProjectDocuments(options: {
     };
   }
 
-  const areaHref = options.workspaceKind === 'personal' ? '/personal' : '/collaboration';
-  const breadcrumbs: DocumentBreadcrumbItem[] = (navigationPath ?? [])
-    .slice(0, -1)
-    .map((document) => ({
-      href: `${areaHref}?project=${options.projectId}&document=${document.id}`,
-      id: document.id,
-      title: document.title,
-    }));
-
   const [[selectedContent], [starredRecord]] = await Promise.all([
     db
       .select({
@@ -119,9 +109,7 @@ export async function getProjectDocuments(options: {
       : null,
     selectedDocument: selectedContent
       ? {
-          breadcrumbs,
           ...selectedContent,
-          projectName: authorization.project.name,
           isStarred: Boolean(starredRecord),
         }
       : null,

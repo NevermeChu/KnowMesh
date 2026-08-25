@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { Check, ChevronRight, FileText, Folder, Maximize2, Minimize2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -76,14 +76,33 @@ export function ContentToolbar(props: {
                 />
               )}
               {breadcrumb.href ? (
-                <Link href={breadcrumb.href} className="truncate transition-colors hover:text-ink">
-                  {breadcrumb.label}
+                <Link
+                  href={breadcrumb.href}
+                  className="inline-flex min-w-0 items-center gap-1 truncate transition-colors hover:text-ink"
+                >
+                  {breadcrumb.icon === 'project' && (
+                    <Folder aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
+                  )}
+                  {breadcrumb.icon === 'document' && (
+                    <FileText aria-hidden="true" className="size-3 shrink-0" strokeWidth={1.8} />
+                  )}
+                  <span className="truncate">{breadcrumb.label}</span>
                 </Link>
               ) : (
                 <span
-                  className={`truncate ${index === breadcrumbs.length - 1 ? 'font-medium text-ink' : ''}`}
+                  className={`inline-flex min-w-0 items-center gap-1 truncate ${index === breadcrumbs.length - 1 ? 'font-medium text-ink' : ''}`}
                 >
-                  {breadcrumb.label}
+                  {breadcrumb.icon === 'project' && (
+                    <Folder aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
+                  )}
+                  {breadcrumb.icon === 'document' && (
+                    <FileText
+                      aria-hidden="true"
+                      className="size-3 shrink-0 text-accent"
+                      strokeWidth={1.8}
+                    />
+                  )}
+                  <span className="truncate">{breadcrumb.label}</span>
                 </span>
               )}
             </li>

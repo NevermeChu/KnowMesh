@@ -26,7 +26,6 @@ export type DocumentContent = DocumentNode & {
 };
 
 export type Document = {
-  breadcrumbs?: DocumentBreadcrumbItem[];
   content: DocumentContent;
   contentSchemaVersion: number;
   createdAt: Date;
@@ -34,7 +33,6 @@ export type Document = {
   isStarred?: boolean;
   parentId: string | null;
   projectId: string;
-  projectName?: string;
   sortOrder: number;
   title: string;
   titleVersion: number;
@@ -51,12 +49,6 @@ export type DocumentNavigationCursor = Pick<DocumentNavigationItem, 'id' | 'sort
 export type DocumentNavigationPage = {
   items: DocumentNavigationItem[];
   nextCursor: DocumentNavigationCursor | null;
-};
-
-export type DocumentBreadcrumbItem = {
-  href: string;
-  id: string;
-  title: string;
 };
 
 export const EMPTY_DOCUMENT_CONTENT: DocumentContent = {

@@ -3,6 +3,7 @@ import type { Project } from '@/features/projects/Project';
 
 export type ContentBreadcrumb = {
   href?: string;
+  icon?: 'document' | 'project';
   label: string;
 };
 
@@ -59,21 +60,37 @@ export function createContentBreadcrumbs(options: {
     if (project) {
       breadcrumbs.push({
         href: `${options.pathname}?project=${encodeURIComponent(project.id)}`,
+        icon: 'project',
         label: project.name,
       });
 
-      const document = options.documents.find(
-        (candidate) =>
-          candidate.id === options.documentId && candidate.projectId === options.projectId,
+      const projectDocuments = options.documents.filter(
+        (candidate) => candidate.projectId === options.projectId,
       );
+      const documentsById = new Map(projectDocuments.map((document) => [document.id, document]));
+      let document = options.documentId ? documentsById.get(options.documentId) : undefined;
+      const reversedPath: DocumentNavigationItem[] = [];
+      const visited = new Set<string>();
 
-      if (document) {
-        breadcrumbs.push({ label: document.title });
+      while (document && !visited.has(document.id)) {
+        reversedPath.push(document);
+        visited.add(document.id);
+        document = document.parentId ? documentsById.get(document.parentId) : undefined;
+      }
+
+      for (const pathItem of reversedPath.toReversed()) {
+        breadcrumbs.push({
+          href: `${options.pathname}?project=${encodeURIComponent(project.id)}&document=${encodeURIComponent(pathItem.id)}`,
+          icon: 'document',
+          label: pathItem.title,
+        });
       }
     }
   }
 
   return breadcrumbs.map((breadcrumb, index) =>
-    index === breadcrumbs.length - 1 ? { label: breadcrumb.label } : breadcrumb,
+    index === breadcrumbs.length - 1
+      ? { ...(breadcrumb.icon ? { icon: breadcrumb.icon } : {}), label: breadcrumb.label }
+      : breadcrumb,
   );
 }

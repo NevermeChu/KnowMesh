@@ -10,7 +10,6 @@ import type { Document } from '../Document';
 import { isDocumentContent } from '../DocumentSchema';
 import { updateDocument } from '../server/UpdateDocument';
 import { DocumentBlockHandle } from './DocumentBlockHandle';
-import { DocumentBreadcrumbs } from './DocumentBreadcrumbs';
 import { DocumentBubbleMenu } from './DocumentBubbleMenu';
 import {
   useDocumentEditorCommands,
@@ -150,14 +149,6 @@ export function DocumentEditorSurface(props: {
           isOutlineExpanded ? 'xl:pr-64 2xl:pr-0' : 'xl:pr-0'
         }`}
       >
-        <div className="mb-4">
-          <DocumentBreadcrumbs
-            breadcrumbs={props.document.breadcrumbs}
-            currentTitle={title}
-            projectName={props.document.projectName}
-          />
-        </div>
-
         <div className="flex min-h-6 items-center justify-between gap-4 text-xs text-ink-faint">
           <div className="flex min-w-0 items-center gap-2.5">
             <DocumentSaveStatus
