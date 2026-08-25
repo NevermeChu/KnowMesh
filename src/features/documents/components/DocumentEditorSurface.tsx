@@ -3,7 +3,7 @@
 import type { Editor } from '@tiptap/react';
 import { EditorContent } from '@tiptap/react';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import type { Document } from '../Document';
@@ -45,10 +45,32 @@ export function DocumentEditorSurface(props: {
   );
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(true);
   const lastSavedTitle = useRef(props.document.title);
-  const currentContent = props.editor?.getJSON();
-  const exportContent = isDocumentContent(currentContent) ? currentContent : props.document.content;
+  const hasTitleConflict = useRef(false);
+  const titleVersion = useRef(props.document.titleVersion);
+  const applyRemoteTitle = useEffectEvent(() => {
+    if (props.document.titleVersion <= titleVersion.current) {
+      return;
+    }
 
+    titleVersion.current = props.document.titleVersion;
+    if (title === lastSavedTitle.current) {
+      lastSavedTitle.current = props.document.title;
+      setTitle(props.document.title);
+      return;
+    }
+
+    hasTitleConflict.current = true;
+    props.setSaveState('conflict');
+  });
+  useEffect(() => {
+    applyRemoteTitle();
+  }, [props.document.title, props.document.titleVersion]);
   const saveTitle = async () => {
+    if (hasTitleConflict.current) {
+      props.setSaveState('conflict');
+      return;
+    }
+
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle) {
@@ -66,14 +88,58 @@ export function DocumentEditorSurface(props: {
     props.setSaveState('saving');
 
     try {
-      await updateDocument({ documentId: props.document.id, title: normalizedTitle });
+      const result = await updateDocument({
+        documentId: props.document.id,
+        expectedTitleVersion: titleVersion.current,
+        title: normalizedTitle,
+      });
+      if (result.status === 'conflict') {
+        hasTitleConflict.current = true;
+        props.setSaveState('conflict');
+        return;
+      }
+      titleVersion.current = result.titleVersion;
       lastSavedTitle.current = normalizedTitle;
+      hasTitleConflict.current = false;
       props.setSaveState('saved');
       router.refresh();
     } catch {
       props.setSaveState('error');
     }
   };
+  const flushTitleForLifecycle = useEffectEvent(() => {
+    if (!hasTitleConflict.current) {
+      void saveTitle();
+    }
+  });
+  const hasPendingTitle = useEffectEvent(() => title.trim() !== lastSavedTitle.current);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasPendingTitle()) {
+        flushTitleForLifecycle();
+      }
+    };
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasPendingTitle()) {
+        return;
+      }
+
+      flushTitleForLifecycle();
+      event.preventDefault();
+      Reflect.set(event, 'returnValue', true);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      if (hasPendingTitle()) {
+        flushTitleForLifecycle();
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   return (
     <div className="relative py-8">
@@ -117,7 +183,13 @@ export function DocumentEditorSurface(props: {
             <span aria-hidden="true" className="text-line">
               ·
             </span>
-            <DocumentExportMenu content={exportContent} title={title} />
+            <DocumentExportMenu
+              getContent={() => {
+                const content = props.editor?.getJSON();
+                return isDocumentContent(content) ? content : props.document.content;
+              }}
+              title={title}
+            />
           </div>
         </div>
 

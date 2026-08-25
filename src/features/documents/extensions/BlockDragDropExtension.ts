@@ -3,9 +3,9 @@ import { NodeSelection, Plugin, PluginKey, Selection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import type { Editor } from '@tiptap/react';
 
-export const BLOCK_DRAG_DROP_PLUGIN_KEY = new PluginKey('blockDragDrop');
+const BLOCK_DRAG_DROP_PLUGIN_KEY = new PluginKey('blockDragDrop');
 
-export type DropIndicatorInfo = {
+type DropIndicatorInfo = {
   left: number;
   targetPos: number;
   top: number;
@@ -19,7 +19,7 @@ export type DropIndicatorInfo = {
  * @param view - Active ProseMirror EditorView.
  * @returns Source block position if available.
  */
-export function getDraggedSourcePos(draggedPos: number | null, view: EditorView): number | null {
+function getDraggedSourcePos(draggedPos: number | null, view: EditorView): number | null {
   if (draggedPos !== null) {
     return draggedPos;
   }
@@ -104,7 +104,7 @@ export function moveBlock(options: {
  * @param options - Editor instance, client coordinates, and source position being dragged.
  * @returns DropIndicatorInfo if a valid drop target is found, null otherwise.
  */
-export function calculateDropTarget(options: {
+function calculateDropTarget(options: {
   clientX: number;
   clientY: number;
   editor: Editor;

@@ -290,7 +290,11 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
   });
 
   return {
-    document: { id: authorization.document.id, title: authorization.document.title },
+    document: {
+      id: authorization.document.id,
+      title: authorization.document.title,
+      titleVersion: authorization.document.titleVersion,
+    },
     groups: await getProjectPermissionGroups({
       currentUserId: userId,
       project: authorization.project,

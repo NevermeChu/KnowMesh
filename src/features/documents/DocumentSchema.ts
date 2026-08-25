@@ -107,6 +107,8 @@ export const updateDocumentSchema = z
   .object({
     content: z.custom<DocumentContent>(isDocumentContent, '文档内容格式无效').optional(),
     documentId: z.uuid(),
+    expectedTitleVersion: z.number().int().positive().optional(),
+    expectedUpdatedAt: z.date().optional(),
     title: z
       .string()
       .trim()
@@ -116,6 +118,12 @@ export const updateDocumentSchema = z
   })
   .refine((input) => input.content !== undefined || input.title !== undefined, {
     message: '没有需要保存的文档变更',
+  })
+  .refine((input) => input.content === undefined || input.expectedUpdatedAt !== undefined, {
+    message: '保存文档正文时缺少版本信息',
+  })
+  .refine((input) => input.title === undefined || input.expectedTitleVersion !== undefined, {
+    message: '保存文档标题时缺少版本信息',
   });
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;

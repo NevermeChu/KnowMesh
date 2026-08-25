@@ -3,7 +3,7 @@
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/react';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import type { Document, DocumentContent } from '../Document';
@@ -18,11 +18,10 @@ import {
 } from './DocumentEditorToolbar';
 import { DocumentExportMenu } from './DocumentExportMenu';
 import { DocumentOutline } from './DocumentOutline';
+import type { SaveState } from './DocumentSaveStatus';
 import { DocumentSaveStatus } from './DocumentSaveStatus';
 import { DocumentSlashMenu } from './DocumentSlashMenu';
 import { StarDocumentButton } from './StarDocumentButton';
-
-type SaveState = 'error' | 'saved' | 'saving';
 
 function countCharacters(content: DocumentContent | null | undefined): number {
   if (!content || !content.content) {
@@ -68,7 +67,11 @@ export function DocumentEditor(props: {
   );
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(true);
   const lastSavedContent = useRef(JSON.stringify(props.document.content));
+  const pendingContent = useRef<unknown>(props.document.content);
+  const documentVersion = useRef(props.document.updatedAt);
   const lastSavedTitle = useRef(props.document.title);
+  const hasTitleConflict = useRef(false);
+  const titleVersion = useRef(props.document.titleVersion);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSavingContent = useRef(false);
   const registeredEditor = useRef<Editor | null>(null);
@@ -78,13 +81,11 @@ export function DocumentEditor(props: {
       return;
     }
 
-    const currentEditor = registeredEditor.current;
-
-    if (!currentEditor || currentEditor.isDestroyed || isSavingContent.current) {
+    if (isSavingContent.current) {
       return;
     }
 
-    const content = currentEditor.getJSON();
+    const content = pendingContent.current;
 
     if (!isDocumentContent(content)) {
       setSaveState('error');
@@ -103,7 +104,16 @@ export function DocumentEditor(props: {
     let didSave = false;
 
     try {
-      await updateDocument({ content, documentId: props.document.id });
+      const result = await updateDocument({
+        content,
+        documentId: props.document.id,
+        expectedUpdatedAt: documentVersion.current,
+      });
+      if (result.status === 'conflict') {
+        setSaveState('conflict');
+        return;
+      }
+      documentVersion.current = result.updatedAt;
       lastSavedContent.current = serializedContent;
       didSave = true;
       setSaveState('saved');
@@ -112,13 +122,10 @@ export function DocumentEditor(props: {
     } finally {
       isSavingContent.current = false;
 
-      if (didSave && registeredEditor.current && !registeredEditor.current.isDestroyed) {
-        const nextContent = registeredEditor.current.getJSON();
-        if (JSON.stringify(nextContent) !== lastSavedContent.current) {
-          saveTimer.current = setTimeout(() => {
-            void flushContent();
-          }, 0);
-        }
+      if (didSave && JSON.stringify(pendingContent.current) !== lastSavedContent.current) {
+        saveTimer.current = setTimeout(() => {
+          void flushContent();
+        }, 0);
       }
     }
   }
@@ -150,6 +157,7 @@ export function DocumentEditor(props: {
       void flushContent();
     },
     onUpdate: ({ editor: currentEditor }) => {
+      pendingContent.current = currentEditor.getJSON();
       setWordCount(currentEditor.state.doc.textContent.length);
       setSaveState('saving');
 
@@ -162,10 +170,50 @@ export function DocumentEditor(props: {
       }, 700);
     },
   });
-  const currentContent = editor?.getJSON();
-  const exportContent = isDocumentContent(currentContent) ? currentContent : props.document.content;
+  const flushContentForLifecycle = useEffectEvent(() => {
+    void flushContent();
+  });
+  const hasPendingContent = useEffectEvent(
+    () =>
+      isSavingContent.current ||
+      JSON.stringify(pendingContent.current) !== lastSavedContent.current,
+  );
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushContentForLifecycle();
+      }
+    };
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasPendingContent()) {
+        return;
+      }
+
+      flushContentForLifecycle();
+      event.preventDefault();
+      Reflect.set(event, 'returnValue', true);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      flushContentForLifecycle();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   const saveTitle = async () => {
+    if (hasTitleConflict.current) {
+      setSaveState('conflict');
+      return;
+    }
+
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle) {
@@ -183,14 +231,59 @@ export function DocumentEditor(props: {
     setSaveState('saving');
 
     try {
-      await updateDocument({ documentId: props.document.id, title: normalizedTitle });
+      const result = await updateDocument({
+        documentId: props.document.id,
+        expectedTitleVersion: titleVersion.current,
+        title: normalizedTitle,
+      });
+      if (result.status === 'conflict') {
+        hasTitleConflict.current = true;
+        setSaveState('conflict');
+        return;
+      }
+      titleVersion.current = result.titleVersion;
+      documentVersion.current = result.updatedAt;
       lastSavedTitle.current = normalizedTitle;
+      hasTitleConflict.current = false;
       setSaveState('saved');
       router.refresh();
     } catch {
       setSaveState('error');
     }
   };
+  const flushTitleForLifecycle = useEffectEvent(() => {
+    if (!hasTitleConflict.current) {
+      void saveTitle();
+    }
+  });
+  const hasPendingTitle = useEffectEvent(() => title.trim() !== lastSavedTitle.current);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasPendingTitle()) {
+        flushTitleForLifecycle();
+      }
+    };
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasPendingTitle()) {
+        return;
+      }
+
+      flushTitleForLifecycle();
+      event.preventDefault();
+      Reflect.set(event, 'returnValue', true);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      if (hasPendingTitle()) {
+        flushTitleForLifecycle();
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   return (
     <div className="relative py-8">
@@ -219,7 +312,13 @@ export function DocumentEditor(props: {
             <span aria-hidden="true" className="text-line">
               ·
             </span>
-            <DocumentExportMenu content={exportContent} title={title} />
+            <DocumentExportMenu
+              getContent={() => {
+                const content = pendingContent.current;
+                return isDocumentContent(content) ? content : props.document.content;
+              }}
+              title={title}
+            />
           </div>
         </div>
 

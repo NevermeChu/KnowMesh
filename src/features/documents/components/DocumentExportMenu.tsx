@@ -10,11 +10,11 @@ import { proseMirrorToMarkdown } from '../DocumentMarkdown';
 /**
  * Dropdown export menu offering Markdown file download, clipboard copy, and native print.
  *
- * @param props - Current document content and title.
+ * @param props - Current document content reader and title.
  * @returns The export action button and dropdown menu.
  */
 export function DocumentExportMenu(props: {
-  content: DocumentContent | null | undefined;
+  getContent: () => DocumentContent | null | undefined;
   title: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,7 +23,7 @@ export function DocumentExportMenu(props: {
   const handleDownloadMarkdown = () => {
     setIsOpen(false);
     try {
-      const markdown = proseMirrorToMarkdown(props.content, props.title);
+      const markdown = proseMirrorToMarkdown(props.getContent(), props.title);
       const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -42,7 +42,7 @@ export function DocumentExportMenu(props: {
   const handleCopyMarkdown = async () => {
     setIsOpen(false);
     try {
-      const markdown = proseMirrorToMarkdown(props.content, props.title);
+      const markdown = proseMirrorToMarkdown(props.getContent(), props.title);
       await navigator.clipboard.writeText(markdown);
       toast.success('已复制 Markdown 内容到剪贴板');
     } catch {

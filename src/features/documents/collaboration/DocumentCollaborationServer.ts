@@ -22,6 +22,7 @@ import {
   sanitizeDocumentCollaborationAwareness,
 } from './DocumentCollaborationSecurity';
 import type { DocumentCollaborationContext } from './DocumentCollaborationSecurity';
+import { broadcastDocumentCollaborationTitle } from './DocumentCollaborationTitleBroadcast';
 
 const STORE_DEBOUNCE_MS = 1000;
 const STORE_MAX_DEBOUNCE_MS = 5000;
@@ -69,6 +70,9 @@ function matchesInvalidation(
 ) {
   if (invalidation.kind === 'document') {
     return context.documentId === invalidation.documentId;
+  }
+  if (invalidation.kind === 'document_title') {
+    return false;
   }
   if (invalidation.kind === 'project_member') {
     return context.projectId === invalidation.projectId && context.userId === invalidation.userId;
@@ -285,6 +289,11 @@ export function createDocumentCollaborationServer() {
 
   const invalidationSubscriber = new DocumentCollaborationInvalidationSubscriber(
     async (invalidation) => {
+      if (invalidation.kind === 'document_title') {
+        broadcastDocumentCollaborationTitle(server.hocuspocus.documents, invalidation);
+        return;
+      }
+
       await revalidateDocumentCollaborationConnections({
         connections: getDocumentCollaborationConnections(server),
         metrics,

@@ -3,12 +3,19 @@ import * as z from 'zod';
 import { db } from '@/libs/DB';
 
 const COLLABORATION_INVALIDATION_CHANNEL = 'knowmesh_document_collaboration';
+const MAX_RETRY_DELAY_MS = 30_000;
 const RETRY_DELAY_MS = 1000;
 
 export const documentCollaborationInvalidationSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('document'),
     documentId: z.uuid(),
+  }),
+  z.object({
+    kind: z.literal('document_title'),
+    documentId: z.uuid(),
+    title: z.string().min(1).max(200),
+    titleVersion: z.number().int().positive(),
   }),
   z.object({
     kind: z.literal('project_member'),
@@ -32,6 +39,7 @@ export class DocumentCollaborationInvalidationSubscriber {
     invalidation: DocumentCollaborationInvalidation,
   ) => Promise<void> | void;
   private retryTimer: NodeJS.Timeout | null = null;
+  private retryAttempt = 0;
   private startPromise: Promise<void> | null = null;
 
   constructor(
@@ -61,18 +69,33 @@ export class DocumentCollaborationInvalidationSubscriber {
   private async connect() {
     const client = await db.$client.connect();
     this.client = client;
+    client.on('end', this.handleConnectionEnd);
     client.on('error', this.handleConnectionError);
     client.on('notification', this.handleNotification);
     await client.query(`LISTEN ${COLLABORATION_INVALIDATION_CHANNEL}`);
+    this.retryAttempt = 0;
   }
 
   private readonly handleConnectionError = () => {
+    this.handleConnectionLost();
+  };
+
+  private readonly handleConnectionEnd = () => {
+    this.handleConnectionLost();
+  };
+
+  private handleConnectionLost() {
     this.resetConnection();
-    this.retryTimer ??= setTimeout(() => {
+    if (this.retryTimer) {
+      return;
+    }
+    const retryDelay = Math.min(RETRY_DELAY_MS * 2 ** this.retryAttempt, MAX_RETRY_DELAY_MS);
+    this.retryAttempt += 1;
+    this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       void this.restart();
-    }, RETRY_DELAY_MS);
-  };
+    }, retryDelay);
+  }
 
   private readonly handleNotification = (message: Notification) => {
     if (message.channel !== COLLABORATION_INVALIDATION_CHANNEL || !message.payload) {
@@ -118,6 +141,7 @@ export class DocumentCollaborationInvalidationSubscriber {
 
   private resetConnection() {
     if (this.client) {
+      this.client.off('end', this.handleConnectionEnd);
       this.client.off('error', this.handleConnectionError);
       this.client.off('notification', this.handleNotification);
       this.client.release(true);

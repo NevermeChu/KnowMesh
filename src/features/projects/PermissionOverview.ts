@@ -88,7 +88,7 @@ export type PermissionOverview =
       workspaceMembers: PermissionMember[];
     }
   | {
-      document: { id: string; title: string };
+      document: { id: string; title: string; titleVersion: number };
       groups: PermissionGroup[];
       permissions: Permission[];
       project: { id: string; name: string };

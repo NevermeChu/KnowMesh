@@ -12,11 +12,13 @@ import {
 } from '@hocuspocus/provider-react';
 import type { Editor } from '@tiptap/react';
 import { useEditor } from '@tiptap/react';
-import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Env } from '@/libs/Env';
 import { throttleDocumentCollaborationCursorAwareness } from '../collaboration/DocumentCollaborationAwarenessThrottle';
 import { parseDocumentCollaborationPersistenceMessage } from '../collaboration/DocumentCollaborationPersistenceMessage';
 import { getDocumentCollaborationRoom } from '../collaboration/DocumentCollaborationRoom';
+import { parseDocumentCollaborationTitleMessage } from '../collaboration/DocumentCollaborationTitleMessage';
 import type { Document } from '../Document';
 import { documentExtensions } from '../DocumentExtensions';
 import {
@@ -120,6 +122,9 @@ function CollaborativeDocumentEditorContent(props: {
       setWordCount(currentEditor.state.doc.textContent.length);
     },
   });
+  useLayoutEffect(() => {
+    editor?.setEditable(props.canEdit, false);
+  }, [editor, props.canEdit]);
 
   return (
     <DocumentEditorSurface
@@ -174,6 +179,7 @@ function CollaborativeDocumentSnapshot(props: {
 
 function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document }) {
   const provider = useHocuspocusProvider();
+  const router = useRouter();
   const connectionStatus = useHocuspocusConnectionStatus();
   const syncStatus = useHocuspocusSyncStatus();
   const users = useHocuspocusAwareness();
@@ -188,6 +194,17 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
   );
   const [hasDisconnected, setHasDisconnected] = useState(false);
   const [hasSynced, setHasSynced] = useState(provider.isSynced);
+  const [documentTitle, setDocumentTitle] = useState(() => ({
+    title: props.document.title,
+    titleVersion: props.document.titleVersion,
+  }));
+  useEffect(() => {
+    setDocumentTitle((current) =>
+      props.document.titleVersion > current.titleVersion
+        ? { title: props.document.title, titleVersion: props.document.titleVersion }
+        : current,
+    );
+  }, [props.document.title, props.document.titleVersion]);
 
   useHocuspocusEvent('authenticated', (data) => {
     setAuthenticationFailed(false);
@@ -210,6 +227,19 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
   useHocuspocusEvent('synced', () => {
     setHasSynced(true);
   });
+  useHocuspocusEvent('stateless', (data) => {
+    const message = parseDocumentCollaborationTitleMessage(data.payload);
+    if (!message || message.documentId !== props.document.id) {
+      return;
+    }
+
+    setDocumentTitle((current) =>
+      message.titleVersion > current.titleVersion
+        ? { title: message.title, titleVersion: message.titleVersion }
+        : current,
+    );
+    router.refresh();
+  });
 
   const collaborationState = getDocumentCollaborationState({
     authenticationFailed,
@@ -217,6 +247,7 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
     hasDisconnected,
     syncStatus,
   });
+  const currentDocument = { ...props.document, ...documentTitle };
 
   if (!hasSynced) {
     if (authenticationFailed || hasDisconnected) {
@@ -227,7 +258,7 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
             canEdit: props.canEdit,
           })}
           collaborationState={collaborationState}
-          document={props.document}
+          document={currentDocument}
         />
       );
     }
@@ -248,11 +279,10 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
 
   return (
     <CollaborativeDocumentEditorContent
-      key={serverCanEdit ? 'editable' : 'readonly'}
       canEdit={serverCanEdit}
       collaborationMembers={getDocumentCollaborationMembers(users)}
       collaborationState={collaborationState}
-      document={props.document}
+      document={currentDocument}
     />
   );
 }

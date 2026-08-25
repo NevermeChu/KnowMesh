@@ -12,6 +12,7 @@ async function getDocumentAuthorization(options: { documentId: string; userId: s
       id: documentsSchema.id,
       projectId: documentsSchema.projectId,
       title: documentsSchema.title,
+      titleVersion: documentsSchema.titleVersion,
     })
     .from(documentsSchema)
     .where(eq(documentsSchema.id, options.documentId))

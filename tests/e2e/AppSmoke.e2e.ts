@@ -174,6 +174,38 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
+  test('flushes a personal document when navigating before debounce', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${documentId}`);
+    const editor = page.locator('.ProseMirror[contenteditable="true"]');
+    await expect(editor).toBeVisible();
+
+    const marker = `navigation-flush-${Date.now()}`;
+    await editor.click();
+    await page.keyboard.press('End');
+    await page.keyboard.type(marker);
+    await page.getByRole('link', { exact: true, name: '通知' }).click();
+    await expect(page.getByRole('heading', { exact: true, name: '通知' })).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const projected = await pool.query<{ content: object }>(
+          `SELECT content FROM documents WHERE id = '${documentId}'`,
+        );
+        return JSON.stringify(projected.rows[0]?.content ?? {});
+      })
+      .toContain(marker);
+
+    await close();
+  });
+
   test("returns not found for another user's personal project and document", async ({
     baseURL,
     browser,

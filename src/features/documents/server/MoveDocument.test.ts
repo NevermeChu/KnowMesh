@@ -130,20 +130,12 @@ describe(moveDocument, () => {
   });
 
   it('moves document to new parent within same project', async () => {
-    state.limit
-      .mockResolvedValueOnce([
-        {
-          id: parentId,
-          parentId: null,
-          projectId,
-        },
-      ])
-      .mockResolvedValueOnce([]);
-
     state.txQueue.rows = [
       [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
       [{ role: 'owner' }],
       [{ role: 'owner' }],
+      [{ id: parentId, parentId: null, projectId }],
+      [],
     ];
 
     const result = await moveDocument({
@@ -176,19 +168,13 @@ describe(moveDocument, () => {
   });
 
   it('rejects moving a document into its own descendant', async () => {
-    state.limit
-      .mockResolvedValueOnce([
-        {
-          id: parentId,
-          parentId: 'descendant_intermediate',
-          projectId,
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          parentId: docId, // Ancestor chain leads back to docId!
-        },
-      ]);
+    state.txQueue.rows = [
+      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
+      [{ role: 'owner' }],
+      [{ role: 'owner' }],
+      [{ id: parentId, parentId: 'descendant_intermediate', projectId }],
+      [{ parentId: docId }],
+    ];
 
     await expect(
       moveDocument({
@@ -202,16 +188,6 @@ describe(moveDocument, () => {
   });
 
   it('authorizes target project and updates descendants when moving across projects', async () => {
-    state.limit
-      .mockResolvedValueOnce([
-        {
-          id: parentId,
-          parentId: null,
-          projectId: targetProjectId,
-        },
-      ])
-      .mockResolvedValueOnce([]);
-
     state.txQueue.rows = [
       [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
       [{ role: 'owner' }],
@@ -219,6 +195,9 @@ describe(moveDocument, () => {
       [{ kind: 'personal', name: '目标项目', ownerId: 'user_1', workspaceId: 'ws-target' }],
       [{ role: 'owner' }],
       [{ role: 'owner' }],
+      [{ id: parentId, parentId: null, projectId: targetProjectId }],
+      [],
+      [],
     ];
 
     await moveDocument({

@@ -2,7 +2,7 @@
 
 import { AlertCircle, Check, Loader2, WifiOff } from 'lucide-react';
 
-export type SaveState = 'error' | 'saved' | 'saving';
+export type SaveState = 'conflict' | 'error' | 'saved' | 'saving';
 export type CollaborationState = 'connecting' | 'error' | 'offline' | 'synced' | 'syncing';
 
 /**
@@ -18,6 +18,7 @@ export function DocumentSaveStatus(props: {
 }) {
   if (
     !props.canEdit &&
+    props.state !== 'conflict' &&
     props.state !== 'error' &&
     (props.collaborationState === undefined || props.collaborationState === 'synced')
   ) {
@@ -45,7 +46,7 @@ export function DocumentSaveStatus(props: {
   }
 
   if (
-    props.state === 'error' &&
+    (props.state === 'conflict' || props.state === 'error') &&
     (props.collaborationState === undefined || props.collaborationState === 'synced')
   ) {
     return (
@@ -54,7 +55,7 @@ export function DocumentSaveStatus(props: {
         className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger/10 px-2.5 py-0.5 text-xs font-medium text-danger"
       >
         <AlertCircle aria-hidden="true" className="size-3" />
-        保存失败
+        {props.state === 'conflict' ? '其他页面已更新' : '保存失败'}
       </span>
     );
   }

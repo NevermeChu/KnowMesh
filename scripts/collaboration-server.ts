@@ -1,5 +1,7 @@
 import { once } from 'node:events';
 import process from 'node:process';
+import { acquireDocumentCollaborationLease } from '@/features/documents/collaboration/DocumentCollaborationLease';
+import type { DocumentCollaborationLease } from '@/features/documents/collaboration/DocumentCollaborationLease';
 import {
   createDocumentCollaborationHealthServer,
   createDocumentCollaborationServer,
@@ -23,6 +25,7 @@ const healthServer = createDocumentCollaborationHealthServer({
   metrics,
 });
 let shutdownPromise: Promise<void> | undefined;
+let collaborationLease: DocumentCollaborationLease | undefined;
 
 const isShutdownMessage = (value: unknown) =>
   typeof value === 'object' && value !== null && 'type' in value && value.type === 'shutdown';
@@ -48,6 +51,18 @@ const shutdown = async (signal: NodeJS.Signals) => {
       }
       process.exitCode = 1;
     } finally {
+      try {
+        await collaborationLease?.release();
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : 'Unknown lease release error',
+            event: 'document_collaboration_lease_release_failed',
+          }),
+        );
+        process.exitCode = 1;
+      }
+      collaborationLease = undefined;
       await db.$client.end();
       if (process.connected) {
         process.disconnect?.();
@@ -70,6 +85,14 @@ process.on('message', (message) => {
 });
 
 async function startCollaborationServer() {
+  collaborationLease = await acquireDocumentCollaborationLease({
+    onLost: (error) => {
+      console.error(
+        JSON.stringify({ error: error.message, event: 'document_collaboration_lease_lost' }),
+      );
+      void shutdown('SIGTERM');
+    },
+  });
   if (!preparationMode) {
     await invalidationSubscriber.start();
   }
@@ -96,7 +119,12 @@ void (async () => {
         event: 'document_collaboration_startup_failed',
       }),
     );
-    await db.$client.end();
+    try {
+      await collaborationLease?.release();
+    } finally {
+      collaborationLease = undefined;
+      await db.$client.end();
+    }
     process.exitCode = 1;
   }
 })();

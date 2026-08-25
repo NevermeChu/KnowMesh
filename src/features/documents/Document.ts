@@ -37,6 +37,7 @@ export type Document = {
   projectName?: string;
   sortOrder: number;
   title: string;
+  titleVersion: number;
   updatedAt: Date;
 };
 

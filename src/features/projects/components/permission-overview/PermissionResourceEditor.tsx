@@ -46,7 +46,15 @@ export function PermissionResourceEditor(props: {
               } else if (props.overview.scope === 'project') {
                 await updateProject({ name, projectId: resource.id });
               } else {
-                await updateDocument({ documentId: resource.id, title: name });
+                const result = await updateDocument({
+                  documentId: resource.id,
+                  expectedTitleVersion: props.overview.document.titleVersion,
+                  title: name,
+                });
+                if (result.status === 'conflict') {
+                  setError('文件名称已在其他页面更新，请重新打开后再试');
+                  return;
+                }
               }
               props.onMutated('update', props.overview.scope);
             } catch {

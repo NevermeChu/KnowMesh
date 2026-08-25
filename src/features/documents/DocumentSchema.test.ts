@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createDocumentSchema, moveDocumentSchema, updateDocumentSchema } from './DocumentSchema';
 
 const documentId = '01987654-3210-7000-8000-000000000001';
+const expectedUpdatedAt = new Date('2026-08-25T00:00:00.000Z');
 
 describe('document schemas', () => {
   it('rejects non-document JSON', () => {
     expect(() =>
-      updateDocumentSchema.parse({ content: { type: 'paragraph' }, documentId }),
+      updateDocumentSchema.parse({ content: { type: 'paragraph' }, documentId, expectedUpdatedAt }),
     ).toThrow('文档内容格式无效');
   });
 
@@ -15,6 +16,7 @@ describe('document schemas', () => {
       updateDocumentSchema.parse({
         content: { content: [{ type: 'unsupportedBlock' }], type: 'doc' },
         documentId,
+        expectedUpdatedAt,
       }),
     ).toThrow('文档内容格式无效');
   });
@@ -45,11 +47,28 @@ describe('document schemas', () => {
       updateDocumentSchema.parse({
         content: validContent,
         documentId,
+        expectedUpdatedAt,
       }),
     ).toStrictEqual({
       content: validContent,
       documentId,
+      expectedUpdatedAt,
     });
+  });
+
+  it('rejects content saves without a version token', () => {
+    expect(() =>
+      updateDocumentSchema.parse({
+        content: { content: [{ type: 'paragraph' }], type: 'doc' },
+        documentId,
+      }),
+    ).toThrow('保存文档正文时缺少版本信息');
+  });
+
+  it('rejects title saves without a version token', () => {
+    expect(() => updateDocumentSchema.parse({ documentId, title: '新标题' })).toThrow(
+      '保存文档标题时缺少版本信息',
+    );
   });
 
   it('validates createDocumentSchema with and without parentId', () => {

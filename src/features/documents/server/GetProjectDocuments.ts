@@ -33,6 +33,7 @@ export async function getProjectDocuments(options: {
       parentId: documentsSchema.parentId,
       sortOrder: documentsSchema.sortOrder,
       title: documentsSchema.title,
+      titleVersion: documentsSchema.titleVersion,
       updatedAt: documentsSchema.updatedAt,
     })
     .from(documentsSchema)

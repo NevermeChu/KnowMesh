@@ -16,8 +16,9 @@ const state = vi.hoisted(() => {
   const firstInnerJoin = vi.fn<() => { innerJoin: typeof secondInnerJoin }>(() => ({
     innerJoin: secondInnerJoin,
   }));
-  const from = vi.fn<() => { innerJoin: typeof firstInnerJoin }>(() => ({
+  const from = vi.fn<() => { innerJoin: typeof firstInnerJoin; where: typeof selectWhere }>(() => ({
     innerJoin: firstInnerJoin,
+    where: selectWhere,
   }));
   const select = vi.fn<() => { from: typeof from }>(() => ({ from }));
   const transaction = vi.fn<
@@ -26,6 +27,7 @@ const state = vi.hoisted(() => {
     ) => Promise<unknown>
   >(async (callback) => await callback({ select, update }));
   const authorizeDocument = vi.fn<() => Promise<unknown>>();
+  const requireProjectPermissionInTransaction = vi.fn<() => Promise<{ kind: string }>>();
   const requireUser = vi.fn<() => Promise<{ id: string }>>();
   const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
 
@@ -35,6 +37,7 @@ const state = vi.hoisted(() => {
     requireUser,
     returning,
     revalidatePath,
+    requireProjectPermissionInTransaction,
     set,
     transaction,
     update,
@@ -53,26 +56,47 @@ vi.mock('@/features/auth/server/CurrentUser', () => ({
 vi.mock('@/features/permissions/server/DocumentAuthorization', () => ({
   authorizeDocument: state.authorizeDocument,
 }));
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Partial revalidation mock isolates transaction authorization.
+vi.mock('@/features/permissions/server/RevalidateProjectPermission', () => ({
+  requireProjectPermissionInTransaction: state.requireProjectPermissionInTransaction,
+}));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Fluent query builders isolate database update.
 vi.mock('@/libs/DB', () => ({
   db: { transaction: state.transaction },
 }));
 
 describe(updateDocument, () => {
+  const initialUpdatedAt = new Date('2026-08-25T00:00:00.000Z');
+  const savedUpdatedAt = new Date('2026-08-25T00:00:01.000Z');
+
   beforeEach(() => {
     vi.clearAllMocks();
     state.requireUser.mockResolvedValue({ id: 'user_1' });
     state.authorizeDocument.mockResolvedValue({
       document: { id: '10000000-0000-4000-8000-000000000001', projectId: 'project_1' },
     });
-    state.returning.mockResolvedValue([{ id: '10000000-0000-4000-8000-000000000001' }]);
-    state.forUpdate.mockResolvedValue([{ workspaceKind: 'personal' }]);
+    state.returning.mockResolvedValue([
+      {
+        id: '10000000-0000-4000-8000-000000000001',
+        titleVersion: 2,
+        updatedAt: savedUpdatedAt,
+      },
+    ]);
+    state.forUpdate.mockResolvedValue([
+      {
+        id: '10000000-0000-4000-8000-000000000001',
+        titleVersion: 1,
+        updatedAt: initialUpdatedAt,
+      },
+    ]);
+    state.requireProjectPermissionInTransaction.mockResolvedValue({ kind: 'personal' });
   });
 
   it('updates document content without revalidating workspace layout', async () => {
     await updateDocument({
       content: { content: [{ type: 'paragraph' }], type: 'doc' },
       documentId: '10000000-0000-4000-8000-000000000001',
+      expectedUpdatedAt: initialUpdatedAt,
     });
 
     expect(state.update).toHaveBeenCalledOnce();
@@ -82,6 +106,7 @@ describe(updateDocument, () => {
   it('updates document title and revalidates workspace layout cache', async () => {
     await updateDocument({
       documentId: '10000000-0000-4000-8000-000000000001',
+      expectedTitleVersion: 1,
       title: '新文档标题',
     });
 
@@ -90,28 +115,64 @@ describe(updateDocument, () => {
   });
 
   it('rejects team document content writes', async () => {
-    state.forUpdate.mockResolvedValueOnce([
-      {
-        workspaceKind: 'team',
-      },
-    ]);
+    state.requireProjectPermissionInTransaction.mockResolvedValueOnce({ kind: 'team' });
     await expect(
       updateDocument({
         content: { content: [{ type: 'paragraph' }], type: 'doc' },
         documentId: '10000000-0000-4000-8000-000000000001',
+        expectedUpdatedAt: initialUpdatedAt,
       }),
     ).rejects.toThrow('团队文档正文必须通过协作服务保存');
     expect(state.update).not.toHaveBeenCalled();
   });
 
   it('updates team document titles', async () => {
-    state.forUpdate.mockResolvedValueOnce([{ workspaceKind: 'team' }]);
+    state.requireProjectPermissionInTransaction.mockResolvedValueOnce({ kind: 'team' });
 
     await updateDocument({
       documentId: '10000000-0000-4000-8000-000000000001',
+      expectedTitleVersion: 1,
       title: 'Team title',
     });
 
     expect(state.update).toHaveBeenCalledOnce();
+  });
+
+  it('rejects stale document versions without overwriting content', async () => {
+    const result = await updateDocument({
+      content: { content: [{ type: 'paragraph' }], type: 'doc' },
+      documentId: '10000000-0000-4000-8000-000000000001',
+      expectedUpdatedAt: new Date('2026-08-24T23:59:59.000Z'),
+    });
+
+    expect(result).toStrictEqual({ status: 'conflict' });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale title versions without overwriting title', async () => {
+    const result = await updateDocument({
+      documentId: '10000000-0000-4000-8000-000000000001',
+      expectedTitleVersion: 2,
+      title: 'Stale title',
+    });
+
+    expect(result).toStrictEqual({ status: 'conflict' });
+    expect(state.update).not.toHaveBeenCalled();
+  });
+
+  it('revalidates document update permission inside transaction', async () => {
+    await updateDocument({
+      documentId: '10000000-0000-4000-8000-000000000001',
+      expectedTitleVersion: 1,
+      title: 'Authorized title',
+    });
+
+    expect(state.requireProjectPermissionInTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: 'document.update',
+        projectId: 'project_1',
+        userId: 'user_1',
+      }),
+    );
   });
 });

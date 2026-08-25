@@ -1,12 +1,11 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { isSessionActive } from '@/features/auth/server/SessionAuthorization';
 import { getProjectPermissionDecision } from '@/features/permissions/PermissionPolicy';
 import { db } from '@/libs/DB';
 import {
   documentsSchema,
   projectMembersSchema,
   projectsSchema,
-  sessionSchema,
-  userSchema,
   workspaceMembersSchema,
   workspacesSchema,
 } from '@/models/Schema';
@@ -68,19 +67,5 @@ export async function isDocumentCollaborationSessionActive(options: {
   sessionId: string;
   userId: string;
 }) {
-  const [session] = await db
-    .select({ id: sessionSchema.id })
-    .from(sessionSchema)
-    .innerJoin(userSchema, eq(userSchema.id, sessionSchema.userId))
-    .where(
-      and(
-        eq(sessionSchema.id, options.sessionId),
-        eq(sessionSchema.userId, options.userId),
-        gt(sessionSchema.expiresAt, new Date()),
-        eq(userSchema.emailVerified, true),
-      ),
-    )
-    .limit(1);
-
-  return session !== undefined;
+  return await isSessionActive(options);
 }
