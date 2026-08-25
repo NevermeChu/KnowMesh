@@ -107,7 +107,7 @@ function drawNodes(
       }
     }
 
-    ctx.font = '600 12px "Plus Jakarta Sans", "Noto Sans SC", sans-serif';
+    ctx.font = '600 12px "Plus Jakarta Sans Variable", "Noto Sans SC Variable", sans-serif';
     const textWidth = ctx.measureText(node.text).width;
     const boxWidth = textWidth + 24;
     const boxHeight = 32;

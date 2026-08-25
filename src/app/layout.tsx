@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import '@fontsource-variable/jetbrains-mono/wght.css';
+import '@fontsource-variable/noto-sans-sc/wght.css';
+import '@fontsource-variable/plus-jakarta-sans/wght.css';
 import '@/styles/global.css';
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { ToastProvider } from '@/components/ui/Toast';
 import {
   CONTENT_WIDTH_COOKIE,
@@ -50,8 +53,7 @@ export const viewport: Viewport = {
 const themeInitScript = `(function(){var d=document.documentElement,m=window.matchMedia('(prefers-color-scheme: dark)'),r=function(){var t=d.dataset.theme;d.classList.toggle('dark',t==='dark'||(t!=='light'&&m.matches))};r();m.addEventListener('change',r);})();`;
 
 export default async function RootLayout(props: { children: React.ReactNode }) {
-  const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
-  const nonce = requestHeaders.get('x-nonce') ?? undefined;
+  const cookieStore = await cookies();
   const themeCookie = cookieStore.get(THEME_COOKIE)?.value;
   const theme: UserThemePreference = isUserThemePreference(themeCookie) ? themeCookie : 'system';
   const contentWidth = parseContentWidth(cookieStore.get(CONTENT_WIDTH_COOKIE)?.value);
@@ -66,7 +68,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
       suppressHydrationWarning
     >
       <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
         <ToastProvider>{props.children}</ToastProvider>
