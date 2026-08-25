@@ -27,11 +27,11 @@ updateThemePreference Server Action
 根布局（每个请求）
 → 读取 knowmesh-theme，非法值回退 system
 → <html data-theme="..." class="dark?">
-→ <head> 内联脚本在首帧前解析 system → prefers-color-scheme
+→ <head> 带请求级 CSP nonce 的脚本在首帧前解析 system → prefers-color-scheme
 → 内联脚本持续监听系统主题变化，跟随系统时实时切换
 ```
 
-由此产生的边界：根布局读取 cookie，因此所有路由（含公开首页）都是动态渲染；未登录或没有 cookie 的访客按 `跟随系统` 处理。设置页展示的当前值从数据库读取，跨设备一致；cookie 只用于渲染加速，两者短暂不一致时以数据库为准。
+由此产生的边界：页面使用请求级 CSP nonce，因此所有页面路由（含公开首页）按请求动态渲染；根布局同时读取 cookie，未登录或没有 cookie 的访客按 `跟随系统` 处理。设置页展示的当前值从数据库读取，跨设备一致；cookie 只用于渲染加速，两者短暂不一致时以数据库为准。
 
 ## 持久化模型
 
@@ -61,7 +61,7 @@ updateThemePreference Server Action
 - `src/features/preferences/components/ThemePreferenceSection.tsx`：主题卡片与乐观切换。
 - `src/components/layout/WorkspaceContent.tsx`：消费 `--content-read-width` 的共享内容容器。
 - `src/components/layout/ContentToolbar.tsx`：内容宽度下拉与乐观切换。
-- `src/app/layout.tsx`：cookie 读取、`<html>` 主题属性、`--content-read-width` 内联与主题初始化脚本。
+- `src/app/layout.tsx`：cookie 与 CSP nonce 读取、`<html>` 主题属性、`--content-read-width` 内联与主题初始化脚本。
 - `src/styles/global.css`：颜色 token 体系与 `--content-read-width` 默认值。
 
 ## 相关文档

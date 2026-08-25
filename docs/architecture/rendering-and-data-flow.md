@@ -21,7 +21,7 @@ Team 正文：Client Component → 浏览器 Yjs 副本 + Hocuspocus Provider �
 
 ## 受保护页面的认证回跳
 
-`src/proxy.ts` 保护工作区与邀请页面。未检测到 Better Auth Session cookie 时，代理将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
+`src/proxy.ts` 为页面请求生成 CSP nonce，并把严格脚本策略写入请求与响应头；根布局和 Next.js 框架脚本使用同一 nonce。它同时保护工作区与邀请页面：未检测到 Better Auth Session cookie 时，代理将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
 
 这会保留 Workspace 邀请链接的 token，但不自动接受邀请；用户仍必须在接受页明确确认，服务端 Action 再次校验 token 和已验证邮箱。`/dashboard` 只是没有安全动态目标时的 fallback。
 

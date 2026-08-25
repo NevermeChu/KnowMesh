@@ -25,6 +25,7 @@ ADR 记录具有真实替代方案和长期影响的架构决定。它回答“�
 | [0010](0010-use-sse-for-realtime-notifications.md) | Superseded | 使用进程内总线配合 SSE 实现实时站内通知 |
 | [0011](0011-use-postgresql-notify-for-realtime-delivery.md) | Accepted | 使用事务性 PostgreSQL 通知驱动跨进程 SSE |
 | [0012](0012-use-yjs-for-team-document-collaboration.md) | Accepted | Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照 |
+| [0013](0013-use-request-nonces-for-content-security-policy.md) | Accepted | 页面使用请求级 nonce 执行严格脚本 CSP |
 | [0014](0014-use-browser-yjs-replicas-for-crash-recovery.md) | Accepted | 使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口 |
 | [0015](0015-lazy-load-document-navigation.md) | Accepted | 按节点加载文档导航树 |
 
