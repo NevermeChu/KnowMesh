@@ -72,7 +72,7 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 → 保留其他人 Project 中的 Document，并匿名化 created_by_id
 ```
 
-账户删除采用“自有资源删除、他人资源退出”的过渡策略，不执行所有权转让。Better Auth 内置账户删除入口保持关闭；KnowMesh Server Action 将业务清理和身份行删除放入同一个 Drizzle 事务，任一步失败都会整体回滚。
+账户删除采用“Personal 资源删除、他人资源退出”的策略，不自动执行 Team 所有权转让。用户仍拥有 Team Workspace 时事务在任何删除前拒绝，必须先显式转让所有权。Better Auth 内置账户删除入口保持关闭；KnowMesh Server Action 将业务清理和身份行删除放入同一个 Drizzle 事务，任一步失败都会整体回滚。
 
 普通 Workspace 和 Project 操作复用相同语义：Project 右键权限弹窗以及“设置 → 工作区管理”根据当前用户角色显示“删除”或“退出”，服务端只接收资源 ID，并在已认证边界重新解析 owner/member 身份。owner 删除完整资源；member 退出时只清理自己的关系。Workspace member 退出前会递归处理其直接参与的 Project，避免留下 owner Project 或违反成员外键。
 
@@ -117,7 +117,7 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 
 创建、更新和删除均使用 Server Action。客户端的 `projectId`、`documentId` 或能力只用于定位候选资源和界面呈现，服务端仍会重新计算授权。`viewer` 可以读取，不能创建、修改或删除文件；`owner` 和 `editor` 可以管理文件。
 
-Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`；服务端再次验证 ProseMirror JSON 结构后写入 `documents.content`。Team 文档在功能开关开启时使用 `CollaborativeDocumentEditor`：Provider 按 `document:<uuid>` 隔离 Y.Doc，客户端 Collaboration 扩展与服务端 transformer 统一使用 `content` XmlFragment，首次同步完成后才挂载 Tiptap，正文变更不调用 Server Action。服务端加载旧二进制状态时把早期 `default` XmlFragment 转换为 canonical `content` 状态。协作编辑器持有文档级 WebSocket 生命周期；路由卸载时房间 Provider 先从共享传输分离，外层 WebSocket 随后销毁，防止旧 Awareness 和连接残留。Provider 文档连接关闭、底层断线、认证失败或重新认证为 `readonly` 时，客户端立即以只读编辑器替换可写实例；只有页面授权与服务端 `read-write` scope 同时成立才允许正文写入。该状态变化不会回退到 JSON 写入；Personal 编辑器也不会因协作服务故障改变保存行为。
+Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `updateDocument`；服务端再次验证 ProseMirror JSON 结构后写入 `documents.content`。Team 文档在功能开关开启时使用 `CollaborativeDocumentEditor`：Provider 按 `document:<uuid>` 隔离 Y.Doc，客户端 Collaboration 扩展与服务端 transformer 统一使用 `content` XmlFragment，首次同步完成后才挂载 Tiptap，正文变更不调用 Server Action。标题在两种模式下仍由 Server Action 写入，但使用独立 `title_version` 做乐观并发；Team 标题提交后经 PostgreSQL 通知和房间 stateless 消息同步，不进入 Y.Doc。服务端加载旧二进制状态时把早期 `default` XmlFragment 转换为 canonical `content` 状态。协作编辑器持有文档级 WebSocket 生命周期；路由卸载时房间 Provider 先从共享传输分离，外层 WebSocket 随后销毁，防止旧 Awareness 和连接残留。Provider 文档连接关闭、底层断线、认证失败或重新认证为 `readonly` 时，客户端立即以只读编辑器替换可写实例；只有页面授权与服务端 `read-write` scope 同时成立才允许正文写入。该状态变化不会回退到 JSON 写入；Personal 编辑器也不会因协作服务故障改变保存行为。
 
 模式分流把 Workspace 正文权威类型和协作服务当前是否允许写入分开表达。功能开关关闭时，所有 Team 文档都选择 `collaborative-readonly`，直接显示当前 JSON 快照且不建立 Provider；正文编辑和 `updateDocument(content)` 保持关闭，标题继续按独立业务授权保存。重新启用后，已有状态继续使用既有 Yjs 历史，尚未初始化的 Team 文档才从经过验证的 JSON 快照建立首次 Yjs 状态。
 

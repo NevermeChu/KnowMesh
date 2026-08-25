@@ -89,7 +89,7 @@ PostgreSQL / 本地 PGlite
 - 个人与协作项目创建。
 - Workspace 创建、切换和项目归属。
 - Better Auth 用户创建和 Session 创建 hook 幂等创建或补偿 Personal Workspace；Personal Workspace 永久保留且不可删除或退出，仅在用户注销账号时随业务数据一同清理。
-- 账户删除前同步删除用户拥有的 Workspace 和 Project，并退出其他共享资源；业务清理失败会阻止身份删除。
+- 账户删除前同步删除 Personal Workspace 并退出其他共享资源；仍拥有 Team Workspace 时必须先转让所有权，业务清理失败会阻止身份删除。
 - 项目及 owner 成员持久化。
 - 当前用户项目列表查询和侧边栏刷新。
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。

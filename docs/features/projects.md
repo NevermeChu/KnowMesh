@@ -63,12 +63,12 @@ Project 的删除或退出入口位于侧边栏 Project 右键打开的权限弹
 - Team Workspace 支持全局操作审计日志，记录成员进出、角色变更、所有权转让、资源重命名与删除等关键事件。
 - 审计日志严格对 **Workspace Owner** 开放（路由 `/settings/audit-logs`）；非 Owner 用户在侧边栏和设置菜单中不展示入口，直接访问页面或接口会被服务端拦截（403 权限拒绝）。
 - 审计日志在业务 Server Action 事务内同步写入 `audit_logs` 表，记录操作者 ID、事件类型、目标资源类型与 ID、结构化详情 metadata、请求 IP 及客户端环境。
-- 审计日志归属于 Team Workspace，当 Workspace 被删除或账户注销时随外键级联清理，因此它是产品内操作历史，不作为独立于 Workspace 生命周期的合规留存介质。
+- 审计日志记录产生它的 Team Workspace UUID，但不以外键依附 Workspace 生命周期。删除 Workspace 时，同一事务先写入 `workspace_deleted`，已有历史和删除事件在资源删除后继续保留；当前产品界面仍只允许活跃 Workspace owner 按 Workspace 查询，跨删除资源的归档或合规导出尚未提供产品入口。
 
 
 ## 账户删除过渡策略
 
-KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，并在同一个数据库事务中删除 Better Auth 身份。该流程复用统一删除与退出规则遍历用户的 Workspace 成员关系：删除该用户拥有的 Personal/Team Workspace；对于其他人的 Workspace，先删除其中由该用户拥有的 Project、退出其他直接参与的 Project，再退出 Workspace。数据库级联删除自有资源的 Document 和协作状态。
+KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，并在同一个数据库事务中删除 Better Auth 身份。用户仍拥有任一 Team Workspace 时，清理事务必须在任何删除前拒绝并要求先转让所有权；Personal Workspace 随账户删除。对于其他人的 Workspace，流程先处理用户直接参与的 Project，再退出 Workspace。数据库级联删除 Personal 资源的 Document 和协作状态。
 
 共享 Project 中由该用户创建、但不由该用户拥有的 Document 继续保留，并把 `created_by_id` 匿名化为 `deleted_user`。该策略可能删除其他成员参与的 Team Workspace 或 Project，是明确记录的过渡行为。
 

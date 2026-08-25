@@ -15,7 +15,7 @@
 
 ## 查询与排序
 
-`searchWorkspaceContent` 先通过 `requireUser()` 取得当前 Better Auth 用户，再按标题 (`documents.title`) 或文档纯文本投影列 (`documents.search_text`) 执行不区分大小写的包含匹配。空白查询不访问数据库。结果按以下顺序排序，最多返回 30 条：
+`searchWorkspaceContent` 先通过 `requireUser()` 取得当前 Better Auth 用户，再以运行时 Schema 限制查询词最多 200 个字符、筛选值只能为 `all | personal | team`、分页大小只能为 1–100，然后按标题 (`documents.title`) 或文档纯文本投影列 (`documents.search_text`) 执行不区分大小写的包含匹配。空白查询不访问数据库。结果按以下顺序排序：
 
 1. 标题完全匹配，权重 100。
 2. 标题包含查询词，权重 50。

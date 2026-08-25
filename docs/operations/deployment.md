@@ -298,6 +298,7 @@ sudo systemctl status knowmesh.service --no-pager -l
 - 使用 `/srv/knowmesh-app/current` 作为工作目录。
 - 读取 `/etc/knowmesh.env`。
 - 使用固定 Node.js 路径执行 `collaboration-server.cjs`。
+- 启动后持有 PostgreSQL advisory lock 作为数据库级单实例租约；第二个写实例必须启动失败，租约连接丢失必须触发服务关闭。
 - 异常退出后自动重启，并在停止时给持久化留出时间。
 - 应用 systemd 的基础沙箱限制。
 

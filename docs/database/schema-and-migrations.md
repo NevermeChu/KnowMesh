@@ -13,6 +13,8 @@
 - 本地开发数据库：PGlite Socket，持久化目录为 `local.db/`。
 - 应用通过 `src/libs/DB.ts` 获取共享数据库实例。
 
+应用进程的共享 `pg` Pool 最多使用 10 条连接；新连接与锁等待最多 5 秒，普通语句与空闲事务最多 15 秒。通知和协作失效的 `LISTEN` 各在所属进程中占用一条专用连接，连接报告 `error` 或干净 `end` 时均清除旧启动状态，断线重连使用最长 30 秒的指数退避。迁移脚本使用独立连接配置，不受应用语句时限影响。
+
 `pg` 是 Node.js PostgreSQL 驱动，不是可视化数据库工具。查看本地数据优先使用 `npm run db:studio`。
 
 ## 当前业务表
@@ -100,6 +102,7 @@
 - `type` 使用通知事件枚举；`title` 和 `body` 保存事件发生时的展示快照。
 - 可选的 `target_kind` 与 `target_id` 必须同时为空或同时存在。目标是 Workspace 或 Project 的多态历史上下文，不建立外键，因此资源删除不会删除通知。
 - `read_at` 为空表示未读；`(recipient_user_id, created_at DESC)` 支持最近通知列表，收件人未读部分索引支持角标统计。
+- `(recipient_user_id, target_id) WHERE type = 'workspace_invited' AND target_kind = 'workspace'` 部分唯一索引保证同一用户和 Workspace 只有一条邀请通知；应用仍用 `ON CONFLICT DO NOTHING` 把并发冲突收敛为幂等成功。
 
 ### `user_preferences`
 
@@ -121,6 +124,10 @@
 
 自 `0027_woozy_magus.sql` 起，上述用户引用关系由数据库外键兜底：归属类列（通知收件人、偏好、收藏、成员、访问请求、邀请双方、Workspace/Project 的 owner）对 `user.id` 级联删除；`notifications.actor_user_id` 为可空外键并随触发者删除置空，与既有清理语义一致。两个例外保持无外键：`audit_logs.actor_user_id` 在账户删除后必须保留审计历史，`documents.created_by_id` 会被替换为哨兵值 `deleted_user` 而非真实用户行。同一迁移把全部时间戳列统一为 `timestamptz`（按 UTC 解释存量值），为 `project_invitations` 补充七天过期的 `expires_at`（存量行按 `created_at + 7 天` 回填），并新增 `(workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL` 部分唯一索引防止重复待处理工作区邀请；迁移在清理孤儿行与回填期间临时禁用 owner 不变量触发器。
 
+自 `0029_majestic_orphan.sql` 起，`audit_logs.workspace_id` 也不再引用 `workspaces`：它保存产生事件时的稳定 Workspace UUID，而不是活跃资源关系。该边界保证删除 Workspace 后旧历史和同事务写入的 `workspace_deleted` 事件仍存在；普通业务子表仍继续通过外键级联清理。
+
+自 `0030_flowery_domino.sql` 起，`documents.title_version` 独立记录标题保存版本，不受协作正文更新 `updated_at` 影响。标题更新递增版本并在事务提交后向协作失效频道发布标题、文档 ID 与新版本；协作进程只把该消息广播给当前文档房间，不把标题写入 Y.Doc。
+
 ## 数据库约束与应用层不变量
 
 数据库当前直接保证：主键和外键有效、成员关系唯一、关键字段非空、Project 成员一定属于同一 Workspace、资源 owner 与唯一 owner 成员一致，以及删除上级资源或 Workspace 成员时按外键级联清理下级关系。
@@ -134,6 +141,6 @@
 
 Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFERRED` 约束触发器共同维护。触发器在事务结束时检查，因此创建或转让可以在同一事务中依次写资源表与成员表；如果最终 `owner_id`、owner 成员身份或 owner 角色不一致，事务提交会失败。Drizzle Schema 能声明索引和外键，但不能表达这些跨表延迟触发器，其权威实现位于 `0010_silly_nomad.sql`。
 
-通知实时信号由 `0021_notification_realtime_delivery.sql` 中的数据库触发器维护。`notifications` 插入及 `read_at` 更新会调用事务性 `pg_notify`；PostgreSQL 仅在事务提交后投递信号，载荷只包含收件人、事件种类和通知 ID，应用收到信号后重新读取持久化内容与未读数。
+通知实时信号由 `0021_notification_realtime_delivery.sql` 建立并由 `0028_blushing_moonstone.sql` 扩展。`notifications` 插入、删除及 `read_at` 更新会调用事务性 `pg_notify`；PostgreSQL 仅在事务提交后投递信号，载荷只包含收件人、事件种类和通知 ID，应用收到信号后重新读取持久化内容与未读数。
 
 文档内容结构和版本一致性由文档 Server Action 维护。数据库只保证值是合法 JSON，不理解 ProseMirror 节点语义；绕过应用直接写入可能产生编辑器无法解释的内容。
