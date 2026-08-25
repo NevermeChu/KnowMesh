@@ -275,11 +275,23 @@ test.describe('application smoke coverage', () => {
 
     const { page, close } = await newAuthenticatedPage({ baseURL, browser });
     await page.goto(`/personal?project=${projectId}&document=${childDocumentId}`);
+    const personalNavigation = page.getByRole('navigation', {
+      exact: true,
+      name: '个人区域',
+    });
 
-    await expect(page.getByRole('button', { name: '收起Smoke Project' })).toBeVisible();
-    await expect(page.getByRole('link', { exact: true, name: seededTitle })).toBeVisible();
-    await expect(page.getByRole('link', { exact: true, name: childDocumentTitle })).toBeVisible();
-    await expect(page.getByRole('button', { name: `收起${seededTitle}` })).toBeVisible();
+    await expect(
+      personalNavigation.getByRole('button', { name: '收起Smoke Project' }),
+    ).toBeVisible();
+    await expect(
+      personalNavigation.getByRole('link', { exact: true, name: seededTitle }),
+    ).toBeVisible();
+    await expect(
+      personalNavigation.getByRole('link', { exact: true, name: childDocumentTitle }),
+    ).toBeVisible();
+    await expect(
+      personalNavigation.getByRole('button', { name: `收起${seededTitle}` }),
+    ).toBeVisible();
 
     await close();
   });
