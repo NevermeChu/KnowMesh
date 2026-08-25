@@ -1,4 +1,5 @@
-export type SearchFilter = 'all' | 'personal' | 'team';
+export const searchFilters = ['all', 'personal', 'team'] as const;
+export type SearchFilter = (typeof searchFilters)[number];
 
 export type SearchResultItem = {
   documentId: string;

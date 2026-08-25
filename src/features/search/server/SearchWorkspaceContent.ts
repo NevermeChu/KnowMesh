@@ -1,6 +1,7 @@
 'use server';
 
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import * as z from 'zod';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { db } from '@/libs/DB';
 import {
@@ -10,10 +11,18 @@ import {
   workspacesSchema,
 } from '@/models/Schema';
 import { escapeSqlLikePattern } from '@/utils/SqlPattern';
-import { extractSnippet } from '../Search';
+import { extractSnippet, searchFilters } from '../Search';
 import type { SearchFilter, SearchResults } from '../Search';
 
 const DEFAULT_PAGE_SIZE = 20;
+const MAX_SEARCH_QUERY_CHARS = 200;
+
+const searchWorkspaceOptionsSchema = z.object({
+  filter: z.enum(searchFilters).optional(),
+  page: z.number().int().positive().optional(),
+  pageSize: z.number().int().min(1).max(100).optional(),
+  query: z.string().trim().max(MAX_SEARCH_QUERY_CHARS),
+});
 
 export type SearchWorkspaceOptions = {
   filter?: SearchFilter;
@@ -33,9 +42,10 @@ export async function searchWorkspaceContent(
   options: SearchWorkspaceOptions,
 ): Promise<SearchResults> {
   const { id: userId } = await requireUser();
-  const trimmedQuery = options.query.trim();
-  const page = Math.max(1, options.page ?? 1);
-  const pageSize = Math.max(1, Math.min(100, options.pageSize ?? DEFAULT_PAGE_SIZE));
+  const searchOptions = searchWorkspaceOptionsSchema.parse(options);
+  const trimmedQuery = searchOptions.query;
+  const page = searchOptions.page ?? 1;
+  const pageSize = searchOptions.pageSize ?? DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
 
   if (!trimmedQuery) {
@@ -60,9 +70,9 @@ export async function searchWorkspaceContent(
     ),
   ];
 
-  if (options.filter === 'personal') {
+  if (searchOptions.filter === 'personal') {
     whereConditions.push(eq(workspacesSchema.kind, 'personal'));
-  } else if (options.filter === 'team') {
+  } else if (searchOptions.filter === 'team') {
     whereConditions.push(eq(workspacesSchema.kind, 'team'));
   }
 
