@@ -3,6 +3,14 @@ import { AppLogo } from '@/components/ui/AppLogo';
 import { SignOutButton } from '@/features/auth/components/SignOutButton';
 import { ThemeToggle } from '@/features/preferences/components/ThemeToggle';
 
+const landingNavigation = [
+  { href: '#hero-workspace', label: '工作区体验' },
+  { href: '#knowledge-mesh', label: '拓扑网格' },
+  { href: '#dual-workspace', label: '双轨与权限' },
+  { href: '#editor-search', label: '块级引擎与搜索' },
+  { href: '#tech-stack', label: '技术底座' },
+] as const;
+
 /**
  * Renders the public landing navigation without adding a layout wrapper.
  *
@@ -12,124 +20,33 @@ import { ThemeToggle } from '@/features/preferences/components/ThemeToggle';
 export function LandingHeader(props: { isAuthenticated: boolean }) {
   return (
     <header className="glass-nav sticky top-0 z-50">
-      <div
-        className="landing-container"
-        style={{
-          display: 'flex',
-          height: '4.25rem',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
+      <div className="landing-container flex h-17 items-center justify-between">
         {/* Brand Logo */}
-        <Link
-          href="/"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            textDecoration: 'none',
-            color: 'var(--ink)',
-          }}
-        >
+        <Link className="flex items-center gap-3 text-ink no-underline" href="/">
           <AppLogo className="size-11 rounded-xl shadow-card" />
           <div>
-            <span
-              style={{
-                fontSize: '1.125rem',
-                fontWeight: 700,
-                letterSpacing: '-0.03em',
-                color: 'var(--ink)',
-              }}
-            >
-              KnowMesh
-            </span>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                marginLeft: '0.35rem',
-                color: 'var(--accent)',
-                background: 'var(--accent-soft)',
-                padding: '0.15rem 0.4rem',
-                borderRadius: '0.35rem',
-              }}
-            >
+            <span className="text-lg font-bold tracking-[-0.03em] text-ink">KnowMesh</span>
+            <span className="ml-[0.35rem] rounded-[0.35rem] bg-accent-soft px-[0.4rem] py-[0.15rem] text-xs font-semibold text-accent">
               知序
             </span>
           </div>
         </Link>
 
         {/* Nav Links */}
-        <nav
-          aria-label="首页导航"
-          className="hidden md:flex"
-          style={{ alignItems: 'center', gap: '2rem' }}
-        >
-          <a
-            href="#hero-workspace"
-            style={{
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: 'var(--ink-secondary)',
-              textDecoration: 'none',
-              transition: 'color 0.15s ease',
-            }}
-          >
-            工作区体验
-          </a>
-          <a
-            href="#knowledge-mesh"
-            style={{
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: 'var(--ink-secondary)',
-              textDecoration: 'none',
-              transition: 'color 0.15s ease',
-            }}
-          >
-            拓扑网格
-          </a>
-          <a
-            href="#dual-workspace"
-            style={{
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: 'var(--ink-secondary)',
-              textDecoration: 'none',
-              transition: 'color 0.15s ease',
-            }}
-          >
-            双轨与权限
-          </a>
-          <a
-            href="#editor-search"
-            style={{
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: 'var(--ink-secondary)',
-              textDecoration: 'none',
-              transition: 'color 0.15s ease',
-            }}
-          >
-            块级引擎与搜索
-          </a>
-          <a
-            href="#tech-stack"
-            style={{
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: 'var(--ink-secondary)',
-              textDecoration: 'none',
-              transition: 'color 0.15s ease',
-            }}
-          >
-            技术底座
-          </a>
+        <nav aria-label="首页导航" className="hidden items-center gap-8 md:flex">
+          {landingNavigation.map((item) => (
+            <a
+              className="text-sm font-medium text-ink-secondary no-underline transition-colors"
+              href={item.href}
+              key={item.href}
+            >
+              {item.label}
+            </a>
+          ))}
         </nav>
 
         {/* Actions & Theme Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className="flex items-center gap-3">
           <ThemeToggle
             className="flex size-9 cursor-pointer items-center justify-center rounded-lg border border-line bg-surface text-ink-secondary transition-all hover:bg-surface-strong hover:text-ink"
             iconClassName="size-4.5 text-ink-secondary dark:text-accent"
@@ -138,34 +55,17 @@ export function LandingHeader(props: { isAuthenticated: boolean }) {
           />
           {props.isAuthenticated ? (
             <>
-              <Link
-                href="/dashboard"
-                className="btn-primary"
-                style={{ fontSize: '0.875rem', padding: '0.5rem 1.125rem' }}
-              >
+              <Link href="/dashboard" className="btn-primary px-[1.125rem] py-2 text-sm">
                 进入工作台
               </Link>
-              <SignOutButton
-                className="btn-secondary"
-                style={{ fontSize: '0.875rem', padding: '0.5rem 1rem' }}
-              >
-                退出登录
-              </SignOutButton>
+              <SignOutButton className="btn-secondary px-4 py-2 text-sm">退出登录</SignOutButton>
             </>
           ) : (
             <>
-              <Link
-                href="/sign-in"
-                className="btn-secondary"
-                style={{ fontSize: '0.875rem', padding: '0.5rem 1rem' }}
-              >
+              <Link href="/sign-in" className="btn-secondary px-4 py-2 text-sm">
                 登录
               </Link>
-              <Link
-                href="/sign-up"
-                className="btn-primary"
-                style={{ fontSize: '0.875rem', padding: '0.5rem 1.125rem' }}
-              >
+              <Link href="/sign-up" className="btn-primary px-[1.125rem] py-2 text-sm">
                 免费注册
               </Link>
             </>

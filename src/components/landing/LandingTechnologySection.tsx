@@ -1,3 +1,5 @@
+import { LandingSectionHeading } from '@/components/landing/LandingSectionHeading';
+
 /**
  * Renders the current technology capability cards.
  *
@@ -14,24 +16,12 @@ export function LandingTechnologySection() {
       }}
     >
       <div className="landing-container">
-        <div style={{ textAlign: 'center', maxWidth: '680px', margin: '0 auto 3.5rem' }}>
-          <span className="badge-pill" style={{ marginBottom: '0.75rem', color: 'var(--accent)' }}>
-            现代轻量级工程底座
-          </span>
-          <h2
-            style={{
-              fontSize: '2.25rem',
-              fontWeight: 800,
-              letterSpacing: '-0.03em',
-              color: 'var(--ink)',
-            }}
-          >
-            拒绝臃肿，拥抱极速与自主
-          </h2>
-          <p style={{ color: 'var(--ink-muted)', fontSize: '1rem', marginTop: '0.75rem' }}>
-            彻底移除外部云认证锁定，采用现代 Web 最前沿的性能与类型安全实践。
-          </p>
-        </div>
+        <LandingSectionHeading
+          description="彻底移除外部云认证锁定，采用现代 Web 最前沿的性能与类型安全实践。"
+          eyebrow="现代轻量级工程底座"
+          spacious
+          title="拒绝臃肿，拥抱极速与自主"
+        />
 
         <div className="landing-grid-3">
           <div className="card-feature">

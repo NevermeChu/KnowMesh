@@ -62,30 +62,6 @@ export async function getStarredDocuments(): Promise<StarredDocumentItem[]> {
 }
 
 /**
- * Checks whether a document is starred by the current user.
- *
- * @param input - The document id.
- * @returns True if starred, false otherwise.
- */
-export async function getIsDocumentStarred(input: { documentId: string }): Promise<boolean> {
-  const { id: userId } = await requireUser();
-  const { documentId } = documentIdSchema.parse(input);
-
-  const [row] = await db
-    .select({ documentId: starredDocumentsSchema.documentId })
-    .from(starredDocumentsSchema)
-    .where(
-      and(
-        eq(starredDocumentsSchema.userId, userId),
-        eq(starredDocumentsSchema.documentId, documentId),
-      ),
-    )
-    .limit(1);
-
-  return Boolean(row);
-}
-
-/**
  * Toggles the starred status of a document for the authenticated user.
  *
  * @param input - Target document identifier.

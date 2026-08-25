@@ -1,4 +1,4 @@
-export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
+type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const avatarSizeClasses: Record<AvatarSize, string> = {
   xs: 'size-6 text-[10px]',
