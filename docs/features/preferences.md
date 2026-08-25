@@ -28,6 +28,7 @@ updateThemePreference Server Action
 → 读取 knowmesh-theme，非法值回退 system
 → <html data-theme="..." class="dark?">
 → <head> 带请求级 CSP nonce 的脚本在首帧前解析 system → prefers-color-scheme
+→ Plus Jakarta Sans、Noto Sans SC 与 JetBrains Mono 由 Fontsource 同源发布
 → 内联脚本持续监听系统主题变化，跟随系统时实时切换
 ```
 
@@ -61,7 +62,7 @@ updateThemePreference Server Action
 - `src/features/preferences/components/ThemePreferenceSection.tsx`：主题卡片与乐观切换。
 - `src/components/layout/WorkspaceContent.tsx`：消费 `--content-read-width` 的共享内容容器。
 - `src/components/layout/ContentToolbar.tsx`：内容宽度下拉与乐观切换。
-- `src/app/layout.tsx`：cookie 与 CSP nonce 读取、`<html>` 主题属性、`--content-read-width` 内联与主题初始化脚本。
+- `src/app/layout.tsx`：Fontsource 字体入口、cookie 读取、`<html>` 主题属性、`--content-read-width` 内联与主题初始化脚本；脚本 nonce 由 Next.js 从请求 CSP 自动应用。
 - `src/styles/global.css`：颜色 token 体系与 `--content-read-width` 默认值。
 
 ## 相关文档

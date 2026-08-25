@@ -21,7 +21,7 @@ Team 正文：Client Component → 浏览器 Yjs 副本 + Hocuspocus Provider �
 
 ## 受保护页面的认证回跳
 
-`src/proxy.ts` 为页面请求生成 CSP nonce，并把严格脚本策略写入请求与响应头；根布局和 Next.js 框架脚本使用同一 nonce。它同时保护工作区与邀请页面：未检测到 Better Auth Session cookie 时，代理将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
+`src/proxy.ts` 为页面请求生成 CSP nonce，并把严格脚本策略写入请求与响应头；Next.js 从请求 CSP 自动把同一 nonce 应用到框架脚本和根布局主题脚本，应用组件不重复传递浏览器会隐藏的 nonce 属性。Plus Jakarta Sans、Noto Sans SC 与 JetBrains Mono 由锁文件固定的 Fontsource 包随应用同源发布，CSP 不开放外部样式或字体来源。代理同时保护工作区与邀请页面：未检测到 Better Auth Session cookie 时，它将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
 
 这会保留 Workspace 邀请链接的 token，但不自动接受邀请；用户仍必须在接受页明确确认，服务端 Action 再次校验 token 和已验证邮箱。`/dashboard` 只是没有安全动态目标时的 fallback。
 
@@ -121,7 +121,7 @@ Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `upda
 
 模式分流把 Workspace 正文权威类型和协作服务当前是否允许写入分开表达。功能开关关闭时，所有 Team 文档都选择 `collaborative-readonly`，直接显示当前 JSON 快照且不建立 Provider；正文编辑和 `updateDocument(content)` 保持关闭，标题继续按独立业务授权保存。重新启用后，已有状态继续使用既有 Yjs 历史，尚未初始化的 Team 文档才从经过验证的 JSON 快照建立首次 Yjs 状态。
 
-独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本在功能开关开启时于迁移完成后启动协作进程并等待 `/ready`，任一受管进程异常退出都会结束整组服务；Windows 下长生命周期子进程使用独立进程组，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。GitHub Actions 已在真实 PostgreSQL 与协作服务下确认 E2E 和容器清理；生产 release 包含同 SHA 的协作可执行文件、systemd/Nginx 模板和受显式部署开关保护的双服务健康检查与回滚。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用；真实登录双会话业务验收仍需单独确认。
+独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本先检查全部受管端口，只有端口空闲才启动数据库、迁移、协作与 Next.js；任一受管进程异常退出都会结束整组服务，预检失败且尚未启动子进程时不会进入端口清理。Windows 下长生命周期子进程使用独立进程组，Next.js CLI 启动时显式加载隐藏窗口预加载器并覆盖其内部 `fork` 与 `spawn`，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。GitHub Actions 已在真实 PostgreSQL 与协作服务下确认 E2E 和容器清理；生产 release 包含同 SHA 的协作可执行文件、systemd/Nginx 模板和受显式部署开关保护的双服务健康检查与回滚。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用；真实登录双会话业务验收仍需单独确认。
 
 `DocumentEditor` 在创建和销毁时通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例。共享 `ContentToolbar` 从该上下文取得编辑器，仅在可编辑文档打开时显示格式命令；编辑器内容仍由文档页面持有，工具栏上下文不保存正文副本。
 
