@@ -28,8 +28,16 @@ describe('permission policy', () => {
     });
 
     expect(nonOwnerDecision.permissions).toStrictEqual([]);
-    expect(ownerDecision.permissions).toContain('project.delete');
-    expect(ownerDecision.permissions).not.toContain('project.members.manage');
+    expect(ownerDecision.permissions).toStrictEqual([
+      'project.structure.read',
+      'project.read',
+      'project.update',
+      'project.delete',
+      'document.read',
+      'document.create',
+      'document.update',
+      'document.delete',
+    ]);
   });
 
   it('limits non-project team members to structure', () => {

@@ -37,6 +37,17 @@ const projectPermissions: Record<MemberRole, Permission[]> = {
   viewer: ['project.structure.read', 'project.read', 'document.read'],
 };
 
+const personalProjectOwnerPermissions = [
+  'project.structure.read',
+  'project.read',
+  'project.update',
+  'project.delete',
+  'document.read',
+  'document.create',
+  'document.update',
+  'document.delete',
+] satisfies Permission[];
+
 export function getWorkspacePermissions(role: MemberRole, workspaceKind: WorkspaceKind) {
   if (workspaceKind === 'personal') {
     return role === 'owner'
@@ -55,14 +66,11 @@ export function getProjectPermissionDecision(options: {
 }): PermissionDecision {
   const grants: PermissionGrant[] = [];
   const resolvedPermissions = new Set<Permission>();
-  const personalOwnerPermissions = projectPermissions.owner.filter(
-    (permission) => permission !== 'project.members.manage',
-  );
 
   if (options.workspaceKind === 'personal') {
     if (options.isProjectOwner && options.projectRole === 'owner') {
       grants.push({ role: 'owner', source: 'project' as const });
-      for (const permission of personalOwnerPermissions) {
+      for (const permission of personalProjectOwnerPermissions) {
         resolvedPermissions.add(permission);
       }
     }
