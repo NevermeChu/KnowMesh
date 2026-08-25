@@ -44,7 +44,14 @@ export type Document = {
 export type DocumentNavigationItem = Pick<
   Document,
   'id' | 'parentId' | 'projectId' | 'sortOrder' | 'title'
->;
+> & { hasChildren: boolean };
+
+export type DocumentNavigationCursor = Pick<DocumentNavigationItem, 'id' | 'sortOrder'>;
+
+export type DocumentNavigationPage = {
+  items: DocumentNavigationItem[];
+  nextCursor: DocumentNavigationCursor | null;
+};
 
 export type DocumentBreadcrumbItem = {
   href: string;

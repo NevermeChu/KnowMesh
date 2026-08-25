@@ -52,6 +52,7 @@ export function DocumentWorkspace(props: {
   accessState: DocumentAccessState;
   canEdit: boolean;
   canRead: boolean;
+  currentUserId: string;
   documentCount: number;
   selectedDocument: Document | null;
   selectedDocumentEditorMode: DocumentEditorMode | null;
@@ -87,6 +88,7 @@ export function DocumentWorkspace(props: {
       <DynamicDocumentEditor
         key={props.selectedDocument.id}
         canEdit={props.canEdit}
+        currentUserId={props.currentUserId}
         document={props.selectedDocument}
         editorMode={props.selectedDocumentEditorMode}
       />

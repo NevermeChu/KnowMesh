@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { getFormText } from '@/features/auth/AuthForm';
 import type { AuthenticatedUser } from '@/features/auth/server/CurrentUser';
 import { deleteAccount as deleteCurrentAccount } from '@/features/auth/server/DeleteAccount';
+import { clearDocumentCollaborationCachesForUser } from '@/features/documents/collaboration/DocumentCollaborationLocalPersistence';
 import { authClient } from '@/libs/AuthClient';
 
 /**
@@ -65,6 +66,7 @@ export function AccountSettings(props: { user: AuthenticatedUser }) {
       return;
     }
 
+    await clearDocumentCollaborationCachesForUser(props.user.id);
     await authClient.signOut();
     window.location.assign('/');
   }

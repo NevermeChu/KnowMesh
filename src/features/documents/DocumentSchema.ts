@@ -96,12 +96,38 @@ export const createDocumentSchema = z.object({
 
 export const deleteDocumentSchema = z.object({ documentId: z.uuid() });
 
-export const moveDocumentSchema = z.object({
-  documentId: z.uuid(),
-  sortOrder: z.number().optional(),
-  targetParentId: z.uuid().nullable(),
-  targetProjectId: z.uuid(),
+export const documentNavigationChildrenSchema = z.object({
+  cursor: z
+    .object({
+      id: z.uuid(),
+      sortOrder: z.number(),
+    })
+    .optional(),
+  limit: z.number().int().min(1).max(100).default(50),
+  parentId: z.uuid().nullable(),
+  projectId: z.uuid(),
 });
+
+export const documentNavigationPathSchema = z.object({
+  documentId: z.uuid(),
+  projectId: z.uuid(),
+});
+
+export const moveDocumentSchema = z
+  .object({
+    documentId: z.uuid(),
+    position: z.enum(['after', 'before', 'inside']).optional(),
+    sortOrder: z.number().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).optional(),
+    targetDocumentId: z.uuid().optional(),
+    targetParentId: z.uuid().nullable(),
+    targetProjectId: z.uuid(),
+  })
+  .refine(
+    (input) =>
+      (input.position !== 'after' && input.position !== 'before') ||
+      input.targetDocumentId !== undefined,
+    { message: '相对移动缺少目标文档' },
+  );
 
 export const updateDocumentSchema = z
   .object({
@@ -128,5 +154,7 @@ export const updateDocumentSchema = z
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type DeleteDocumentInput = z.infer<typeof deleteDocumentSchema>;
+export type DocumentNavigationChildrenInput = z.input<typeof documentNavigationChildrenSchema>;
+export type DocumentNavigationPathInput = z.infer<typeof documentNavigationPathSchema>;
 export type MoveDocumentInput = z.infer<typeof moveDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;

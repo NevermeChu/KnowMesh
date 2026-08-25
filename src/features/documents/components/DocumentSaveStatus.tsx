@@ -11,11 +11,14 @@ export type CollaborationState = 'connecting' | 'error' | 'offline' | 'synced' |
  * @param props - Current save state.
  * @returns The save status indicator badge.
  */
-export function DocumentSaveStatus(props: {
+type DocumentSaveStatusProps = {
   canEdit: boolean;
   collaborationState?: CollaborationState;
+  localPersistenceFailed?: boolean;
   state: SaveState;
-}) {
+};
+
+function DocumentSaveStatusBase(props: DocumentSaveStatusProps) {
   if (
     !props.canEdit &&
     props.state !== 'conflict' &&
@@ -105,4 +108,20 @@ export function DocumentSaveStatus(props: {
       {props.collaborationState === 'synced' ? '已同步' : '已保存'}
     </span>
   );
+}
+
+export function DocumentSaveStatus(props: DocumentSaveStatusProps) {
+  if (props.localPersistenceFailed && props.collaborationState === 'synced') {
+    return (
+      <span
+        aria-live="polite"
+        className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400"
+      >
+        <AlertCircle aria-hidden="true" className="size-3" />
+        本地恢复不可用
+      </span>
+    );
+  }
+
+  return <DocumentSaveStatusBase {...props} />;
 }

@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
@@ -8,6 +8,7 @@ import { Env } from '@/libs/Env';
 import { documentsSchema, starredDocumentsSchema } from '@/models/Schema';
 import type { DocumentBreadcrumbItem } from '../Document';
 import { getDocumentEditorMode } from '../DocumentEditorMode';
+import { getDocumentNavigationPath } from './GetDocumentNavigation';
 
 export async function getProjectDocuments(options: {
   documentId?: string;
@@ -26,34 +27,26 @@ export async function getProjectDocuments(options: {
     return null;
   }
 
-  const documentMetadata = await db
-    .select({
-      createdAt: documentsSchema.createdAt,
-      id: documentsSchema.id,
-      parentId: documentsSchema.parentId,
-      sortOrder: documentsSchema.sortOrder,
-      title: documentsSchema.title,
-      titleVersion: documentsSchema.titleVersion,
-      updatedAt: documentsSchema.updatedAt,
-    })
-    .from(documentsSchema)
-    .where(eq(documentsSchema.projectId, options.projectId))
-    .orderBy(asc(documentsSchema.sortOrder), desc(documentsSchema.updatedAt));
+  const [[firstDocument], navigationPath] = await Promise.all([
+    db
+      .select({ id: documentsSchema.id })
+      .from(documentsSchema)
+      .where(eq(documentsSchema.projectId, options.projectId))
+      .limit(1),
+    options.documentId
+      ? getDocumentNavigationPath({
+          documentId: options.documentId,
+          projectId: options.projectId,
+        })
+      : null,
+  ]);
+  const selectedNavigationItem = navigationPath?.at(-1);
 
-  const documents = documentMetadata.map((document) => ({
-    id: document.id,
-    parentId: document.parentId,
-    sortOrder: document.sortOrder,
-    title: document.title,
-  }));
-  const selectedMetadata = options.documentId
-    ? documentMetadata.find((document) => document.id === options.documentId)
-    : undefined;
-
-  if (!selectedMetadata) {
+  if (!selectedNavigationItem) {
     return {
       access: authorization.decision,
-      documents,
+      currentUserId: userId,
+      hasDocuments: Boolean(firstDocument),
       selectedDocumentEditorMode: null,
       selectedDocument: null,
       selectedDocumentTitle: null,
@@ -63,49 +56,41 @@ export async function getProjectDocuments(options: {
   if (!authorization.decision.permissions.includes('document.read')) {
     return {
       access: authorization.decision,
-      documents,
+      currentUserId: userId,
+      hasDocuments: Boolean(firstDocument),
       selectedDocumentEditorMode: null,
       selectedDocument: null,
-      selectedDocumentTitle: selectedMetadata.title,
+      selectedDocumentTitle: selectedNavigationItem.title,
     };
   }
 
   const areaHref = options.workspaceKind === 'personal' ? '/personal' : '/collaboration';
-  const breadcrumbs: DocumentBreadcrumbItem[] = [];
-  const metadataById = new Map(documentMetadata.map((doc) => [doc.id, doc]));
-  let currentParentId = selectedMetadata.parentId;
-  const visited = new Set<string>();
-
-  while (currentParentId) {
-    if (visited.has(currentParentId)) {
-      break;
-    }
-    visited.add(currentParentId);
-
-    const parent = metadataById.get(currentParentId);
-    if (!parent) {
-      break;
-    }
-
-    breadcrumbs.unshift({
-      href: `${areaHref}?project=${options.projectId}&document=${parent.id}`,
-      id: parent.id,
-      title: parent.title,
-    });
-    currentParentId = parent.parentId;
-  }
+  const breadcrumbs: DocumentBreadcrumbItem[] = (navigationPath ?? [])
+    .slice(0, -1)
+    .map((document) => ({
+      href: `${areaHref}?project=${options.projectId}&document=${document.id}`,
+      id: document.id,
+      title: document.title,
+    }));
 
   const [[selectedContent], [starredRecord]] = await Promise.all([
     db
       .select({
         content: documentsSchema.content,
         contentSchemaVersion: documentsSchema.contentSchemaVersion,
+        createdAt: documentsSchema.createdAt,
+        id: documentsSchema.id,
+        parentId: documentsSchema.parentId,
         projectId: documentsSchema.projectId,
+        sortOrder: documentsSchema.sortOrder,
+        title: documentsSchema.title,
+        titleVersion: documentsSchema.titleVersion,
+        updatedAt: documentsSchema.updatedAt,
       })
       .from(documentsSchema)
       .where(
         and(
-          eq(documentsSchema.id, selectedMetadata.id),
+          eq(documentsSchema.id, selectedNavigationItem.id),
           eq(documentsSchema.projectId, options.projectId),
         ),
       )
@@ -116,7 +101,7 @@ export async function getProjectDocuments(options: {
       .where(
         and(
           eq(starredDocumentsSchema.userId, userId),
-          eq(starredDocumentsSchema.documentId, selectedMetadata.id),
+          eq(starredDocumentsSchema.documentId, selectedNavigationItem.id),
         ),
       )
       .limit(1),
@@ -124,7 +109,8 @@ export async function getProjectDocuments(options: {
 
   return {
     access: authorization.decision,
-    documents,
+    currentUserId: userId,
+    hasDocuments: Boolean(firstDocument),
     selectedDocumentEditorMode: selectedContent
       ? getDocumentEditorMode({
           collaborationEnabled: Env.COLLABORATION_ENABLED === 'true',
@@ -134,14 +120,11 @@ export async function getProjectDocuments(options: {
     selectedDocument: selectedContent
       ? {
           breadcrumbs,
-          content: selectedContent.content,
-          contentSchemaVersion: selectedContent.contentSchemaVersion,
-          projectId: selectedContent.projectId,
+          ...selectedContent,
           projectName: authorization.project.name,
-          ...selectedMetadata,
           isStarred: Boolean(starredRecord),
         }
       : null,
-    selectedDocumentTitle: selectedMetadata.title,
+    selectedDocumentTitle: selectedContent?.title ?? selectedNavigationItem.title,
   };
 }

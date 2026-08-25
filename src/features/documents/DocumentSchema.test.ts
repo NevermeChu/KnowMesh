@@ -134,5 +134,14 @@ describe('document schemas', () => {
       targetParentId: null,
       targetProjectId: projectId,
     });
+
+    expect(() =>
+      moveDocumentSchema.parse({
+        documentId,
+        position: 'before',
+        targetParentId: null,
+        targetProjectId: projectId,
+      }),
+    ).toThrow('相对移动缺少目标文档');
   });
 });

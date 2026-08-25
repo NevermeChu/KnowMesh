@@ -3,7 +3,7 @@ import { AppSectionPlaceholder } from '@/components/layout/AppSectionPlaceholder
 import type { ProjectArea } from '@/features/projects/Project';
 import { getProjectAccessState } from '@/features/projects/server/GetProjectAccessState';
 import { getWorkspaceContext } from '@/features/workspaces/server/GetWorkspaceContext';
-import { createDocumentSchema } from '../DocumentSchema';
+import { createDocumentSchema, documentNavigationPathSchema } from '../DocumentSchema';
 import { getProjectDocuments } from '../server/GetProjectDocuments';
 import { DocumentWorkspace } from './DocumentWorkspace';
 
@@ -46,6 +46,9 @@ export async function ProjectDocumentsPage(props: {
   if (!createDocumentSchema.shape.projectId.safeParse(projectId).success) {
     notFound();
   }
+  if (documentId && !documentNavigationPathSchema.shape.documentId.safeParse(documentId).success) {
+    notFound();
+  }
 
   const result = await getProjectDocuments({
     documentId,
@@ -57,6 +60,9 @@ export async function ProjectDocumentsPage(props: {
   if (!result) {
     notFound();
   }
+  if (documentId && !result.selectedDocumentTitle) {
+    notFound();
+  }
 
   const accessState = await getProjectAccessState(projectId);
 
@@ -64,8 +70,9 @@ export async function ProjectDocumentsPage(props: {
     <DocumentWorkspace
       canEdit={result.access.permissions.includes('document.update')}
       canRead={result.access.permissions.includes('document.read')}
+      currentUserId={result.currentUserId}
       accessState={{ ...accessState, projectId }}
-      documentCount={result.documents.length}
+      documentCount={result.hasDocuments ? 1 : 0}
       selectedDocument={result.selectedDocument}
       selectedDocumentEditorMode={result.selectedDocumentEditorMode}
       selectedDocumentTitle={result.selectedDocumentTitle}

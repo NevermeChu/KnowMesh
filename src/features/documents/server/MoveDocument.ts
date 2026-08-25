@@ -1,6 +1,6 @@
 'use server';
 
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
@@ -10,9 +10,44 @@ import { db } from '@/libs/DB';
 import { documentCollaborationStatesSchema, documentsSchema } from '@/models/Schema';
 import { moveDocumentSchema } from '../DocumentSchema';
 import type { MoveDocumentInput } from '../DocumentSchema';
+import { planDocumentSortOrder } from '../DocumentSortOrder';
 
 const MAX_MOVED_SUBTREE_DOCUMENTS = 10_000;
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function getRequestedSortOrder(options: {
+  position?: 'after' | 'before' | 'inside';
+  requestedSortOrder?: number;
+  siblings: { id: string; sortOrder: number }[];
+  targetDocumentId?: string;
+}) {
+  if (
+    (options.position !== 'after' && options.position !== 'before') ||
+    !options.targetDocumentId
+  ) {
+    return options.requestedSortOrder;
+  }
+
+  const targetIndex = options.siblings.findIndex(
+    (sibling) => sibling.id === options.targetDocumentId,
+  );
+  if (targetIndex === -1) {
+    throw new Error('指定的相对移动目标不存在于目标父节点');
+  }
+
+  const target = options.siblings[targetIndex];
+  if (!target) {
+    throw new Error('指定的相对移动目标不存在');
+  }
+
+  if (options.position === 'before') {
+    const previous = options.siblings[targetIndex - 1];
+    return previous ? (previous.sortOrder + target.sortOrder) / 2 : target.sortOrder - 1000;
+  }
+
+  const next = options.siblings[targetIndex + 1];
+  return next ? (target.sortOrder + next.sortOrder) / 2 : target.sortOrder + 1000;
+}
 
 async function assertValidMoveTarget(options: {
   documentId: string;
@@ -150,23 +185,37 @@ export async function moveDocument(input: MoveDocumentInput) {
       transaction,
     });
 
-    let finalSortOrder = documentInput.sortOrder;
-    if (finalSortOrder === undefined) {
-      const [latestSibling] = await transaction
-        .select({ sortOrder: documentsSchema.sortOrder })
-        .from(documentsSchema)
-        .where(
-          and(
-            eq(documentsSchema.projectId, documentInput.targetProjectId),
-            documentInput.targetParentId
-              ? eq(documentsSchema.parentId, documentInput.targetParentId)
-              : isNull(documentsSchema.parentId),
-          ),
-        )
-        .orderBy(desc(documentsSchema.sortOrder))
-        .limit(1);
+    const siblings = await transaction
+      .select({ id: documentsSchema.id, sortOrder: documentsSchema.sortOrder })
+      .from(documentsSchema)
+      .where(
+        and(
+          eq(documentsSchema.projectId, documentInput.targetProjectId),
+          ne(documentsSchema.id, documentInput.documentId),
+          documentInput.targetParentId
+            ? eq(documentsSchema.parentId, documentInput.targetParentId)
+            : isNull(documentsSchema.parentId),
+        ),
+      )
+      .orderBy(asc(documentsSchema.sortOrder))
+      .for('update', { of: documentsSchema });
 
-      finalSortOrder = (latestSibling?.sortOrder ?? 0) + 1000;
+    const sortOrderPlan = planDocumentSortOrder({
+      documentId: documentInput.documentId,
+      requestedSortOrder: getRequestedSortOrder({
+        position: documentInput.position,
+        requestedSortOrder: documentInput.sortOrder,
+        siblings,
+        targetDocumentId: documentInput.targetDocumentId,
+      }),
+      siblings,
+    });
+
+    for (const sibling of sortOrderPlan.updates) {
+      await transaction
+        .update(documentsSchema)
+        .set({ sortOrder: sibling.sortOrder })
+        .where(eq(documentsSchema.id, sibling.id));
     }
 
     if (isCrossProjectMove) {
@@ -196,7 +245,7 @@ export async function moveDocument(input: MoveDocumentInput) {
       .set({
         parentId: documentInput.targetParentId,
         projectId: documentInput.targetProjectId,
-        sortOrder: finalSortOrder,
+        sortOrder: sortOrderPlan.sortOrder,
         updatedAt: new Date(),
       })
       .where(eq(documentsSchema.id, documentInput.documentId))

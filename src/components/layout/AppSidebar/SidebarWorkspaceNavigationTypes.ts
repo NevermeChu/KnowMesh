@@ -4,6 +4,7 @@ import type { ProjectArea } from '@/features/projects/Project';
 
 export type WorkspaceDocument = {
   children?: WorkspaceDocument[];
+  hasChildren: boolean;
   href: string;
   id: string;
   label: string;

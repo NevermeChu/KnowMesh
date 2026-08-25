@@ -1,4 +1,6 @@
+/* oxlint-disable promise/prefer-await-to-callbacks -- Drizzle transactions are callback-based. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { requireProjectPermissionInTransaction as requireProjectPermissionInTransactionFunction } from '@/features/permissions/server/RevalidateProjectPermission';
 import { createDocument } from './CreateDocument';
 
 const state = vi.hoisted(() => {
@@ -14,8 +16,15 @@ const state = vi.hoisted(() => {
   const from = vi.fn<() => { where: typeof where }>(() => ({ where }));
   const select = vi.fn<() => { from: typeof from }>(() => ({ from }));
   const authorizeProject = vi.fn<() => Promise<unknown>>();
+  const requireProjectPermissionInTransaction =
+    vi.fn<typeof requireProjectPermissionInTransactionFunction>();
   const requireUser = vi.fn<() => Promise<{ id: string }>>();
   const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
+  const transaction = vi.fn<
+    (
+      callback: (transaction: { insert: typeof insert; select: typeof select }) => Promise<unknown>,
+    ) => Promise<unknown>
+  >(async (callback) => await callback({ insert, select }));
 
   return {
     authorizeProject,
@@ -23,10 +32,12 @@ const state = vi.hoisted(() => {
     insert,
     limit,
     orderBy,
+    requireProjectPermissionInTransaction,
     requireUser,
     returning,
     revalidatePath,
     select,
+    transaction,
     values,
     where,
   };
@@ -43,11 +54,13 @@ vi.mock('@/features/auth/server/CurrentUser', () => ({
 vi.mock('@/features/permissions/server/ProjectAuthorization', () => ({
   authorizeProject: state.authorizeProject,
 }));
+vi.mock(import('@/features/permissions/server/RevalidateProjectPermission'), () => ({
+  requireProjectPermissionInTransaction: state.requireProjectPermissionInTransaction,
+}));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Fluent query builders isolate database queries.
 vi.mock('@/libs/DB', () => ({
   db: {
-    insert: state.insert,
-    select: state.select,
+    transaction: state.transaction,
   },
 }));
 
@@ -82,6 +95,13 @@ describe(createDocument, () => {
       userId: 'user_1',
     });
     expect(state.insert).toHaveBeenCalledOnce();
+    expect(state.requireProjectPermissionInTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: 'document.create',
+        projectId: '01987654-3210-7000-8000-000000000001',
+        userId: 'user_1',
+      }),
+    );
     expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
     expect(document.id).toBe('10000000-0000-4000-8000-000000000001');
   });

@@ -3,7 +3,7 @@
 import { ChevronRight, FileText, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { SidebarNavigationContextMenus } from '@/components/layout/AppSidebar/SidebarNavigationContextMenus';
 import type {
   NavigationContextMenu,
@@ -15,7 +15,14 @@ import type {
 import { fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import { CreateDocumentDialog } from '@/features/documents/components/CreateDocumentDialog';
 import { MoveDocumentDialog } from '@/features/documents/components/MoveDocumentDialog';
-import type { DocumentNavigationItem } from '@/features/documents/Document';
+import type {
+  DocumentNavigationCursor,
+  DocumentNavigationItem,
+} from '@/features/documents/Document';
+import {
+  getDocumentNavigationChildren,
+  getDocumentNavigationPath,
+} from '@/features/documents/server/GetDocumentNavigation';
 import { moveDocument } from '@/features/documents/server/MoveDocument';
 import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
 import type { Project, ProjectArea } from '@/features/projects/Project';
@@ -34,6 +41,23 @@ type DropTargetState = {
   id: string;
   kind: 'document' | 'project';
   position: 'before' | 'inside' | 'after';
+};
+
+type NavigationNodeState = {
+  error: string | null;
+  hasLoadedFirstPage: boolean;
+  isLoading: boolean;
+  nextCursor: DocumentNavigationCursor | null;
+};
+
+const getNavigationNodeKey = (projectId: string, parentId: string | null) =>
+  `${projectId}:${parentId ?? 'root'}`;
+
+const emptyNavigationNodeState: NavigationNodeState = {
+  error: null,
+  hasLoadedFirstPage: false,
+  isLoading: false,
+  nextCursor: null,
 };
 
 function isDescendant(
@@ -60,6 +84,9 @@ function isDescendant(
   return false;
 }
 
+const compareDocuments = (left: WorkspaceDocument, right: WorkspaceDocument) =>
+  left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
+
 function buildDocumentTree(documents: WorkspaceDocument[]): WorkspaceDocument[] {
   const docMap = new Map<string, WorkspaceDocument>();
   const rootDocs: WorkspaceDocument[] = [];
@@ -76,9 +103,14 @@ function buildDocumentTree(documents: WorkspaceDocument[]): WorkspaceDocument[] 
 
     if (doc.parentId && docMap.has(doc.parentId)) {
       docMap.get(doc.parentId)?.children?.push(treeNode);
-    } else {
+    } else if (!doc.parentId) {
       rootDocs.push(treeNode);
     }
+  }
+
+  rootDocs.sort(compareDocuments);
+  for (const document of docMap.values()) {
+    document.children?.sort(compareDocuments);
   }
 
   return rootDocs;
@@ -131,6 +163,22 @@ function getProjectItemClassName(options: {
   return 'relative flex min-h-8 items-center rounded-lg transition-colors text-ink-muted hover:bg-overlay hover:text-ink';
 }
 
+function isSelectedProject(options: {
+  pathname: string;
+  sectionHref: string;
+  selectedProjectId?: string;
+  projectId: string;
+}) {
+  return (
+    isActiveRoute(options.pathname, options.sectionHref) &&
+    options.selectedProjectId === options.projectId
+  );
+}
+
+function isProjectDropTarget(dropTarget: DropTargetState | null, projectId: string) {
+  return dropTarget?.id === projectId && dropTarget.kind === 'project';
+}
+
 function DocumentTreePrefix(props: {
   hasChildren: boolean;
   isDocExpanded: boolean;
@@ -170,6 +218,7 @@ function DocumentTreeItem(props: {
   draggingDoc: DraggingDocument | null;
   dropTarget: DropTargetState | null;
   expandedDocIds: Record<string, boolean>;
+  nodeStates: Record<string, NavigationNodeState>;
   onCreateChildDocument: (
     project: WorkspaceProject,
     parentDocument: { id: string; label: string },
@@ -192,20 +241,24 @@ function DocumentTreeItem(props: {
     project: WorkspaceProject,
   ) => void;
   onNavigate: () => void;
+  onLoadMore: (projectId: string, parentId: string | null) => void;
   onOpenContextMenu: (
     event: React.MouseEvent<HTMLElement>,
     target: NavigationContextTarget,
   ) => void;
-  onToggleDoc: (docId: string) => void;
+  onToggleDoc: (projectId: string, docId: string) => void;
   project: WorkspaceProject;
   selectedDocumentId?: string;
 }) {
-  const hasChildren = (props.document.children?.length ?? 0) > 0;
+  const { hasChildren } = props.document;
   const isDocumentActive = props.selectedDocumentId === props.document.id;
   const isDocExpanded = props.expandedDocIds[props.document.id] ?? false;
   const isDraggingThis = props.draggingDoc?.documentId === props.document.id;
   const isDropTargetThis = props.dropTarget?.id === props.document.id;
   const canDrag = props.project.permissions.includes('document.update');
+  const nodeState =
+    props.nodeStates[getNavigationNodeKey(props.project.id, props.document.id)] ??
+    emptyNavigationNodeState;
 
   const containerClassName = getDocumentItemClassName({
     dropPosition: props.dropTarget?.position,
@@ -256,7 +309,7 @@ function DocumentTreeItem(props: {
           isDocExpanded={isDocExpanded}
           label={props.document.label}
           onToggle={() => {
-            props.onToggleDoc(props.document.id);
+            props.onToggleDoc(props.project.id, props.document.id);
           }}
         />
 
@@ -298,6 +351,7 @@ function DocumentTreeItem(props: {
               draggingDoc={props.draggingDoc}
               dropTarget={props.dropTarget}
               expandedDocIds={props.expandedDocIds}
+              nodeStates={props.nodeStates}
               onCreateChildDocument={props.onCreateChildDocument}
               onDragEndDoc={props.onDragEndDoc}
               onDragLeaveDoc={props.onDragLeaveDoc}
@@ -305,12 +359,40 @@ function DocumentTreeItem(props: {
               onDragStartDoc={props.onDragStartDoc}
               onDropDoc={props.onDropDoc}
               onNavigate={props.onNavigate}
+              onLoadMore={props.onLoadMore}
               onOpenContextMenu={props.onOpenContextMenu}
               onToggleDoc={props.onToggleDoc}
               project={props.project}
               selectedDocumentId={props.selectedDocumentId}
             />
           ))}
+          {nodeState.isLoading && <li className="px-8 py-1 text-xs text-ink-faint">正在加载…</li>}
+          {nodeState.error && (
+            <li className="px-8 py-1 text-xs text-danger">
+              <button
+                type="button"
+                className="underline underline-offset-2"
+                onClick={() => {
+                  props.onLoadMore(props.project.id, props.document.id);
+                }}
+              >
+                加载失败，点击重试
+              </button>
+            </li>
+          )}
+          {nodeState.nextCursor && !nodeState.isLoading && !nodeState.error && (
+            <li className="px-8 py-1 text-xs text-ink-faint">
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-ink"
+                onClick={() => {
+                  props.onLoadMore(props.project.id, props.document.id);
+                }}
+              >
+                加载更多
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </li>
@@ -323,6 +405,7 @@ function WorkspaceSectionNavigation(props: {
   expandedDocIds: Record<string, boolean>;
   expandedProjectIds: Record<string, boolean>;
   isExpanded: boolean;
+  nodeStates: Record<string, NavigationNodeState>;
   onCreate: () => void;
   onCreateChildDocument: (
     project: WorkspaceProject,
@@ -350,12 +433,13 @@ function WorkspaceSectionNavigation(props: {
   ) => void;
   onDropProject: (event: React.DragEvent<HTMLElement>, project: WorkspaceProject) => void;
   onNavigate: () => void;
+  onLoadMore: (projectId: string, parentId: string | null) => void;
   onOpenContextMenu: (
     event: React.MouseEvent<HTMLElement>,
     target: NavigationContextTarget,
   ) => void;
   onToggle: () => void;
-  onToggleDoc: (docId: string) => void;
+  onToggleDoc: (projectId: string, docId: string) => void;
   onToggleProject: (projectId: string) => void;
   pathname: string;
   selectedDocumentId?: string;
@@ -419,18 +503,26 @@ function WorkspaceSectionNavigation(props: {
               <li className="px-3 py-1.5 text-xs text-ink-faint">暂无项目</li>
             ) : (
               props.section.projects.map((project) => {
-                const isProjectActive =
-                  isActiveRoute(props.pathname, props.section.href) &&
-                  props.selectedProjectId === project.id;
+                const isProjectActive = isSelectedProject({
+                  pathname: props.pathname,
+                  projectId: project.id,
+                  sectionHref: props.section.href,
+                  selectedProjectId: props.selectedProjectId,
+                });
                 const isProjectExpanded = props.expandedProjectIds[project.id] ?? false;
-                const isProjectDropTarget =
-                  props.dropTarget?.id === project.id && props.dropTarget?.kind === 'project';
+                const isProjectDropTargetThis = isProjectDropTarget(props.dropTarget, project.id);
                 const documentTree = buildDocumentTree(project.documents);
+                const projectNodeState =
+                  props.nodeStates[getNavigationNodeKey(project.id, null)] ??
+                  emptyNavigationNodeState;
 
                 return (
                   <li key={project.id}>
                     <div
-                      className={getProjectItemClassName({ isProjectActive, isProjectDropTarget })}
+                      className={getProjectItemClassName({
+                        isProjectActive,
+                        isProjectDropTarget: isProjectDropTargetThis,
+                      })}
                       onContextMenu={(event) => {
                         props.onOpenContextMenu(event, { kind: 'project', project });
                       }}
@@ -506,7 +598,9 @@ function WorkspaceSectionNavigation(props: {
                           id={`project-documents-${project.id}`}
                           className="mt-1 space-y-0.5 pl-2"
                         >
-                          {documentTree.length === 0 ? (
+                          {documentTree.length === 0 &&
+                          projectNodeState.hasLoadedFirstPage &&
+                          !projectNodeState.isLoading ? (
                             <li className="px-3 py-1 text-xs text-ink-faint">暂无文档</li>
                           ) : (
                             documentTree.map((document) => (
@@ -517,6 +611,7 @@ function WorkspaceSectionNavigation(props: {
                                 draggingDoc={props.draggingDoc}
                                 dropTarget={props.dropTarget}
                                 expandedDocIds={props.expandedDocIds}
+                                nodeStates={props.nodeStates}
                                 onCreateChildDocument={props.onCreateChildDocument}
                                 onDragEndDoc={props.onDragEndDoc}
                                 onDragLeaveDoc={props.onDragLeaveDoc}
@@ -524,6 +619,7 @@ function WorkspaceSectionNavigation(props: {
                                 onDragStartDoc={props.onDragStartDoc}
                                 onDropDoc={props.onDropDoc}
                                 onNavigate={props.onNavigate}
+                                onLoadMore={props.onLoadMore}
                                 onOpenContextMenu={props.onOpenContextMenu}
                                 onToggleDoc={props.onToggleDoc}
                                 project={project}
@@ -531,6 +627,37 @@ function WorkspaceSectionNavigation(props: {
                               />
                             ))
                           )}
+                          {projectNodeState.isLoading && (
+                            <li className="px-3 py-1 text-xs text-ink-faint">正在加载…</li>
+                          )}
+                          {projectNodeState.error && (
+                            <li className="px-3 py-1 text-xs text-danger">
+                              <button
+                                type="button"
+                                className="underline underline-offset-2"
+                                onClick={() => {
+                                  props.onLoadMore(project.id, null);
+                                }}
+                              >
+                                加载失败，点击重试
+                              </button>
+                            </li>
+                          )}
+                          {projectNodeState.nextCursor &&
+                            !projectNodeState.isLoading &&
+                            !projectNodeState.error && (
+                              <li className="px-3 py-1 text-xs text-ink-faint">
+                                <button
+                                  type="button"
+                                  className="underline underline-offset-2 hover:text-ink"
+                                  onClick={() => {
+                                    props.onLoadMore(project.id, null);
+                                  }}
+                                >
+                                  加载更多
+                                </button>
+                              </li>
+                            )}
                         </ul>
                       </div>
                     </div>
@@ -553,11 +680,11 @@ function WorkspaceSectionNavigation(props: {
  */
 export function SidebarWorkspaceNavigation(props: {
   activeWorkspace: Workspace | null;
-  documents: DocumentNavigationItem[];
   pathname: string;
   projects: Project[];
   onCreateProject: (area: ProjectArea) => void;
   onNavigate: () => void;
+  onNavigationDocumentsChange: (documents: DocumentNavigationItem[]) => void;
   onOpenPermissionOverview: (input: PermissionOverviewInput) => void;
 }) {
   const router = useRouter();
@@ -567,6 +694,7 @@ export function SidebarWorkspaceNavigation(props: {
   const selectedProjectArea = props.projects.find(
     (project) => project.id === selectedProjectId,
   )?.workspaceKind;
+  const projectIdsKey = props.projects.map((project) => project.id).join(':');
 
   const [expandedSections, setExpandedSections] = useState<Record<ProjectArea, boolean>>({
     collaboration: selectedProjectArea === 'team',
@@ -576,19 +704,14 @@ export function SidebarWorkspaceNavigation(props: {
     selectedProjectId ? { [selectedProjectId]: true } : {},
   );
 
-  // Expand parent documents if selectedDocumentId has ancestors
-  const initialExpandedDocIds: Record<string, boolean> = {};
-  if (selectedDocumentId) {
-    const docById = new Map(props.documents.map((doc) => [doc.id, doc]));
-    let currentDoc = docById.get(selectedDocumentId);
-    while (currentDoc?.parentId) {
-      initialExpandedDocIds[currentDoc.parentId] = true;
-      currentDoc = docById.get(currentDoc.parentId);
-    }
-  }
-
-  const [expandedDocIds, setExpandedDocIds] =
-    useState<Record<string, boolean>>(initialExpandedDocIds);
+  const [documents, setDocuments] = useState<DocumentNavigationItem[]>([]);
+  const [expandedDocIds, setExpandedDocIds] = useState<Record<string, boolean>>({});
+  const [nodeStates, setNodeStates] = useState<Record<string, NavigationNodeState>>({});
+  const nodeStatesRef = useRef<Record<string, NavigationNodeState>>({});
+  const loadingNodeKeys = useRef(new Set<string>());
+  const pathRequestId = useRef(0);
+  const visibleProjectIds = useRef(new Set(props.projects.map((project) => project.id)));
+  visibleProjectIds.current = new Set(props.projects.map((project) => project.id));
   const [contextMenu, setContextMenu] = useState<NavigationContextMenu | null>(null);
   const [creatingDocumentProject, setCreatingDocumentProject] = useState<WorkspaceProject | null>(
     null,
@@ -603,6 +726,143 @@ export function SidebarWorkspaceNavigation(props: {
   } | null>(null);
   const [draggingDoc, setDraggingDoc] = useState<DraggingDocument | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
+
+  const updateNodeState = (key: string, state: NavigationNodeState) => {
+    nodeStatesRef.current = { ...nodeStatesRef.current, [key]: state };
+    setNodeStates(nodeStatesRef.current);
+  };
+
+  const mergeDocuments = (items: DocumentNavigationItem[]) => {
+    setDocuments((currentDocuments) => {
+      const documentsById = new Map(currentDocuments.map((document) => [document.id, document]));
+      for (const item of items) {
+        const current = documentsById.get(item.id);
+        documentsById.set(item.id, {
+          ...current,
+          ...item,
+          hasChildren: current?.hasChildren === true || item.hasChildren,
+        });
+      }
+      return [...documentsById.values()];
+    });
+  };
+
+  const loadDocumentChildren = async (projectId: string, parentId: string | null) => {
+    const key = getNavigationNodeKey(projectId, parentId);
+    if (loadingNodeKeys.current.has(key)) {
+      return;
+    }
+
+    const currentState = nodeStatesRef.current[key] ?? emptyNavigationNodeState;
+    loadingNodeKeys.current.add(key);
+    updateNodeState(key, { ...currentState, error: null, isLoading: true });
+
+    try {
+      const page = await getDocumentNavigationChildren({
+        cursor: currentState.nextCursor ?? undefined,
+        limit: 50,
+        parentId,
+        projectId,
+      });
+      if (!visibleProjectIds.current.has(projectId)) {
+        return;
+      }
+      mergeDocuments(page.items);
+      if (parentId && !currentState.hasLoadedFirstPage) {
+        setDocuments((currentDocuments) =>
+          currentDocuments.map((document) =>
+            document.id === parentId
+              ? { ...document, hasChildren: page.items.length > 0 }
+              : document,
+          ),
+        );
+      }
+      updateNodeState(key, {
+        error: null,
+        hasLoadedFirstPage: true,
+        isLoading: false,
+        nextCursor: page.nextCursor,
+      });
+    } catch {
+      updateNodeState(key, {
+        ...currentState,
+        error: '文档导航加载失败',
+        isLoading: false,
+      });
+    } finally {
+      loadingNodeKeys.current.delete(key);
+    }
+  };
+
+  const reloadDocumentChildren = (projectId: string, parentId: string | null) => {
+    const key = getNavigationNodeKey(projectId, parentId);
+    setDocuments((currentDocuments) =>
+      currentDocuments.filter(
+        (document) => document.projectId !== projectId || document.parentId !== parentId,
+      ),
+    );
+    updateNodeState(key, emptyNavigationNodeState);
+    void loadDocumentChildren(projectId, parentId);
+  };
+
+  const loadSelectedDocumentPath = useEffectEvent(async () => {
+    const requestId = pathRequestId.current + 1;
+    pathRequestId.current = requestId;
+    if (!selectedDocumentId || !selectedProjectId) {
+      return;
+    }
+
+    const selectedProject = props.projects.find((project) => project.id === selectedProjectId);
+    if (!selectedProject) {
+      return;
+    }
+
+    let path;
+    try {
+      path = await getDocumentNavigationPath({
+        documentId: selectedDocumentId,
+        projectId: selectedProjectId,
+      });
+    } catch {
+      return;
+    }
+    if (pathRequestId.current !== requestId || !path) {
+      return;
+    }
+
+    mergeDocuments(path);
+    setExpandedProjectIds((current) => ({ ...current, [selectedProjectId]: true }));
+    setExpandedSections((current) => ({
+      ...current,
+      [selectedProject.workspaceKind === 'personal' ? 'personal' : 'collaboration']: true,
+    }));
+    setExpandedDocIds((current) => ({
+      ...current,
+      ...Object.fromEntries(path.slice(0, -1).map((document) => [document.id, true])),
+    }));
+    void loadDocumentChildren(selectedProjectId, null);
+    for (const document of path.slice(0, -1)) {
+      void loadDocumentChildren(selectedProjectId, document.id);
+    }
+  });
+
+  const notifyNavigationDocumentsChange = useEffectEvent((items: DocumentNavigationItem[]) => {
+    props.onNavigationDocumentsChange(items);
+  });
+
+  useEffect(() => {
+    notifyNavigationDocumentsChange(documents);
+  }, [documents]);
+
+  useEffect(() => {
+    void loadSelectedDocumentPath();
+  }, [projectIdsKey, selectedDocumentId, selectedProjectId]);
+
+  useEffect(() => {
+    setDocuments((currentDocuments) =>
+      currentDocuments.filter((document) => visibleProjectIds.current.has(document.projectId)),
+    );
+  }, [projectIdsKey]);
 
   const handleDragStartDoc = (
     event: React.DragEvent<HTMLElement>,
@@ -691,37 +951,13 @@ export function SidebarWorkspaceNavigation(props: {
     setDraggingDoc(null);
     setDropTarget(null);
 
-    let targetParentId: string | null = null;
-    let sortOrder: number | undefined;
-
-    if (position === 'inside') {
-      targetParentId = targetDoc.id;
-    } else {
-      targetParentId = targetDoc.parentId;
-      const siblings = targetProject.documents
-        .filter((doc) => doc.parentId === targetParentId && doc.id !== sourceDocId)
-        .toSorted((a, b) => a.sortOrder - b.sortOrder);
-
-      const targetIdx = siblings.findIndex((doc) => doc.id === targetDoc.id);
-      if (targetIdx !== -1) {
-        if (position === 'before') {
-          const prev = siblings[targetIdx - 1];
-          sortOrder = prev
-            ? (prev.sortOrder + targetDoc.sortOrder) / 2
-            : targetDoc.sortOrder - 1000;
-        } else {
-          const next = siblings[targetIdx + 1];
-          sortOrder = next
-            ? (targetDoc.sortOrder + next.sortOrder) / 2
-            : targetDoc.sortOrder + 1000;
-        }
-      }
-    }
+    const targetParentId = position === 'inside' ? targetDoc.id : targetDoc.parentId;
 
     try {
       await moveDocument({
         documentId: sourceDocId,
-        sortOrder,
+        position,
+        targetDocumentId: targetDoc.id,
         targetParentId,
         targetProjectId,
       });
@@ -729,6 +965,10 @@ export function SidebarWorkspaceNavigation(props: {
         setExpandedDocIds((prev) => ({ ...prev, [targetParentId]: true }));
       }
       setExpandedProjectIds((prev) => ({ ...prev, [targetProjectId]: true }));
+      reloadDocumentChildren(draggingDoc.projectId, draggingDoc.parentId);
+      if (draggingDoc.projectId !== targetProjectId || draggingDoc.parentId !== targetParentId) {
+        reloadDocumentChildren(targetProjectId, targetParentId);
+      }
       router.refresh();
     } catch {
       // Silently catch or handle move failure
@@ -807,11 +1047,12 @@ export function SidebarWorkspaceNavigation(props: {
           projects: props.projects
             .filter((project) => project.workspaceKind === 'personal')
             .map((project) => ({
-              documents: props.documents
+              documents: documents
                 .filter((document) => document.projectId === project.id)
                 .map((document) => ({
                   href: `/personal?project=${project.id}&document=${document.id}`,
                   id: document.id,
+                  hasChildren: document.hasChildren,
                   label: document.title,
                   parentId: document.parentId,
                   sortOrder: document.sortOrder,
@@ -833,11 +1074,12 @@ export function SidebarWorkspaceNavigation(props: {
                 projects: props.projects
                   .filter((project) => project.workspaceKind === 'team')
                   .map((project) => ({
-                    documents: props.documents
+                    documents: documents
                       .filter((document) => document.projectId === project.id)
                       .map((document) => ({
                         href: `/collaboration?project=${project.id}&document=${document.id}`,
                         id: document.id,
+                        hasChildren: document.hasChildren,
                         label: document.title,
                         parentId: document.parentId,
                         sortOrder: document.sortOrder,
@@ -883,6 +1125,7 @@ export function SidebarWorkspaceNavigation(props: {
             expandedDocIds={expandedDocIds}
             expandedProjectIds={expandedProjectIds}
             isExpanded={expandedSections[section.id]}
+            nodeStates={nodeStates}
             pathname={props.pathname}
             selectedDocumentId={selectedDocumentId}
             selectedProjectId={selectedProjectId}
@@ -905,6 +1148,9 @@ export function SidebarWorkspaceNavigation(props: {
             onDropDoc={handleDropDoc}
             onDropProject={handleDropProject}
             onNavigate={props.onNavigate}
+            onLoadMore={(projectId, parentId) => {
+              void loadDocumentChildren(projectId, parentId);
+            }}
             onOpenContextMenu={(event, target) => {
               event.preventDefault();
               event.stopPropagation();
@@ -923,17 +1169,31 @@ export function SidebarWorkspaceNavigation(props: {
                 [section.id]: !currentSections[section.id],
               }));
             }}
-            onToggleDoc={(docId) => {
+            onToggleDoc={(projectId, docId) => {
+              const willExpand = !expandedDocIds[docId];
               setExpandedDocIds((currentDocs) => ({
                 ...currentDocs,
                 [docId]: !currentDocs[docId],
               }));
+              const nodeState =
+                nodeStatesRef.current[getNavigationNodeKey(projectId, docId)] ??
+                emptyNavigationNodeState;
+              if (willExpand && !nodeState.hasLoadedFirstPage) {
+                void loadDocumentChildren(projectId, docId);
+              }
             }}
             onToggleProject={(projectId) => {
+              const willExpand = !expandedProjectIds[projectId];
               setExpandedProjectIds((currentProjects) => ({
                 ...currentProjects,
                 [projectId]: !currentProjects[projectId],
               }));
+              const nodeState =
+                nodeStatesRef.current[getNavigationNodeKey(projectId, null)] ??
+                emptyNavigationNodeState;
+              if (willExpand && !nodeState.hasLoadedFirstPage) {
+                void loadDocumentChildren(projectId, null);
+              }
             }}
           />
         ))}
@@ -1001,7 +1261,7 @@ export function SidebarWorkspaceNavigation(props: {
           onClose={() => {
             setMovingDocument(null);
           }}
-          onMoved={(targetProjectId, documentId) => {
+          onMoved={(targetProjectId, targetParentId, documentId) => {
             const targetProject = workspaceSections
               .flatMap((s) => s.projects)
               .find((p) => p.id === targetProjectId);
@@ -1009,6 +1269,13 @@ export function SidebarWorkspaceNavigation(props: {
               ? `${targetProject.href}&document=${documentId}`
               : `${movingDocument.project.href}&document=${documentId}`;
             router.push(href);
+            reloadDocumentChildren(movingDocument.project.id, movingDocument.document.parentId);
+            if (
+              movingDocument.project.id !== targetProjectId ||
+              movingDocument.document.parentId !== targetParentId
+            ) {
+              reloadDocumentChildren(targetProjectId, targetParentId);
+            }
             router.refresh();
             setMovingDocument(null);
             props.onNavigate();

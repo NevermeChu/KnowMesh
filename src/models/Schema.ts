@@ -403,7 +403,12 @@ export const documentsSchema = pgTable(
       name: 'documents_parent_id_fk',
     }).onDelete('cascade'),
     index('documents_project_updated_idx').on(table.projectId, table.updatedAt),
-    index('documents_project_parent_sort_idx').on(table.projectId, table.parentId, table.sortOrder),
+    index('documents_project_parent_sort_idx').on(
+      table.projectId,
+      table.parentId,
+      table.sortOrder,
+      table.id,
+    ),
     index('documents_search_text_trgm_idx').using('gin', table.searchText.op('gin_trgm_ops')),
     index('documents_title_trgm_idx').using('gin', table.title.op('gin_trgm_ops')),
   ],

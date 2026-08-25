@@ -32,6 +32,7 @@ export function DocumentEditorSurface(props: {
   collaborationState?: CollaborationState;
   document: Document;
   editor: Editor | null;
+  localPersistenceFailed?: boolean;
   saveState: SaveState;
   setSaveState: (state: SaveState) => void;
   wordCount: number;
@@ -162,6 +163,7 @@ export function DocumentEditorSurface(props: {
             <DocumentSaveStatus
               canEdit={props.canEditContent}
               collaborationState={props.collaborationState}
+              localPersistenceFailed={props.localPersistenceFailed}
               state={props.saveState}
             />
             {props.collaborationMembers && (

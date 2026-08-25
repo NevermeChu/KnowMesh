@@ -1,10 +1,9 @@
 import 'server-only';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectPermissionDecision } from '@/features/permissions/PermissionPolicy';
 import { db } from '@/libs/DB';
 import {
-  documentsSchema,
   projectMembersSchema,
   projectsSchema,
   workspaceMembersSchema,
@@ -12,10 +11,10 @@ import {
 } from '@/models/Schema';
 
 /**
- * Returns the projects and documents visible in one workspace navigation section.
+ * Returns the projects visible in one workspace navigation section.
  *
  * @param options - Workspace boundary for the navigation query.
- * @returns Accessible projects with their document navigation items.
+ * @returns Accessible project navigation items without eagerly loading documents.
  */
 export async function getWorkspaceNavigation(options: { workspaceId: string }) {
   const { id: userId } = await requireUser();
@@ -65,23 +64,5 @@ export async function getWorkspaceNavigation(options: { workspaceId: string }) {
         ]
       : [];
   });
-  const documentProjectIds = projects.map((project) => project.id);
-
-  if (documentProjectIds.length === 0) {
-    return { documents: [], projects };
-  }
-
-  const documents = await db
-    .select({
-      id: documentsSchema.id,
-      parentId: documentsSchema.parentId,
-      projectId: documentsSchema.projectId,
-      sortOrder: documentsSchema.sortOrder,
-      title: documentsSchema.title,
-    })
-    .from(documentsSchema)
-    .where(inArray(documentsSchema.projectId, documentProjectIds))
-    .orderBy(asc(documentsSchema.sortOrder), desc(documentsSchema.updatedAt));
-
-  return { documents, projects };
+  return { projects };
 }

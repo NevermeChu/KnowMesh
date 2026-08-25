@@ -29,7 +29,6 @@ export default async function WorkspaceLayout(props: { children: React.ReactNode
     getUnreadNotificationCount(),
     cookies(),
   ]);
-  const documents = workspaceResources.flatMap((resources) => resources.documents);
   const projects = workspaceResources.flatMap((resources) => resources.projects);
   const contentWidth = parseContentWidth(cookieStore.get(CONTENT_WIDTH_COOKIE)?.value);
 
@@ -39,7 +38,6 @@ export default async function WorkspaceLayout(props: { children: React.ReactNode
         activeWorkspace={workspaceContext.activeWorkspace}
         contentWidth={contentWidth}
         currentUserId={user.id}
-        documents={documents}
         projects={projects}
         workspaces={workspaceContext.workspaces}
       >

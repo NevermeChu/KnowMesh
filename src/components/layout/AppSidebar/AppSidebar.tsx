@@ -31,18 +31,20 @@ const menuDialogIds: Record<Exclude<SidebarMenu, null>, string> = {
 
 function SidebarContent(props: {
   activeWorkspace: Workspace | null;
-  documents: DocumentNavigationItem[];
+  currentUserId: string;
   openMenu: SidebarMenu;
   pathname: string;
   projects: Project[];
   workspaceError: string | null;
   workspaces: Workspace[];
   isSwitchingWorkspace: boolean;
+  navigationRevision: number;
   onCloseMenu: () => void;
   onCreateWorkspace: () => void;
   onCreateProject: (area: ProjectArea) => void;
   onManageWorkspace: () => void;
   onNavigate: () => void;
+  onNavigationDocumentsChange: (documents: DocumentNavigationItem[]) => void;
   onOpenPermissionOverview: (input: PermissionOverviewInput) => void;
   onToggleMenu: (menu: Exclude<SidebarMenu, null>) => void;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -66,12 +68,13 @@ function SidebarContent(props: {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-4">
         <SidebarPrimaryNavigation pathname={props.pathname} onNavigate={props.onNavigate} />
         <SidebarWorkspaceNavigation
+          key={props.navigationRevision}
           activeWorkspace={props.activeWorkspace}
-          documents={props.documents}
           pathname={props.pathname}
           projects={props.projects}
           onCreateProject={props.onCreateProject}
           onNavigate={props.onNavigate}
+          onNavigationDocumentsChange={props.onNavigationDocumentsChange}
           onOpenPermissionOverview={props.onOpenPermissionOverview}
         />
       </div>
@@ -84,6 +87,7 @@ function SidebarContent(props: {
         isNotificationsRoute={props.pathname.startsWith('/notifications')}
         isSettingsRoute={props.pathname.startsWith('/settings')}
         isWorkspaceAvailable={props.activeWorkspace !== null}
+        currentUserId={props.currentUserId}
         onManageWorkspace={props.onManageWorkspace}
         onNavigate={props.onNavigate}
         onToggle={() => {
@@ -115,12 +119,13 @@ function isPermissionOverviewInput(value: unknown): value is PermissionOverviewI
 
 export function AppSidebar(props: {
   activeWorkspace: Workspace | null;
-  documents: DocumentNavigationItem[];
+  currentUserId: string;
   isHidden: boolean;
   projects: Project[];
   workspaces: Workspace[];
   width: number;
   onResize: (width: number) => void;
+  onNavigationDocumentsChange: (documents: DocumentNavigationItem[]) => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -132,6 +137,7 @@ export function AppSidebar(props: {
   const [permissionOverview, setPermissionOverview] = useState<PermissionOverview | null>(null);
   const [permissionInput, setPermissionInput] = useState<PermissionOverviewInput | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [navigationRevision, setNavigationRevision] = useState(0);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [isLoadingPermissions, startLoadingPermissions] = useTransition();
   const [isSwitchingWorkspace, startSwitchingWorkspace] = useTransition();
@@ -268,13 +274,14 @@ export function AppSidebar(props: {
         <div className="flex h-full w-full flex-col">
           <SidebarContent
             activeWorkspace={props.activeWorkspace}
-            documents={props.documents}
+            currentUserId={props.currentUserId}
             openMenu={openMenu}
             pathname={pathname}
             projects={props.projects}
             workspaceError={workspaceError}
             workspaces={props.workspaces}
             isSwitchingWorkspace={isSwitchingWorkspace}
+            navigationRevision={navigationRevision}
             onCloseMenu={() => {
               setOpenMenu(null);
             }}
@@ -296,6 +303,7 @@ export function AppSidebar(props: {
               });
             }}
             onNavigate={closeNavigation}
+            onNavigationDocumentsChange={props.onNavigationDocumentsChange}
             onOpenPermissionOverview={openPermissionOverview}
             onToggleMenu={(menu) => {
               setWorkspaceError(null);
@@ -392,6 +400,7 @@ export function AppSidebar(props: {
             permissionRequestId.current += 1;
             setIsPermissionDialogOpen(false);
             if (operation === 'delete') {
+              setNavigationRevision((revision) => revision + 1);
               router.replace(pathname);
             }
             router.refresh();

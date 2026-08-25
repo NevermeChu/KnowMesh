@@ -17,7 +17,7 @@ const landingNavigation = [
  * @param props - Current authentication state.
  * @returns The landing navigation.
  */
-export function LandingHeader(props: { isAuthenticated: boolean }) {
+export function LandingHeader(props: { currentUserId: string | null }) {
   return (
     <header className="glass-nav sticky top-0 z-50">
       <div className="landing-container flex h-17 items-center justify-between">
@@ -53,12 +53,17 @@ export function LandingHeader(props: { isAuthenticated: boolean }) {
             strokeWidth={2}
             title="切换外观主题（浅空知序 / 深空知序）"
           />
-          {props.isAuthenticated ? (
+          {props.currentUserId ? (
             <>
               <Link href="/dashboard" className="btn-primary px-[1.125rem] py-2 text-sm">
                 进入工作台
               </Link>
-              <SignOutButton className="btn-secondary px-4 py-2 text-sm">退出登录</SignOutButton>
+              <SignOutButton
+                className="btn-secondary px-4 py-2 text-sm"
+                userId={props.currentUserId}
+              >
+                退出登录
+              </SignOutButton>
             </>
           ) : (
             <>

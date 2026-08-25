@@ -44,17 +44,17 @@
 
 ## 读取和编辑流程
 
-`/personal` 与 `/collaboration` 是两个界面区域，通过查询参数选择项目和文档，并复用同一个文档页面组件。Workspace Layout 先解析当前有效用户的 Personal Workspace 和活动 Workspace：个人区域读取前者，协作区域仅在活动 Workspace 为 Team 时读取后者。页面 Server Component 调用 `getProjectDocuments`，同时验证项目所属 Workspace 及其类型。它先读取导航元数据；只有授权决策包含 `document.read` 时才继续查询并传递所选文档的 `content`。非项目成员点击文件时只得到标题和访问申请状态。
+`/personal` 与 `/collaboration` 是两个界面区域，通过查询参数选择项目和文档，并复用同一个文档页面组件。Workspace Layout 先解析当前有效用户的 Personal Workspace 和活动 Workspace：个人区域读取前者，协作区域仅在活动 Workspace 为 Team 时读取后者。页面 Server Component 调用 `getProjectDocuments`，同时验证项目所属 Workspace 及其类型。它只读取所选文档的根到节点路径；只有授权决策包含 `document.read` 时才继续查询并传递所选文档的 `content`。非项目成员点击文件时只得到标题和访问申请状态。
 
 全局侧边栏是当前唯一的项目和文档导航层。当前项目节点提供创建文档入口；编辑区不再重复呈现项目名称和文档列表。格式工具栏通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例，并由共享 `ContentToolbar` 在内容全屏按钮左侧呈现。工具栏直接显示最多八个常用格式命令，左侧箭头使用共享 `PopupMenu` 展开其余 StarterKit 格式命令，每行最多八个；该浮层只由同一箭头切换开关。撤销和重做独立固定在工具栏右侧。ContentToolbar 和编辑器正文右键菜单复用 `useDocumentEditorCommands`，因此两处使用相同的格式命令、激活状态和撤销/重做可用状态；右键菜单通过共享 `ContextMenu` 和 `PopupMenu` 纵向呈现。
 
 应用根布局通过客户端事件边界禁用浏览器默认右键菜单。工作区、项目、文件和可编辑正文等明确注册了自定义菜单的区域显示对应菜单；其他区域右键不显示任何菜单。只读正文不会显示格式菜单。
 
-项目节点本身可以折叠，展开后才显示其文档。内部文档列表以**多层级递归树**呈现，支持任意层级深度展开/折叠，并在同级按 `sort_order` 排序。项目加号创建根文档，文件悬停的加号或右键“新建子文件”创建子级文档；侧边栏支持**原生拖拽（Drag & Drop）**：可将文档拖拽至其他文档上方/下方重排序（中点计算 `sort_order`）、拖入文档内部变为子文档、或拖入其他项目根目录/子文档中（自动校验防环并级联迁移子树）；右键文件节点支持查看权限、修改名称、弹窗移动文件（`MoveDocumentDialog`）以及级联删除。文件权限完全继承项目，当前没有文档级 ACL。文档编辑区顶部呈现层级面包屑导航（`项目 > 父文档 > ... > 当前文档`），支持点击快速跳转。编辑器正文支持**Notion 风格块级悬浮手柄与文档内拖拽（`DocumentBlockHandle` 与 `BlockDragDropExtension`）**：鼠标悬停在顶层块或左侧空白边距（Gutter）时显示浮动手柄，提供快捷添加新行（`+`）、按住拖拽把手（`⠿`）在文档内任意上下重排块级节点，以及点击 6-dot 手柄呼出块级快捷菜单（`DocumentBlockMenu`，支持删除块、创建副本、转换为其他块类型、上移/下移等）。拖拽过程中通过 `BlockDragDropExtension` 计算块级包围盒中线实现精确的块边界吸附（Block Boundary Snapping），呈现全宽蓝色落点指示线（Drop Indicator），并在单次原子事务（Atomic Transaction）内执行位置重排，确保与 Yjs 实时协同及单人 Undo/Redo 历史无缝兼容。
+项目节点本身可以折叠，首次展开时才调用 `getDocumentNavigationChildren` 读取根节点；文档节点也只在首次展开时读取直接子节点。每页使用 `(sort_order, id)` 稳定游标，节点分别保存加载中、失败、已加载与下一页状态，并提供局部重试和“加载更多”；重复请求会合并，项目切换后的旧响应不会写回当前树。直接访问深层文档时，服务端以循环检测和最大深度限制返回根到节点路径，客户端注入并展开这条路径，不扫描项目全树。项目加号创建根文档，文件悬停的加号或右键“新建子文件”创建子级文档；创建、删除和移动后只刷新受影响节点。侧边栏支持**原生拖拽（Drag & Drop）**：客户端只提交目标文档及 `before`、`inside` 或 `after` 语义，服务端在项目锁与完整目标同级集合内计算 `sort_order`、必要时重排、校验防环并级联迁移子树。右键文件节点支持查看权限、修改名称、弹窗移动文件（`MoveDocumentDialog`）以及级联删除。文件权限完全继承项目，当前没有文档级 ACL。文档编辑区顶部呈现层级面包屑导航（`项目 > 父文档 > ... > 当前文档`），支持点击快速跳转。编辑器正文支持**Notion 风格块级悬浮手柄与文档内拖拽（`DocumentBlockHandle` 与 `BlockDragDropExtension`）**：鼠标悬停在顶层块或左侧空白边距（Gutter）时显示浮动手柄，提供快捷添加新行（`+`）、按住拖拽把手（`⠿`）在文档内任意上下重排块级节点，以及点击 6-dot 手柄呼出块级快捷菜单（`DocumentBlockMenu`，支持删除块、创建副本、转换为其他块类型、上移/下移等）。拖拽过程中通过 `BlockDragDropExtension` 计算块级包围盒中线实现精确的块边界吸附（Block Boundary Snapping），呈现全宽蓝色落点指示线（Drop Indicator），并在单次原子事务（Atomic Transaction）内执行位置重排，确保与 Yjs 实时协同及单人 Undo/Redo 历史无缝兼容。
 
 编辑模式由 `getProjectDocuments` 根据服务端已验证的 Workspace 类型和协作功能开关推导，客户端不能自行选择存储链路。Personal 文档继续以 ProseMirror JSON 初始化 Tiptap；标题失焦时保存，正文变更经过短延迟合并后调用 `updateDocument`，编辑器失焦会立即触发一次保存。正文保存串行执行，待保存快照独立于编辑器实例保留；页面隐藏或组件卸载会立即冲刷，仍有未完成保存时浏览器离页保护会提示用户。每次正文保存必须携带页面读取或上次成功保存返回的 `updated_at` 版本令牌；事务锁行后版本不一致时保留本地内容并显示冲突，不得整篇覆盖其他页面已经提交的修改。Personal 文档不创建 Provider 或 Y.Doc。
 
-启用功能开关后的 Team 文档使用按文档隔离的 Hocuspocus Provider 和 Y.Doc。客户端和服务端 transformer 必须统一把正文存放在名为 `content` 的 Y.XmlFragment；加载早期版本写入的 `default` 字段时，服务端会在读取二进制状态后转换为 canonical `content` 状态。客户端必须完成首次 Yjs 同步后才创建 Tiptap，不把服务端传入的 JSON 再次写入 Y.Doc；Team 正文更新只进入 Collaboration 扩展，StarterKit Undo/Redo 在该模式关闭。标题仍由 `updateDocument` Server Action 持久化，并以独立 `title_version` 拒绝旧基线；提交后的 PostgreSQL 通知由协作进程转为房间 stateless 消息，使远端标题输入框和面包屑更新。存在本地未保存标题时收到更高版本不会覆盖输入，而是进入冲突状态；页面隐藏、卸载或离页也会冲刷或提示标题变更。文档组件只在协作编辑器挂载期间创建 WebSocket；卸载时先销毁房间 Provider、发送关闭消息，再销毁外层传输，避免路由切换遗留连接。界面区分连接、同步、离线、失败、已同步和 viewer 只读状态；文档连接关闭、底层断线或认证失败会立即冻结正文，认证失败也会撤销基于旧页面权限的标题编辑入口。重新认证后只有服务端返回 `read-write` scope 且页面授权仍允许写入时才恢复编辑。在线成员、远端光标与选区来自服务端净化后的 Awareness，成员列表按用户 ID 防御性去重。
+启用功能开关后的 Team 文档使用按文档隔离的 Hocuspocus Provider 和 Y.Doc。客户端和服务端 transformer 必须统一把正文存放在名为 `content` 的 Y.XmlFragment；加载早期版本写入的 `default` 字段时，服务端会在读取二进制状态后转换为 canonical `content` 状态。服务端认证为 `read-write` 后，客户端才按 `knowmesh:<userId>:<documentId>:v<schemaVersion>` 创建 `y-indexeddb` 本地副本，并让它与 Hocuspocus Provider 复用同一个 Y.Doc；viewer、认证失败和 Personal 文档不会加载该副本。客户端等待服务端首次同步和本地副本首次加载后才创建 Tiptap，不把服务端传入的 JSON 再次写入 Y.Doc；本地存储失败时显示降级状态但不切换正文权威。Team 正文更新只进入 Collaboration 扩展，StarterKit Undo/Redo 在该模式关闭。标题仍由 `updateDocument` Server Action 持久化，并以独立 `title_version` 拒绝旧基线；提交后的 PostgreSQL 通知由协作进程转为房间 stateless 消息，使远端标题输入框和面包屑更新。存在本地未保存标题时收到更高版本不会覆盖输入，而是进入冲突状态；页面隐藏、卸载或离页也会冲刷或提示标题变更。文档组件只在协作编辑器挂载期间创建 WebSocket；卸载时先销毁本地副本与房间 Provider、发送关闭消息，再销毁外层传输，避免路由切换遗留连接。界面区分连接、同步、本地恢复不可用、离线、失败、已同步和 viewer 只读状态；文档连接关闭、底层断线或认证失败会立即冻结正文，认证失败也会撤销基于旧页面权限的标题编辑入口。重新认证后只有服务端返回 `read-write` scope 且页面授权仍允许写入时才恢复编辑。离线期间本地副本不开放继续编辑；退出登录和删除账户会尽力删除当前用户命名空间下的副本。在线成员、远端光标与选区来自服务端净化后的 Awareness，成员列表按用户 ID 防御性去重。
 
 客户端用 50ms 固定窗口合并本地光标与选区位置，只发送窗口内最后一次 `cursor` 状态；用户身份、Presence 移除和 Yjs 正文更新不经过该限流，失焦或卸载时立即清除远端光标。
 
@@ -62,7 +62,7 @@ Team 文档不会进入 JSON 正文写入。功能开关关闭时，服务端对
 
 Provider 报告本地未同步正文更新后，界面保持“保存中”直到协作服务完成 Yjs 状态与 JSON 投影的事务写入；服务通过房间内无状态消息反馈成功或失败。持久化失败会显示保存失败但不会启用 JSON 正文写入。首次同步前若服务不可用或认证失败，页面显示服务端读取的只读 JSON 快照；连接恢复并完成首次 Yjs 同步后才重新创建可编辑协作编辑器。Markdown 导出与打印使用当前编辑器内容，搜索继续读取最近一次成功持久化的 `documents.content` 投影，最近文档和收藏只消费文档元数据。
 
-独立 Hocuspocus 服务使用 Better Auth Cookie 验证身份，重新计算 Project 文档权限，将 viewer 设为只读，并通过数据库通知和最长 15 秒周期复查使权限与 Session 变化失效；每条连接独立执行复查，一个数据库查询失败只记录脱敏错误，不跳过其余连接。Origin、连接数、消息大小和 Presence 身份也由服务端限制。进程启动时必须持有 PostgreSQL session advisory lock；同一数据库只允许一个协作写实例，租约连接丢失会触发失败关闭。存储在同一事务中更新 Yjs 二进制权威状态与 `documents.content` JSON 派生投影。协作服务以显式 `yDocOptions: { gc: true }` 创建文档：Yjs GC 在事务清理时剥离已删除内容的载荷，持久化快照因此不保留墓碑文本；该隐私不变量是对库默认值的显式声明，改动此配置前必须重新评估。store 失败后服务按文档保留内存状态并周期重试；任一失败文档未恢复时 `/ready` 保持失败，最后一个客户端离开也不会卸载它。关闭时逐篇执行最终持久化，一个文档失败不会跳过后续文档；资源清理完成后仍以失败状态退出。内存重试不能覆盖 `SIGKILL`、OOM、主机故障或进程租约连接突然丢失：这些事件可能丢失最近一次成功持久化之后、且没有仍存活客户端可在重连时重推的更新。当前没有持久更新队列、长期 IndexedDB 离线队列或版本历史，运维必须把该窗口纳入 RPO，并在 `/ready` 失败时避免强制重启或发布切换。Windows 长生命周期子进程使用独立进程组，避免控制台中断先关闭数据库。开关关闭时不会启动它。CI E2E 使用 PostgreSQL service 并显式启用协作服务；`E2E_REAL_POSTGRES=true` 时本地运行器不会创建 PGlite，而是迁移并使用外部数据库。每个测试使用独立资源 ID，避免并行执行互相删除数据库状态；Chromium 覆盖 viewer 只读、Project 角色降级、Workspace 成员移除和 Session 撤销，Firefox 继续运行通用 E2E。Project 成员删除与角色降级共用 `project_members` 通知和复查路径，不重复保留浏览器场景。生产 release 包含同 SHA 的协作可执行文件和 systemd/Nginx 模板；部署在显式开关开启时先验证协作 readiness，再启动应用并执行公网 WSS Upgrade 冒烟，失败时回滚两个服务。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用，真实登录双会话业务验收仍需单独确认。
+独立 Hocuspocus 服务使用 Better Auth Cookie 验证身份，重新计算 Project 文档权限，将 viewer 设为只读，并通过数据库通知和最长 15 秒周期复查使权限与 Session 变化失效；每条连接独立执行复查，一个数据库查询失败只记录脱敏错误，不跳过其余连接。Origin、连接数、消息大小和 Presence 身份也由服务端限制。进程启动时必须持有 PostgreSQL session advisory lock；同一数据库只允许一个协作写实例，租约连接丢失会触发失败关闭。存储在同一事务中更新 Yjs 二进制权威状态与 `documents.content` JSON 派生投影。协作服务以显式 `yDocOptions: { gc: true }` 创建文档：Yjs GC 在事务清理时剥离已删除内容的载荷，持久化快照因此不保留墓碑文本；该隐私不变量是对库默认值的显式声明，改动此配置前必须重新评估。store 失败后服务按文档保留内存状态并周期重试；任一失败文档未恢复时 `/ready` 保持失败，最后一个客户端离开也不会卸载它。关闭时逐篇执行最终持久化，一个文档失败不会跳过后续文档；资源清理完成后仍以失败状态退出。内存重试不能覆盖 `SIGKILL`、OOM、主机故障或进程租约连接突然丢失：这些事件可能丢失最近一次成功持久化之后的更新。浏览器本地 Yjs 副本现在可在授权用户重新打开文档并重连时把未落库更新重新合并，但浏览器数据被清除、存储失败或所有客户端副本都丢失时仍只能恢复最近一次成功的服务端快照；当前没有服务端持久更新日志、长期离线编辑或版本历史，因此运维仍须把剩余窗口纳入 RPO，并在 `/ready` 失败时避免强制重启或发布切换。Windows 长生命周期子进程使用独立进程组，避免控制台中断先关闭数据库。开关关闭时不会启动它。CI E2E 使用 PostgreSQL service 并显式启用协作服务；`E2E_REAL_POSTGRES=true` 时本地运行器不会创建 PGlite，而是迁移并使用外部数据库。每个测试使用独立资源 ID，避免并行执行互相删除数据库状态；Chromium 覆盖 viewer 只读、Project 角色降级、Workspace 成员移除和 Session 撤销，Firefox 继续运行通用 E2E。Project 成员删除与角色降级共用 `project_members` 通知和复查路径，不重复保留浏览器场景。生产 release 包含同 SHA 的协作可执行文件和 systemd/Nginx 模板；部署在显式开关开启时先验证协作 readiness，再启动应用并执行公网 WSS Upgrade 冒烟，失败时回滚两个服务。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用，真实登录双会话业务验收仍需单独确认。
 
 ## 导出
 
@@ -110,6 +110,7 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - `src/features/documents/DocumentMarkdown.ts`
 - `src/features/documents/collaboration/DocumentCollaborationTransform.ts`
 - `src/features/documents/collaboration/DocumentCollaborationState.ts`
+- `src/features/documents/collaboration/DocumentCollaborationLocalPersistence.ts`
 - `src/components/layout/AppShell.tsx`
 - `src/components/ui/ContextMenu.tsx`
 - `src/components/ui/ModalDialog.tsx`
@@ -117,6 +118,7 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - `src/features/permissions/server/ProjectAuthorization.ts`
 - `src/features/permissions/server/DocumentAuthorization.ts`
 - `src/features/documents/server/GetProjectDocuments.ts`
+- `src/features/documents/server/GetDocumentNavigation.ts`
 - `src/features/workspaces/server/GetWorkspaceNavigation.ts`
 - `src/features/documents/server/CreateDocument.ts`
 - `src/features/documents/server/MoveDocument.ts`
@@ -129,6 +131,7 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 
 - [ADR 0002：文档内容使用版本化 ProseMirror JSON](../adr/0002-use-versioned-prosemirror-json.md)
 - [ADR 0012：Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照](../adr/0012-use-yjs-for-team-document-collaboration.md)
+- [ADR 0014：使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口](../adr/0014-use-browser-yjs-replicas-for-crash-recovery.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0006：分离 Workspace 结构发现与 Project 内容访问](../adr/0006-separate-workspace-discovery-from-project-content-access.md)

@@ -216,6 +216,15 @@ test.describe('team document collaboration', () => {
       const editorEditor = editorPage.locator('.ProseMirror[contenteditable="true"]');
       await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
       await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
+      await expect
+        .poll(
+          async () =>
+            await ownerPage.evaluate(async (expectedName) => {
+              const databases = await indexedDB.databases();
+              return databases.some((database) => database.name === expectedName);
+            }, `knowmesh:${ownerUserId}:${documentId}:v1`),
+        )
+        .toBeTruthy();
 
       await ownerEditor.fill(persistedText);
       await expect(editorEditor).toContainText(persistedText);
@@ -372,6 +381,12 @@ test.describe('team document collaboration', () => {
       );
       await expect(page.locator('.ProseMirror[contenteditable="true"]')).toHaveCount(0);
       await expect(page.getByText('只读模式', { exact: true })).toBeVisible();
+      expect(
+        await page.evaluate(async (cachePrefix) => {
+          const databases = await indexedDB.databases();
+          return databases.some((database) => database.name?.startsWith(cachePrefix));
+        }, `knowmesh:${editorUserId}:`),
+      ).toBeFalsy();
     } finally {
       await context.close();
     }

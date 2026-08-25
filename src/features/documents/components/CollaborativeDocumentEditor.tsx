@@ -14,8 +14,10 @@ import type { Editor } from '@tiptap/react';
 import { useEditor } from '@tiptap/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { IndexeddbPersistence } from 'y-indexeddb';
 import { Env } from '@/libs/Env';
 import { throttleDocumentCollaborationCursorAwareness } from '../collaboration/DocumentCollaborationAwarenessThrottle';
+import { getDocumentCollaborationCacheName } from '../collaboration/DocumentCollaborationLocalPersistence';
 import { parseDocumentCollaborationPersistenceMessage } from '../collaboration/DocumentCollaborationPersistenceMessage';
 import { getDocumentCollaborationRoom } from '../collaboration/DocumentCollaborationRoom';
 import { parseDocumentCollaborationTitleMessage } from '../collaboration/DocumentCollaborationTitleMessage';
@@ -36,6 +38,17 @@ import type { CollaborationState, SaveState } from './DocumentSaveStatus';
 import { DocumentSaveStatus } from './DocumentSaveStatus';
 
 const WEBSOCKET_DESTROY_DELAY_MS = 50;
+const LOCAL_PERSISTENCE_TIMEOUT_MS = 5000;
+
+type LocalPersistenceState = 'error' | 'loading' | 'ready' | 'skipped';
+
+async function destroyLocalPersistence(persistence: IndexeddbPersistence) {
+  try {
+    await persistence.destroy();
+  } catch {
+    // The database may already be closed during browser teardown.
+  }
+}
 
 function DocumentCollaborationConnection(props: { children: React.ReactNode }) {
   const [websocketProvider] = useState(
@@ -71,6 +84,7 @@ function CollaborativeDocumentEditorContent(props: {
   collaborationMembers: DocumentCollaborationMember[];
   collaborationState: CollaborationState;
   document: Document;
+  localPersistenceFailed: boolean;
 }) {
   const provider = useHocuspocusProvider();
   const toolbarRegistration = useDocumentEditorToolbarRegistration();
@@ -134,6 +148,7 @@ function CollaborativeDocumentEditorContent(props: {
       collaborationState={props.collaborationState}
       document={props.document}
       editor={editor}
+      localPersistenceFailed={props.localPersistenceFailed}
       saveState={saveState}
       setSaveState={setSaveState}
       wordCount={wordCount}
@@ -177,7 +192,11 @@ function CollaborativeDocumentSnapshot(props: {
   );
 }
 
-function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document }) {
+function DocumentCollaborationRoom(props: {
+  canEdit: boolean;
+  currentUserId: string;
+  document: Document;
+}) {
   const provider = useHocuspocusProvider();
   const router = useRouter();
   const connectionStatus = useHocuspocusConnectionStatus();
@@ -192,8 +211,15 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
         })
       : false,
   );
+  const [localPersistenceAllowed, setLocalPersistenceAllowed] = useState<boolean | null>(() =>
+    provider.isAuthenticated && provider.authorizedScope
+      ? provider.authorizedScope === 'read-write' && props.canEdit
+      : null,
+  );
   const [hasDisconnected, setHasDisconnected] = useState(false);
   const [hasSynced, setHasSynced] = useState(provider.isSynced);
+  const [localPersistenceState, setLocalPersistenceState] =
+    useState<LocalPersistenceState>('loading');
   const [documentTitle, setDocumentTitle] = useState(() => ({
     title: props.document.title,
     titleVersion: props.document.titleVersion,
@@ -205,15 +231,71 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
         : current,
     );
   }, [props.document.title, props.document.titleVersion]);
+  useEffect(() => {
+    let isActive = true;
+    let persistence: IndexeddbPersistence | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const markUnavailable = () => {
+      if (!isActive) {
+        return;
+      }
+      console.error('Document collaboration local recovery is unavailable');
+      setLocalPersistenceState('error');
+    };
+
+    if (localPersistenceAllowed === null) {
+      setLocalPersistenceState('loading');
+    } else if (!localPersistenceAllowed) {
+      setLocalPersistenceState('skipped');
+    } else if (typeof indexedDB === 'undefined') {
+      markUnavailable();
+    } else {
+      try {
+        persistence = new IndexeddbPersistence(
+          getDocumentCollaborationCacheName({
+            documentId: props.document.id,
+            userId: props.currentUserId,
+          }),
+          provider.document,
+        );
+        persistence.once('synced', () => {
+          if (!isActive) {
+            return;
+          }
+          if (timeout) {
+            clearTimeout(timeout);
+            timeout = null;
+          }
+          setLocalPersistenceState('ready');
+        });
+        timeout = setTimeout(markUnavailable, LOCAL_PERSISTENCE_TIMEOUT_MS);
+      } catch {
+        markUnavailable();
+      }
+    }
+
+    return () => {
+      isActive = false;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      if (persistence) {
+        void destroyLocalPersistence(persistence);
+      }
+    };
+  }, [localPersistenceAllowed, props.currentUserId, props.document.id, provider.document]);
 
   useHocuspocusEvent('authenticated', (data) => {
     setAuthenticationFailed(false);
+    setLocalPersistenceAllowed(data.scope === 'read-write' && props.canEdit);
     setServerCanEdit(
       getDocumentCollaborationCanEdit({ canEdit: props.canEdit, scope: data.scope }),
     );
   });
   useHocuspocusEvent('authenticationFailed', () => {
     setAuthenticationFailed(true);
+    setLocalPersistenceAllowed(false);
     setServerCanEdit(false);
   });
   useHocuspocusEvent('close', () => {
@@ -249,7 +331,7 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
   });
   const currentDocument = { ...props.document, ...documentTitle };
 
-  if (!hasSynced) {
+  if (!hasSynced || localPersistenceState === 'loading') {
     if (authenticationFailed || hasDisconnected) {
       return (
         <CollaborativeDocumentSnapshot
@@ -283,15 +365,24 @@ function DocumentCollaborationRoom(props: { canEdit: boolean; document: Document
       collaborationMembers={getDocumentCollaborationMembers(users)}
       collaborationState={collaborationState}
       document={currentDocument}
+      localPersistenceFailed={localPersistenceState === 'error'}
     />
   );
 }
 
-export function CollaborativeDocumentEditor(props: { canEdit: boolean; document: Document }) {
+export function CollaborativeDocumentEditor(props: {
+  canEdit: boolean;
+  currentUserId: string;
+  document: Document;
+}) {
   return (
     <DocumentCollaborationConnection>
       <HocuspocusRoom name={getDocumentCollaborationRoom(props.document.id)}>
-        <DocumentCollaborationRoom canEdit={props.canEdit} document={props.document} />
+        <DocumentCollaborationRoom
+          canEdit={props.canEdit}
+          currentUserId={props.currentUserId}
+          document={props.document}
+        />
       </HocuspocusRoom>
     </DocumentCollaborationConnection>
   );

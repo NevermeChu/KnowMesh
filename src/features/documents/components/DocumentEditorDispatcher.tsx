@@ -6,11 +6,18 @@ import { DocumentEditor } from './DocumentEditor';
 
 export function DocumentEditorDispatcher(props: {
   canEdit: boolean;
+  currentUserId: string;
   document: Document;
   editorMode: DocumentEditorMode;
 }) {
   if (props.editorMode === 'collaborative') {
-    return <CollaborativeDocumentEditor canEdit={props.canEdit} document={props.document} />;
+    return (
+      <CollaborativeDocumentEditor
+        canEdit={props.canEdit}
+        currentUserId={props.currentUserId}
+        document={props.document}
+      />
+    );
   }
 
   return (

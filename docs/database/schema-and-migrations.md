@@ -76,14 +76,14 @@
 
 - UUID 主键，每篇文档通过 `project_id` 属于一个项目；删除项目时级联删除文档。
 - `parent_id` 可空自引用外键指向 `documents.id`，实现项目内无限层级父子文档嵌套；删除父文档时级联删除其所有子孙文档。
-- `sort_order` 双精度浮点数（`double precision`），用于兄弟节点间的排序（基于 Fractional Indexing）。
+- `sort_order` 双精度浮点数（`double precision`），用于兄弟节点间的排序（基于 Fractional Indexing）。文档移动在项目行锁保护的事务中锁定目标兄弟节点；相邻间隙小于安全阈值或数值接近安全精度边界时，服务端按 1000 步长重新编号同级节点。文档创建复用同一项目行锁串行计算尾部顺序，避免并发创建得到相同值。
 - 标题最长 200 字符。
 - `content` 使用 `JSONB` 保存 ProseMirror JSON，默认内容是包含一个空段落的 `doc` 根节点。
 - `content_schema_version` 记录应用文档结构版本，当前为 `1`。
 - `search_text` 纯文本投影列，在单人保存或协作状态落库时同步由 ProseMirror 树提取并持久化，供全文检索直接匹配。
 - `created_by_id` 通常保存创建者的 Better Auth user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
-- `(project_id, parent_id, sort_order)` 索引支持层级树构建与同级排序。
+- `(project_id, parent_id, sort_order, id)` 索引支持直接子节点按稳定游标分页；`id` 在相同 `sort_order` 时提供确定顺序。
 - `documents_search_text_trgm_idx` 与 `documents_title_trgm_idx` 分别为 `search_text` 和 `title` 建立基于 `pg_trgm` 扩展的 GIN 三元组倒排索引，支持全文模糊检索直接命中索引。
 
 ### `document_collaboration_states`
@@ -127,6 +127,8 @@
 自 `0029_majestic_orphan.sql` 起，`audit_logs.workspace_id` 也不再引用 `workspaces`：它保存产生事件时的稳定 Workspace UUID，而不是活跃资源关系。该边界保证删除 Workspace 后旧历史和同事务写入的 `workspace_deleted` 事件仍存在；普通业务子表仍继续通过外键级联清理。
 
 自 `0030_flowery_domino.sql` 起，`documents.title_version` 独立记录标题保存版本，不受协作正文更新 `updated_at` 影响。标题更新递增版本并在事务提交后向协作失效频道发布标题、文档 ID 与新版本；协作进程只把该消息广播给当前文档房间，不把标题写入 Y.Doc。
+
+自 `0031_chief_silver_sable.sql` 起，文档层级索引由 `(project_id, parent_id, sort_order)` 扩展为 `(project_id, parent_id, sort_order, id)`，与导航 Server Action 的 `(sort_order, id)` 稳定游标和确定排序一致。
 
 ## 数据库约束与应用层不变量
 

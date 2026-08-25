@@ -155,6 +155,29 @@ describe(moveDocument, () => {
     expect(result.id).toBe(docId);
   });
 
+  it('computes relative position from locked server siblings', async () => {
+    const targetId = '50000000-0000-4000-8000-000000000005';
+    state.txQueue.rows = [
+      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
+      [{ role: 'owner' }],
+      [{ role: 'owner' }],
+      [
+        { id: parentId, sortOrder: 1000 },
+        { id: targetId, sortOrder: 2000 },
+      ],
+    ];
+
+    await moveDocument({
+      documentId: docId,
+      position: 'before',
+      targetDocumentId: targetId,
+      targetParentId: null,
+      targetProjectId: projectId,
+    });
+
+    expect(state.set).toHaveBeenCalledWith(expect.objectContaining({ sortOrder: 1500 }));
+  });
+
   it('rejects moving a document to be its own child', async () => {
     await expect(
       moveDocument({

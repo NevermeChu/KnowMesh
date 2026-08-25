@@ -139,6 +139,7 @@ export function NotificationSidebarBadge() {
  */
 export function SettingsMenu(props: {
   canViewAuditLogs?: boolean;
+  currentUserId: string;
   isOpen: boolean;
   isNotificationsRoute: boolean;
   isSettingsRoute: boolean;
@@ -232,7 +233,7 @@ export function SettingsMenu(props: {
           <span>账号设置</span>
         </Link>
         <div className="my-0.5 border-t border-line" />
-        <SignOutButton className={popupMenuItemClassName}>
+        <SignOutButton className={popupMenuItemClassName} userId={props.currentUserId}>
           <LogOut aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
           <span>退出登录</span>
         </SignOutButton>

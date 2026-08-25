@@ -218,6 +218,13 @@
       "when": 1787629632697,
       "tag": "0030_flowery_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1787635951982,
+      "tag": "0031_chief_silver_sable",
+      "breakpoints": true
     }
   ]
 }

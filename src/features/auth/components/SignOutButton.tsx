@@ -1,5 +1,6 @@
 'use client';
 
+import { clearDocumentCollaborationCachesForUser } from '@/features/documents/collaboration/DocumentCollaborationLocalPersistence';
 import { authClient } from '@/libs/AuthClient';
 
 /**
@@ -12,6 +13,7 @@ export function SignOutButton(props: {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  userId: string;
 }) {
   return (
     <button
@@ -19,6 +21,7 @@ export function SignOutButton(props: {
       style={props.style}
       type="button"
       onClick={async () => {
+        await clearDocumentCollaborationCachesForUser(props.userId);
         await authClient.signOut();
         window.location.assign('/');
       }}

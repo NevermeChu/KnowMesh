@@ -79,8 +79,8 @@ KnowMesh 账户删除 Action 在验证当前密码后调用 `deleteUserData`，�
 - Personal 创建入口把当前用户的 Personal Workspace ID 交给 Server Action。
 - Collaboration 创建入口只在活动 Workspace 为 `team` 且具有 `project.create` 时显示。
 - `createProject` 从 Better Auth Session 获取身份、验证目标 Workspace 能力，并在事务内锁定和重新校验 owner 的 Workspace 成员关系后写入项目与 owner 成员关系。
-- `getWorkspaceNavigation` 向 Workspace 成员返回目标 Workspace 的项目和文档导航元数据；导航元数据不包含正文、正文层级、摘要或预览。
-- Workspace Layout 合并 Personal Workspace 与可选活动 Team Workspace 的项目和文档导航。
+- `getWorkspaceNavigation` 向 Workspace 成员只返回目标 Workspace 的项目；文档导航由节点展开时的 `getDocumentNavigationChildren` 按 `(sort_order, id)` 游标读取，直接访问深层文档时只读取有界祖先路径。导航元数据不包含正文、摘要或预览。
+- Workspace Layout 合并 Personal Workspace 与可选活动 Team Workspace 的项目导航；文档树状态由侧边栏按项目、父节点分别维护。
 - `/personal` 只接受 Personal Workspace 中的项目；`/collaboration` 只接受当前活动 Team Workspace 中的项目。
 - 页面读取对当前身份不可见或不属于目标区域的项目时统一渲染不可索引的 Not Found 结果，不把资源授权异常暴露为应用错误；Next.js 流式响应可能保留 HTTP 200。
 

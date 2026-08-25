@@ -17,7 +17,9 @@ let outsiderSessionToken: string;
 let outsiderPersonalWorkspaceId: string;
 let projectId: string;
 let documentId: string;
+let childDocumentId: string;
 const seededTitle = 'Smoke 冒烟文档';
+const childDocumentTitle = 'Smoke 深层子文档';
 const seededBodyText = '冒烟搜索目标词';
 
 function getSignedSessionCookie(token: string) {
@@ -43,6 +45,7 @@ test.describe('application smoke coverage', () => {
     outsiderPersonalWorkspaceId = randomUUID();
     projectId = randomUUID();
     documentId = randomUUID();
+    childDocumentId = randomUUID();
 
     const client = await pool.connect();
     try {
@@ -80,15 +83,29 @@ test.describe('application smoke coverage', () => {
         VALUES ('${projectId}', '${personalWorkspaceId}', '${userId}', 'owner')
       `);
       await client.query(`
-        INSERT INTO documents (id, project_id, title, content, search_text, created_by_id)
-        VALUES (
-          '${documentId}',
-          '${projectId}',
-          '${seededTitle}',
-          '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"${seededBodyText}"}]}]}'::jsonb,
-          '${seededBodyText}',
-          '${userId}'
-        )
+        INSERT INTO documents
+          (id, project_id, parent_id, sort_order, title, content, search_text, created_by_id)
+        VALUES
+          (
+            '${documentId}',
+            '${projectId}',
+            NULL,
+            1000,
+            '${seededTitle}',
+            '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"${seededBodyText}"}]}]}'::jsonb,
+            '${seededBodyText}',
+            '${userId}'
+          ),
+          (
+            '${childDocumentId}',
+            '${projectId}',
+            '${documentId}',
+            1000,
+            '${childDocumentTitle}',
+            '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"deep navigation"}]}]}'::jsonb,
+            'deep navigation',
+            '${userId}'
+          )
       `);
       await client.query('COMMIT');
     } catch (error) {
@@ -245,6 +262,25 @@ test.describe('application smoke coverage', () => {
     const { page, close } = await newAuthenticatedPage({ baseURL, browser });
     await page.goto(`/search?q=${encodeURIComponent('冒烟搜索目标')}`);
     await expect(page.locator('body')).toContainText(seededTitle);
+    await close();
+  });
+
+  test('injects and expands only the selected deep navigation path', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${childDocumentId}`);
+
+    await expect(page.getByRole('button', { name: '收起Smoke Project' })).toBeVisible();
+    await expect(page.getByRole('link', { exact: true, name: seededTitle })).toBeVisible();
+    await expect(page.getByRole('link', { exact: true, name: childDocumentTitle })).toBeVisible();
+    await expect(page.getByRole('button', { name: `收起${seededTitle}` })).toBeVisible();
+
     await close();
   });
 

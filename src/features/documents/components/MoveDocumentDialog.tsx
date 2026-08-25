@@ -23,7 +23,7 @@ export function MoveDocumentDialog(props: {
   document: { id: string; label: string; parentId: string | null };
   projects: WorkspaceProject[];
   onClose: () => void;
-  onMoved: (targetProjectId: string, documentId: string) => void;
+  onMoved: (targetProjectId: string, targetParentId: string | null, documentId: string) => void;
 }) {
   const [targetProjectId, setTargetProjectId] = useState(props.currentProject.id);
   const [targetParentId, setTargetParentId] = useState<string | null>(props.document.parentId);
@@ -94,7 +94,7 @@ export function MoveDocumentDialog(props: {
                 targetParentId,
                 targetProjectId,
               });
-              props.onMoved(targetProjectId, props.document.id);
+              props.onMoved(targetProjectId, targetParentId, props.document.id);
             } catch (moveError) {
               setError(moveError instanceof Error ? moveError.message : '移动文件失败，请稍后重试');
             }

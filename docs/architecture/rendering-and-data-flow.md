@@ -11,10 +11,10 @@
 用户交互：Client Component 管理界面状态
 内部写入：Client Component → Server Action → 数据库
 交互式权限读取：Client Component → Server Action → 资源授权 → 数据库与本地用户表
-写入后同步：Server Action 使工作区布局数据失效 → 重新执行服务端读取
+写入后同步：Server Action 使项目列表失效或客户端刷新受影响导航节点
 权限通知：权限 Server Action → 同一数据库事务写业务状态与用户通知
 Personal 正文：Client Component → 防抖/失焦保存 → Server Action → JSONB
-Team 正文：Client Component → Yjs Provider → Hocuspocus → Yjs 状态 + JSONB 派生快照
+Team 正文：Client Component → 浏览器 Yjs 副本 + Hocuspocus Provider → Yjs 状态 + JSONB 派生快照
 ```
 
 `async` 不决定函数是否为 Server Action。决定因素是调用发生在哪个运行边界，以及导出函数是否使用 `'use server'` 暴露为 Action。
@@ -35,12 +35,12 @@ Team 正文：Client Component → Yjs Provider → Hocuspocus → Yjs 状态 + 
 → WorkspaceLayout 调用 getWorkspaceContext()
 → 服务端通过 requireUser() 验证 Better Auth Session，再按 workspace_members 校验 HttpOnly Workspace cookie 并确定当前 Workspace
 → WorkspaceLayout 为 Personal Workspace 与可选的活动 Team Workspace 调用 getWorkspaceNavigation()
-→ server-only 导航查询认证一次，计算可访问项目后按这些项目 ID 读取文档元数据
-→ 项目及文档导航数据作为 props 传给 AppShell
+→ server-only 导航查询认证一次，只计算并读取可访问项目
+→ 项目导航数据作为 props 传给 AppShell
 → 页面结构和序列化数据发送给浏览器
 ```
 
-`getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。`getCurrentUser`、`getWorkspaceContext`、`getProjectAuthorization` 和 `getUnreadNotificationCount` 使用 React 请求级缓存（`cache()`），使 Layout、具体页面与鉴权入口在同一次 Server Component 渲染中复用 Session 或查询结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
+`getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。项目或文档节点展开时，客户端调用 `getDocumentNavigationChildren` Server Action；直接访问深层文档时，页面查询 `getDocumentNavigationPath` 并只把根到当前节点的有界路径注入导航树。`getCurrentUser`、`getWorkspaceContext`、`getProjectAuthorization` 和 `getUnreadNotificationCount` 使用 React 请求级缓存（`cache()`），使 Layout、具体页面与鉴权入口在同一次 Server Component 渲染中复用 Session 或查询结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
 
 ## 工作台流式聚合
 
@@ -76,7 +76,7 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 
 普通 Workspace 和 Project 操作复用相同语义：Project 右键权限弹窗以及“设置 → 工作区管理”根据当前用户角色显示“删除”或“退出”，服务端只接收资源 ID，并在已认证边界重新解析 owner/member 身份。owner 删除完整资源；member 退出时只清理自己的关系。Workspace member 退出前会递归处理其直接参与的 Project，避免留下 owner Project 或违反成员外键。
 
-项目及文档导航查询位于共享工作区布局，而不是只位于文档页面，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在。项目权限只计算一次，文档查询复用已经授权的项目 ID；当前导航查询没有分页，正文仍只由具体文档页面按需读取。
+项目导航查询位于共享工作区布局，因为侧边栏在搜索、收藏、设置、个人和协作页面同样存在；它不再扫描任何项目的文档。每个展开节点通过 Server Action 重新认证并验证 `project.structure.read`，只读取直接子节点，按 `(sort_order, id)` 稳定游标分页，并用有界的 `hasChildren` 查询决定是否显示展开入口。客户端为每个节点独立记录加载、错误与下一页状态，合并重复请求，并丢弃项目切换后的过期响应。正文仍只由具体文档页面按需读取。
 
 共享工作区布局使用 `RealtimeNotificationProvider` 注入 SSR 初始未读通知数，并在客户端与 `/api/realtime/notifications` 建立 SSE 长连接。通知是用户级数据，不按活动 Workspace 过滤；`notifications` 表触发器在写入事务提交后通过 PostgreSQL `NOTIFY` 发出不含正文的信号，各 Node.js 进程的 `NotificationDatabaseSubscriber` 读取已提交快照和准确未读数，再通过进程内 `NotificationBroadcaster` 向本进程 SSE 连接扇出。初始连接和浏览器重连都会从数据库校准未读数。侧边栏 `NotificationSidebarBadge` 仅局部更新数字文本，主内容区、编辑器与导航树不重渲染。`/notifications` 在右侧内容区读取最近 50 条，读取不自动标为已读，单条和全部已读均由明确的 Server Action 完成。
 
@@ -98,7 +98,7 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 
 `createProject` 文件顶部的 `'use server'` 声明了服务器执行边界；客户端只调用该 Action，数据库访问仍位于服务器模块。
 
-项目或文档创建成功后，对应 Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 使共享工作区布局失效。因此侧边栏会重新执行 `getWorkspaceNavigation`，而不依赖客户端刷新与导航的时序。新文档创建返回 ID 后，客户端只负责导航到该文档。
+项目创建成功后，Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 使共享工作区布局失效并重新读取项目列表。文档创建返回 ID 后，客户端导航到新文档并刷新对应父节点；删除清除当前客户端树，移动只刷新来源与目标父节点。拖拽不再用客户端已加载的局部兄弟列表推导中点，而是提交 `before`、`inside` 或 `after` 语义，由服务端在项目锁和完整目标同级集合内计算顺序。
 
 ## 文档读取与保存
 
@@ -110,7 +110,7 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 → getProjectDocuments 从 Better Auth Session 取得 userId
 → getProjectAuthorization 用 Workspace 成员关系授予结构发现，再用 Project 直接角色授予内容权限
 → 验证项目属于当前 Workspace
-→ 查询项目文档元数据和所选文档内容
+→ 查询所选文档的有界导航路径，并按正文能力读取所选文档内容
 → 服务端根据 Workspace 类型和功能开关推导编辑模式
 → DocumentWorkspace 与 DocumentEditorDispatcher 接收所选文档数据和编辑模式
 ```
@@ -124,6 +124,8 @@ Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `upda
 独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本在功能开关开启时于迁移完成后启动协作进程并等待 `/ready`，任一受管进程异常退出都会结束整组服务；Windows 下长生命周期子进程使用独立进程组，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。GitHub Actions 已在真实 PostgreSQL 与协作服务下确认 E2E 和容器清理；生产 release 包含同 SHA 的协作可执行文件、systemd/Nginx 模板和受显式部署开关保护的双服务健康检查与回滚。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用；真实登录双会话业务验收仍需单独确认。
 
 `DocumentEditor` 在创建和销毁时通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例。共享 `ContentToolbar` 从该上下文取得编辑器，仅在可编辑文档打开时显示格式命令；编辑器内容仍由文档页面持有，工具栏上下文不保存正文副本。
+
+服务端认证为 `read-write` 后，`y-indexeddb` 按用户、文档和内容 Schema 版本隔离地持久化 Provider 的同一个 Y.Doc。编辑器等待服务端首次同步和本地副本加载；本地存储失败显示降级状态，不回退到 JSON 写入。viewer、认证失败和 Personal 文档不加载副本；断网继续只读，退出登录或删除账户时尽力清理当前用户的命名空间。该副本可在授权重连时补回硬崩溃后未进入服务端快照的更新，但不替代服务端持久更新日志，也不保证浏览器站点数据消失后的 RPO=0。
 
 ## 权限总览
 
@@ -170,7 +172,8 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/features/workspaces/server/CreateWorkspace.ts`：创建 Workspace 与 owner 成员。
 - `src/features/workspaces/server/SelectWorkspace.ts`：校验选择并写入当前 Workspace cookie。
 - `src/proxy.ts`：当前页面路由保护范围和 `/api` matcher 排除规则。
-- `src/features/workspaces/server/GetWorkspaceNavigation.ts`：server-only 项目与文档导航查询。
+- `src/features/workspaces/server/GetWorkspaceNavigation.ts`：server-only 项目导航查询。
+- `src/features/documents/server/GetDocumentNavigation.ts`：按节点分页和深层路径导航查询。
 - `src/features/projects/components/CreateProjectDialog.tsx`：客户端表单。
 - `src/features/projects/server/CreateProject.ts`：创建项目 Server Action。
 - `src/features/projects/server/GetPermissionOverview.ts`：按需授权并读取权限总览。
@@ -203,3 +206,5 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - [ADR 0009：使用 Better Auth 管理本地身份](../adr/0009-use-better-auth-for-local-identity.md)
 - [ADR 0010：使用 SSE 实现实时站内通知](../adr/0010-use-sse-for-realtime-notifications.md)
 - [ADR 0011：使用事务性 PostgreSQL 通知驱动跨进程 SSE](../adr/0011-use-postgresql-notify-for-realtime-delivery.md)
+- [ADR 0012：Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照](../adr/0012-use-yjs-for-team-document-collaboration.md)
+- [ADR 0014：使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口](../adr/0014-use-browser-yjs-replicas-for-crash-recovery.md)

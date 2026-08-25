@@ -17,7 +17,8 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const isAuthenticated = Boolean(await getCurrentUser());
+  const currentUser = await getCurrentUser();
+  const isAuthenticated = Boolean(currentUser);
 
   return (
     <div
@@ -29,7 +30,7 @@ export default async function HomePage() {
           "'Plus Jakarta Sans', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
-      <LandingHeader isAuthenticated={isAuthenticated} />
+      <LandingHeader currentUserId={currentUser?.id ?? null} />
       <main>
         <LandingHero isAuthenticated={isAuthenticated} />
         <LandingKnowledgeMeshSection />

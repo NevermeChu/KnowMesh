@@ -30,13 +30,13 @@ export function AppShell(props: {
   activeWorkspace: Workspace | null;
   children: React.ReactNode;
   contentWidth: ContentWidthPercentage;
-  currentUserId?: string;
-  documents: DocumentNavigationItem[];
+  currentUserId: string;
   projects: Project[];
   workspaces: Workspace[];
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isContentFullscreen, setIsContentFullscreen] = useState(false);
+  const [navigationDocuments, setNavigationDocuments] = useState<DocumentNavigationItem[]>([]);
   const shellStyle: AppShellStyle = {
     '--app-sidebar-width': `${sidebarWidth}px`,
   };
@@ -75,7 +75,7 @@ export function AppShell(props: {
       <div className="relative min-h-dvh bg-transparent text-ink antialiased" style={shellStyle}>
         <AppSidebar
           activeWorkspace={props.activeWorkspace}
-          documents={props.documents}
+          currentUserId={props.currentUserId}
           isHidden={isContentFullscreen}
           projects={props.projects}
           workspaces={props.workspaces}
@@ -83,6 +83,7 @@ export function AppShell(props: {
           onResize={(width) => {
             setSidebarWidth(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)));
           }}
+          onNavigationDocumentsChange={setNavigationDocuments}
         />
         <main
           className={`min-h-dvh pt-16 transition-[margin-left] duration-200 lg:pt-0 ${
@@ -91,7 +92,7 @@ export function AppShell(props: {
         >
           <ContentToolbar
             contentWidth={props.contentWidth}
-            documents={props.documents}
+            documents={navigationDocuments}
             isContentFullscreen={isContentFullscreen}
             projects={props.projects}
             onToggleContentFullscreen={() => {
