@@ -173,6 +173,11 @@ export const notificationsSchema = pgTable(
     index('notifications_recipient_unread_idx')
       .on(table.recipientUserId)
       .where(sql`${table.readAt} is null`),
+    uniqueIndex('notifications_workspace_invited_recipient_target_idx')
+      .on(table.recipientUserId, table.targetId)
+      .where(
+        sql`${table.type} = 'workspace_invited' and ${table.targetKind} = 'workspace' and ${table.targetId} is not null`,
+      ),
   ],
 );
 
@@ -377,6 +382,7 @@ export const documentsSchema = pgTable(
       .references(() => projectsSchema.id, { onDelete: 'cascade' }),
     parentId: uuid('parent_id'),
     title: varchar('title', { length: 200 }).notNull(),
+    titleVersion: integer('title_version').default(1).notNull(),
     sortOrder: doublePrecision('sort_order').default(0).notNull(),
     content: jsonb('content').$type<DocumentContent>().default(EMPTY_DOCUMENT_CONTENT).notNull(),
     contentSchemaVersion: integer('content_schema_version')
@@ -437,9 +443,7 @@ export const auditLogsSchema = pgTable(
   'audit_logs',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    workspaceId: uuid('workspace_id')
-      .notNull()
-      .references(() => workspacesSchema.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id').notNull(),
     actorUserId: varchar('actor_user_id', { length: 255 }).notNull(),
     action: auditActionEnum('action').notNull(),
     targetKind: auditTargetKindEnum('target_kind'),

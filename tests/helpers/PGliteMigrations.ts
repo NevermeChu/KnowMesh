@@ -34,6 +34,9 @@ export const migrationFiles = [
   '0025_add-trgm-search-indexes.sql',
   '0026_remarkable_edwin_jarvis.sql',
   '0027_woozy_magus.sql',
+  '0028_blushing_moonstone.sql',
+  '0029_majestic_orphan.sql',
+  '0030_flowery_domino.sql',
 ] as const;
 
 export function createTestPGlite(options?: ConstructorParameters<typeof PGlite>[0]) {

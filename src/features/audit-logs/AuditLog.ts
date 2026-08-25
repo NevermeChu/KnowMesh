@@ -1,4 +1,5 @@
 export const auditActions = [
+  'workspace_deleted',
   'workspace_renamed',
   'workspace_ownership_transferred',
   'workspace_invited',
@@ -72,6 +73,7 @@ export const auditActionCategories: Record<AuditAction, AuditLogCategory> = {
   project_member_role_updated: 'permissions',
   project_ownership_transferred: 'permissions',
   project_renamed: 'resources',
+  workspace_deleted: 'resources',
   workspace_access_approved: 'permissions',
   workspace_access_rejected: 'permissions',
   workspace_invitation_accepted: 'membership',
@@ -95,6 +97,7 @@ export const auditActionLabels: Record<AuditAction, string> = {
   project_member_role_updated: '调整项目角色',
   project_ownership_transferred: '项目所有权转让',
   project_renamed: '重命名项目',
+  workspace_deleted: '删除工作区',
   workspace_access_approved: '工作区权限审批通过',
   workspace_access_rejected: '工作区权限申请驳回',
   workspace_invitation_accepted: '接受工作区邀请',
