@@ -21,6 +21,7 @@ import { getDocumentCollaborationCacheName } from '../collaboration/DocumentColl
 import { parseDocumentCollaborationPersistenceMessage } from '../collaboration/DocumentCollaborationPersistenceMessage';
 import { getDocumentCollaborationRoom } from '../collaboration/DocumentCollaborationRoom';
 import { parseDocumentCollaborationTitleMessage } from '../collaboration/DocumentCollaborationTitleMessage';
+import { startDocumentCollaborationWebsocket } from '../collaboration/DocumentCollaborationWebsocketLifecycle';
 import type { Document } from '../Document';
 import { documentExtensions } from '../DocumentExtensions';
 import {
@@ -37,7 +38,6 @@ import type { DocumentCollaborationMember } from './DocumentPresence';
 import type { CollaborationState, SaveState } from './DocumentSaveStatus';
 import { DocumentSaveStatus } from './DocumentSaveStatus';
 
-const WEBSOCKET_DESTROY_DELAY_MS = 50;
 const LOCAL_PERSISTENCE_TIMEOUT_MS = 5000;
 
 type LocalPersistenceState = 'error' | 'loading' | 'ready' | 'skipped';
@@ -51,26 +51,26 @@ async function destroyLocalPersistence(persistence: IndexeddbPersistence) {
 }
 
 function DocumentCollaborationConnection(props: { children: React.ReactNode }) {
-  const [websocketProvider] = useState(
-    () =>
-      new HocuspocusProviderWebsocket({
-        url: Env.NEXT_PUBLIC_COLLABORATION_URL,
-      }),
+  const [websocketProvider, setWebsocketProvider] = useState<HocuspocusProviderWebsocket | null>(
+    null,
   );
-  const destroyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (destroyTimeout.current) {
-      clearTimeout(destroyTimeout.current);
-      destroyTimeout.current = null;
-    }
+  useEffect(
+    () =>
+      startDocumentCollaborationWebsocket({
+        create: () =>
+          new HocuspocusProviderWebsocket({
+            autoConnect: false,
+            url: Env.NEXT_PUBLIC_COLLABORATION_URL,
+          }),
+        onReady: setWebsocketProvider,
+      }),
+    [],
+  );
 
-    return () => {
-      destroyTimeout.current = setTimeout(() => {
-        websocketProvider.destroy();
-      }, WEBSOCKET_DESTROY_DELAY_MS);
-    };
-  }, [websocketProvider]);
+  if (!websocketProvider) {
+    return <DocumentEditorSkeleton />;
+  }
 
   return (
     <HocuspocusProviderWebsocketComponent websocketProvider={websocketProvider}>
