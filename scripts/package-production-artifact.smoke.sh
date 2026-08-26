@@ -28,9 +28,10 @@ fail_test() {
 
 create_standalone_fixture() {
   local standalone=$1
-  mkdir -p "${standalone}"
+  mkdir -p "${standalone}/nested/runtime"
   printf 'placeholder server entry\n' > "${standalone}/server.js"
   printf 'SECRET_SHOULD_NOT_SHIP=1\n' > "${standalone}/.env.local"
+  printf 'NESTED_SECRET_SHOULD_NOT_SHIP=1\n' > "${standalone}/nested/runtime/.env.production"
 }
 
 create_static_fixture() {
@@ -96,6 +97,9 @@ if ! package "${standalone}" "${work}/release.tgz" "${revision}" > "${manifest}"
 fi
 if [[ -e "${standalone}/.env.local" ]]; then
   fail_test "packaging left .env.local inside the standalone directory"
+fi
+if [[ -e "${standalone}/nested/runtime/.env.production" ]]; then
+  fail_test "packaging left a nested environment file inside the standalone directory"
 fi
 assert_archive_matches_manifest "${work}/release.tgz" "${manifest}"
 assert_archive_is_complete_and_clean "${work}/release.tgz" "${revision}"

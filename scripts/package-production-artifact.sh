@@ -114,7 +114,7 @@ cp -r "${static_dir}/." "${standalone_dir}/.next/static/"
 cp -r "${repository_root}/migrations/." "${standalone_dir}/migrations/"
 cp -r "${repository_root}/deploy/." "${standalone_dir}/deploy/"
 printf '%s\n' "${revision}" > "${standalone_dir}/REVISION"
-rm -f "${standalone_dir}"/.env*
+find "${standalone_dir}" -type f -name '.env*' -delete
 
 require_file "${standalone_dir}/server.js"
 require_file "${standalone_dir}/migrate-production.cjs"
@@ -133,7 +133,7 @@ packaged_revision=$(tr -d '[:space:]' < "${standalone_dir}/REVISION")
 
 while IFS= read -r -d '' leftover_env_file; do
   fail "Artifact must not contain environment files: ${leftover_env_file}"
-done < <(find "${standalone_dir}" -maxdepth 1 -name '.env*' -print0)
+done < <(find "${standalone_dir}" -name '.env*' -print0)
 
 tar -C "${standalone_dir}" -czf "${output}" .
 
