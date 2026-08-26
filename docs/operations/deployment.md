@@ -170,6 +170,7 @@ artifact 内容包括：
 - 自包含的 `migrate-production.cjs` 和 `collaboration-server.cjs`。
 - `deploy/systemd/knowmesh-collaboration.service`。
 - `deploy/nginx/` 下的两个协作代理片段。
+- `deploy/scripts/activate-release.sh` 与 `deploy/scripts/rollback-release.sh`，即随制品交付的生产激活与回滚脚本。
 - `REVISION`，保存构建该 artifact 的完整 Git SHA。
 
 生产密钥不会进入 artifact。CI workflow 同时把压缩 artifact 保存 14 天，便于审计或人工恢复。
@@ -183,7 +184,7 @@ artifact 内容包括：
 1. GitHub runner 获取生产专用 SSH 私钥。
 2. `ssh-keyscan` 获取服务器 ED25519 host key，并与 workflow 中固定的 SHA-256 指纹比较。指纹不一致立即停止，不能静默接受陌生主机。
 3. artifact 通过 `scp` 上传到服务器 `/tmp/knowmesh-release-<SHA>.tgz`。
-4. SSH 以部署用户登录，再通过非交互 `sudo -n bash` 执行服务器端发布脚本。
+4. SSH 以部署用户登录，再通过非交互 `sudo -n bash -s` 执行同一 Git SHA 中的 [`deploy/scripts/activate-release.sh`](../../deploy/scripts/activate-release.sh)；workflow 只传递受控参数（release ID、服务器路径、服务名、协作开关），不内嵌部署逻辑。
 5. 压缩包先解到 `/srv/knowmesh-app/releases/.<SHA>.staging`，逐项检查关键文件并校验 `REVISION`，再重命名为 `/srv/knowmesh-app/releases/<SHA>`。
 6. 检查 `/etc/knowmesh.env` 可读、Node.js 可执行，以及 GitHub 与服务器的协作开关一致。
 7. 新 release 中的迁移程序读取 `/etc/knowmesh.env`，对生产 PostgreSQL 执行尚未执行的迁移。
@@ -210,11 +211,22 @@ artifact 内容包括：
 
 Secret 的值在 Actions 页面不可读回；Variable 不是秘密。不要把数据库连接串放到 GitHub：生产迁移和运行时从服务器文件读取它。
 
-### workflow 内固定的服务器参数
+### workflow 中的部署参数分层
 
-deploy job 的 `env` 还固定了部署主机、SSH 端口、部署用户、host fingerprint、Node.js 路径、release 路径、systemd 服务名和健康检查地址。更换服务器、SSH key、Node.js 安装位置或端口时，不能只改服务器，必须同步修改这里。
+deploy job 的服务器参数分为三类，避免散落的硬编码：
 
-host fingerprint 不是密码，它用来确认 GitHub 连接的是预期服务器。服务器重装后 host key 会变化，应该在可信通道重新核对新指纹，再更新 workflow；不能为了让部署通过而关闭 `StrictHostKeyChecking`。
+| 参数 | 分类 | 当前生效值 |
+| --- | --- | --- |
+| `DEPLOY_HOST` / `DEPLOY_PORT` / `DEPLOY_USER` | GitHub Environment variable 覆盖 + 稳定默认值（`PRODUCTION_DEPLOY_HOST` 等） | `20.46.165.183` / `22` / `thisme` |
+| `NODE_BINARY` | 同上（`PRODUCTION_NODE_BINARY`） | `/home/thisme/.nvm/versions/node/v24.19.0/bin/node` |
+| `RELEASE_ROOT` / `CURRENT_LINK` / `ENVIRONMENT_FILE` | 同上（对应 `PRODUCTION_RELEASE_ROOT` 等） | `/srv/knowmesh-app/releases` / `/srv/knowmesh-app/current` / `/etc/knowmesh.env` |
+| `SERVICE_NAME` / `COLLABORATION_SERVICE_NAME` / `COLLABORATION_HEALTH_URL` | 同上（对应 `PRODUCTION_SERVICE_NAME` 等） | `knowmesh.service` / `knowmesh-collaboration.service` / `http://127.0.0.1:1235/ready` |
+| `EXPECTED_HOST_FINGERPRINT` | workflow 内固定 pin，不允许用 Variable 覆盖 | `SHA256:s8fwWfOG9…` |
+| 公开验证 URL 与 Origin | workflow 常量 + 既有 `PRODUCTION_APP_URL`/`PRODUCTION_COLLABORATION_URL` Variables | `https://thisme.icu/` |
+
+Variable 缺省时使用表中的稳定默认值；更换服务器、Node.js 或服务名时优先在 GitHub production environment 配置 Variable，再同步本手册。host fingerprint 是安全控制而非环境配置：服务器重装后必须在可信通道重新核对并在 workflow 中显式修改，绝不能通过 Variable 静默替换或关闭 `StrictHostKeyChecking`。
+
+激活与回滚的服务器端实现在 [`deploy/scripts/activate-release.sh`](../../deploy/scripts/activate-release.sh) 和 [`rollback-release.sh`](../../deploy/scripts/rollback-release.sh)：脚本启用 `set -euo pipefail`，校验 release ID 为 40 位十六进制、所有解析路径和回滚目标都位于 release 根目录内，并保持迁移先于切换、协作先于应用、内部健康检查失败即回滚的既有顺序。公开 HTTPS/WSS 验证仍留在 GitHub runner。两个脚本由 CI 的 `packaging` job 在临时目录中配合 systemctl/curl 桩执行冒烟测试（[`deploy/scripts/activate-release.smoke.sh`](../../deploy/scripts/activate-release.smoke.sh)），测试从不连接真实生产主机。
 
 ### 服务器 `/etc/knowmesh.env`
 
@@ -620,6 +632,9 @@ workflow 不会继续启动新 Next.js，并会回滚。检查协作服务日志
 - [GitHub 项目初始化 action](../../.github/actions/setup-project/action.yml)
 - [生产制品打包入口](../../scripts/package-production-artifact.sh)
 - [打包冒烟测试](../../scripts/package-production-artifact.smoke.sh)
+- [生产激活脚本](../../deploy/scripts/activate-release.sh)
+- [生产回滚脚本](../../deploy/scripts/rollback-release.sh)
+- [激活与回滚冒烟测试](../../deploy/scripts/activate-release.smoke.sh)
 - [生产迁移入口](../../scripts/migrate-production.ts)
 - [协作服务入口](../../scripts/collaboration-server.ts)
 - [协作 systemd unit](../../deploy/systemd/knowmesh-collaboration.service)

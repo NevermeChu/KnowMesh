@@ -125,6 +125,8 @@ require_file "${standalone_dir}/migrations/meta/_journal.json"
 require_file "${standalone_dir}/deploy/systemd/knowmesh-collaboration.service"
 require_file "${standalone_dir}/deploy/nginx/knowmesh-websocket-map.conf"
 require_file "${standalone_dir}/deploy/nginx/knowmesh-collaboration-location.conf"
+require_file "${standalone_dir}/deploy/scripts/activate-release.sh"
+require_file "${standalone_dir}/deploy/scripts/rollback-release.sh"
 
 packaged_revision=$(tr -d '[:space:]' < "${standalone_dir}/REVISION")
 [[ "${packaged_revision}" == "${revision}" ]] || fail "REVISION file does not match the requested revision"

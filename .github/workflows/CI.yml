@@ -157,7 +157,7 @@ jobs:
           retention-days: 7
 
   packaging:
-    name: Verify production packaging scripts
+    name: Verify production packaging and deployment scripts
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -171,6 +171,9 @@ jobs:
 
       - name: Run packaging smoke tests
         run: bash scripts/package-production-artifact.smoke.sh
+
+      - name: Run deployment script smoke tests
+        run: bash deploy/scripts/activate-release.smoke.sh
 
   deploy:
     name: Deploy production
@@ -187,17 +190,17 @@ jobs:
       group: production-deployment
       cancel-in-progress: false
     env:
-      DEPLOY_HOST: 20.46.165.183
-      DEPLOY_PORT: '22'
-      DEPLOY_USER: thisme
+      DEPLOY_HOST: ${{ vars.PRODUCTION_DEPLOY_HOST || '20.46.165.183' }}
+      DEPLOY_PORT: ${{ vars.PRODUCTION_DEPLOY_PORT || '22' }}
+      DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER || 'thisme' }}
       EXPECTED_HOST_FINGERPRINT: SHA256:s8fwWfOG9piXBn7D7gxG98WflWbmvvOeZyDoRUy2o+A
-      NODE_BINARY: /home/thisme/.nvm/versions/node/v24.19.0/bin/node
-      RELEASE_ROOT: /srv/knowmesh-app/releases
-      CURRENT_LINK: /srv/knowmesh-app/current
-      ENVIRONMENT_FILE: /etc/knowmesh.env
-      SERVICE_NAME: knowmesh.service
-      COLLABORATION_SERVICE_NAME: knowmesh-collaboration.service
-      COLLABORATION_HEALTH_URL: http://127.0.0.1:1235/ready
+      NODE_BINARY: ${{ vars.PRODUCTION_NODE_BINARY || '/home/thisme/.nvm/versions/node/v24.19.0/bin/node' }}
+      RELEASE_ROOT: ${{ vars.PRODUCTION_RELEASE_ROOT || '/srv/knowmesh-app/releases' }}
+      CURRENT_LINK: ${{ vars.PRODUCTION_CURRENT_LINK || '/srv/knowmesh-app/current' }}
+      ENVIRONMENT_FILE: ${{ vars.PRODUCTION_ENVIRONMENT_FILE || '/etc/knowmesh.env' }}
+      SERVICE_NAME: ${{ vars.PRODUCTION_SERVICE_NAME || 'knowmesh.service' }}
+      COLLABORATION_SERVICE_NAME: ${{ vars.PRODUCTION_COLLABORATION_SERVICE_NAME || 'knowmesh-collaboration.service' }}
+      COLLABORATION_HEALTH_URL: ${{ vars.PRODUCTION_COLLABORATION_HEALTH_URL || 'http://127.0.0.1:1235/ready' }}
       COLLABORATION_DEPLOY_ENABLED: ${{ vars.PRODUCTION_COLLABORATION_ENABLED || 'false' }}
       PUBLIC_HEALTH_URL: https://thisme.icu/
       PUBLIC_COLLABORATION_URL: ${{ vars.PRODUCTION_COLLABORATION_URL }}
@@ -288,143 +291,8 @@ jobs:
             "${SERVICE_NAME}" \
             "${COLLABORATION_SERVICE_NAME}" \
             "${COLLABORATION_HEALTH_URL}" \
-            "${COLLABORATION_DEPLOY_ENABLED}" <<'REMOTE'
-          set -euo pipefail
-
-          release_id=$1
-          release_root=$2
-          current_link=$3
-          environment_file=$4
-          node_binary=$5
-          service_name=$6
-          collaboration_service_name=$7
-          collaboration_health_url=$8
-          collaboration_deploy_enabled=$9
-
-          if [[ ! "${release_id}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo 'Invalid release ID' >&2
-            exit 1
-          fi
-
-          archive="/tmp/knowmesh-release-${release_id}.tgz"
-          release_dir="${release_root}/${release_id}"
-          staging_dir="${release_root}/.${release_id}.staging"
-          rollback_marker="${release_root}/.previous-${release_id}"
-          temporary_link="${current_link}.next-${release_id}"
-
-          cleanup() {
-            rm -f -- "${archive}" "${temporary_link}"
-            if [[ -d "${staging_dir}" ]]; then
-              rm -rf -- "${staging_dir}"
-            fi
-          }
-          trap cleanup EXIT
-
-          install -d -o thisme -g thisme "${release_root}"
-          test -f "${archive}"
-
-          if [[ ! -d "${release_dir}" ]]; then
-            rm -rf -- "${staging_dir}"
-            install -d -o thisme -g thisme "${staging_dir}"
-            tar -xzf "${archive}" -C "${staging_dir}"
-            test -f "${staging_dir}/server.js"
-            test -f "${staging_dir}/migrate-production.cjs"
-            test -f "${staging_dir}/collaboration-server.cjs"
-            test -d "${staging_dir}/.next/static"
-            test -d "${staging_dir}/public"
-            test -f "${staging_dir}/migrations/meta/_journal.json"
-            test -f "${staging_dir}/deploy/systemd/knowmesh-collaboration.service"
-            test -f "${staging_dir}/deploy/nginx/knowmesh-websocket-map.conf"
-            test -f "${staging_dir}/deploy/nginx/knowmesh-collaboration-location.conf"
-            test "$(cat "${staging_dir}/REVISION")" = "${release_id}"
-            chown -R thisme:thisme "${staging_dir}"
-            mv -- "${staging_dir}" "${release_dir}"
-          fi
-
-          test -f "${release_dir}/server.js"
-          test -f "${release_dir}/migrate-production.cjs"
-          test -f "${release_dir}/collaboration-server.cjs"
-          test -d "${release_dir}/.next/static"
-          test -d "${release_dir}/public"
-          test -f "${release_dir}/migrations/meta/_journal.json"
-          test -f "${release_dir}/deploy/systemd/knowmesh-collaboration.service"
-          test -f "${release_dir}/deploy/nginx/knowmesh-websocket-map.conf"
-          test -f "${release_dir}/deploy/nginx/knowmesh-collaboration-location.conf"
-          test "$(cat "${release_dir}/REVISION")" = "${release_id}"
-          test -r "${environment_file}"
-          test -x "${node_binary}"
-
-          if [[ "${collaboration_deploy_enabled}" != true && "${collaboration_deploy_enabled}" != false ]]; then
-            echo 'Invalid production collaboration deployment flag' >&2
-            exit 1
-          fi
-
-          environment_collaboration_enabled=false
-          if grep -Eq '^[[:space:]]*COLLABORATION_ENABLED[[:space:]]*=[[:space:]]*true[[:space:]]*$' "${environment_file}" || \
-            grep -Eq '^[[:space:]]*COLLABORATION_ENABLED[[:space:]]*=[[:space:]]*"true"[[:space:]]*$' "${environment_file}" || \
-            grep -Eq "^[[:space:]]*COLLABORATION_ENABLED[[:space:]]*=[[:space:]]*'true'[[:space:]]*$" "${environment_file}"; then
-            environment_collaboration_enabled=true
-          fi
-          if [[ "${environment_collaboration_enabled}" != "${collaboration_deploy_enabled}" ]]; then
-            echo 'GitHub and server collaboration flags do not match' >&2
-            exit 1
-          fi
-          if [[ "${collaboration_deploy_enabled}" == true ]]; then
-            systemctl cat "${collaboration_service_name}" >/dev/null
-          fi
-
-          "${node_binary}" "${release_dir}/migrate-production.cjs" "${environment_file}"
-
-          old_release=$(readlink -f "${current_link}")
-          if [[ -z "${old_release}" || ! -d "${old_release}" ]]; then
-            echo 'Current production release is unavailable for rollback' >&2
-            exit 1
-          fi
-          printf '%s\n' "${old_release}" > "${rollback_marker}"
-
-          rm -f -- "${temporary_link}"
-          ln -s "${release_dir}" "${temporary_link}"
-          mv -Tf -- "${temporary_link}" "${current_link}"
-
-          collaboration_healthy=true
-          if [[ "${collaboration_deploy_enabled}" == true ]]; then
-            collaboration_healthy=false
-            if systemctl restart "${collaboration_service_name}"; then
-              for attempt in $(seq 1 30); do
-                if curl --fail --silent --show-error "${collaboration_health_url}" >/dev/null; then
-                  collaboration_healthy=true
-                  break
-                fi
-                sleep 2
-              done
-            fi
-          fi
-
-          application_healthy=false
-          if [[ "${collaboration_healthy}" == true ]] && systemctl restart "${service_name}"; then
-            for attempt in $(seq 1 30); do
-              if curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null; then
-                application_healthy=true
-                break
-              fi
-              sleep 2
-            done
-          fi
-
-          if [[ "${collaboration_healthy}" != true || "${application_healthy}" != true ]]; then
-            rollback_link="${current_link}.rollback-${release_id}"
-            rm -f -- "${rollback_link}"
-            ln -s "${old_release}" "${rollback_link}"
-            mv -Tf -- "${rollback_link}" "${current_link}"
-            if [[ "${collaboration_deploy_enabled}" == true ]]; then
-              systemctl restart "${collaboration_service_name}" || true
-            fi
-            systemctl restart "${service_name}" || true
-            rm -f -- "${rollback_marker}"
-            echo 'Local production health check failed; application and collaboration releases were rolled back' >&2
-            exit 1
-          fi
-          REMOTE
+            "${COLLABORATION_DEPLOY_ENABLED}" \
+            < deploy/scripts/activate-release.sh
 
       - name: Verify public production and finalize
         run: |
@@ -497,36 +365,7 @@ jobs:
             "${CURRENT_LINK}" \
             "${SERVICE_NAME}" \
             "${COLLABORATION_SERVICE_NAME}" \
-            "${COLLABORATION_DEPLOY_ENABLED}" <<'ROLLBACK'
-          set -euo pipefail
-
-          release_id=$1
-          release_root=$2
-          current_link=$3
-          service_name=$4
-          collaboration_service_name=$5
-          collaboration_deploy_enabled=$6
-
-          if [[ ! "${release_id}" =~ ^[0-9a-f]{40}$ ]]; then
-            exit 1
-          fi
-
-          rollback_marker="${release_root}/.previous-${release_id}"
-          old_release=$(cat "${rollback_marker}")
-          if [[ "${old_release}" != "${release_root}/"* || ! -d "${old_release}" ]]; then
-            echo 'Rollback target is invalid' >&2
-            exit 1
-          fi
-
-          rollback_link="${current_link}.rollback-${release_id}"
-          rm -f -- "${rollback_link}"
-          ln -s "${old_release}" "${rollback_link}"
-          mv -Tf -- "${rollback_link}" "${current_link}"
-          if [[ "${collaboration_deploy_enabled}" == true ]]; then
-            systemctl restart "${collaboration_service_name}" || true
-          fi
-          systemctl restart "${service_name}" || true
-          rm -f -- "${rollback_marker}"
-          ROLLBACK
+            "${COLLABORATION_DEPLOY_ENABLED}" \
+            < deploy/scripts/rollback-release.sh
           echo 'Public production health check failed; application and collaboration releases were rolled back' >&2
           exit 1

@@ -17,6 +17,8 @@ required_artifact_paths=(
   deploy/systemd/knowmesh-collaboration.service
   deploy/nginx/knowmesh-websocket-map.conf
   deploy/nginx/knowmesh-collaboration-location.conf
+  deploy/scripts/activate-release.sh
+  deploy/scripts/rollback-release.sh
 )
 
 fail_test() {

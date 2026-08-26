@@ -486,6 +486,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 关联问题：ER-09
 
+状态：已完成（2026-08-26）
+
 ### 目标
 
 让 CI deploy job 和手动 Release workflow 调用同一个版本化制品脚本。
@@ -509,11 +511,21 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 `build: share production artifact packaging`
 
+### 实施结果
+
+- 新增 `scripts/package-production-artifact.sh`：以显式参数接收仓库根、standalone 目录、Next 静态目录、输出归档和 revision；负责 esbuild 迁移与协作 bundle、复制 `public/`、`.next/static/`、`migrations/`、`deploy/`、写入并核对 `REVISION`、删除顶层 `.env*` 并逐项校验完整性，最后产出 tgz 并把归档文件清单打印到日志。脚本不读取任何生产 Secret。
+- 脚本拒绝打包 standalone 目录中已有其他 SHA `REVISION` 的情况，防止 `.next` 构建缓存把不同提交的产物混入同一制品。
+- CI deploy job 与 Release workflow 都只调用该脚本，并上传同一种 `knowmesh-release-<SHA>.tgz` 归档结构；文件清单由单一代码路径生成，两个 workflow 不再各自维护打包步骤。
+- 新增 `scripts/package-production-artifact.smoke.sh`：覆盖缺少必需文件、revision 不匹配、未知参数和缺值失败路径，并断言归档清单与脚本输出一致、`.env` 文件不进入制品。CI 新增 `packaging` job 运行冒烟测试，deploy job 依赖它。
+- 参数校验与防混版守卫已在 WSL Ubuntu 的真实 bash 中实测通过；完整打包路径（含 esbuild）由 CI packaging job 执行验证。
+
 ## WP-12：提取生产激活与回滚脚本
 
 关联问题：ER-09
 
 依赖：WP-11
+
+状态：已完成（2026-08-26）
 
 ### 目标
 
@@ -548,6 +560,15 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 建议提交
 
 `ci: move production activation into versioned scripts`
+
+### 实施结果
+
+- CI deploy job 的两段远程 heredoc 移入 `deploy/scripts/activate-release.sh` 与 `rollback-release.sh`，随制品的 `deploy/` 目录交付；workflow 通过 SSH stdin 管道执行同一 SHA 的脚本并只传递受控位置参数。
+- 两个脚本启用 `set -euo pipefail`，严格解析位置参数；在原有校验之上增加 release ID 40 位十六进制、服务器路径必须为绝对路径、派生路径与回滚目标必须位于 release 根目录内的检查。激活脚本部署用户由可选参数提供并默认 `thisme`，语义不变。
+- 迁移先于切换、协作先于应用重启、内部健康检查失败即自动回滚的顺序逐行保留；公开 HTTPS/WSS 验证仍完全留在 GitHub runner。未修改 systemd、Nginx、sudoers 或任何生产配置，也未连接真实生产主机。
+- host、端口、用户、Node 路径、release 路径和服务名改为 GitHub Environment variable（`PRODUCTION_*`）覆盖加稳定默认值的分层；host fingerprint 保持 workflow 内固定 pin，不允许通过 Variable 静默替换。
+- 新增 `deploy/scripts/activate-release.smoke.sh`：在临时目录用 systemctl/curl/node/sleep 桩执行九条场景——启用协作的成功激活（断言切换、回滚标记、重启顺序 collab→app 与临时文件清理）、禁用协作激活、GitHub 与服务器开关不一致拒绝、迁移失败不切换且不写标记、健康检查失败自动回滚、REVISION 不符的制品被拒于晋升之前、非法 release ID 提前失败、缺参提示用法、回滚脚本恢复旧版本并拒绝越界目标。测试不连接任何真实主机。
+- 制品完整性检查与打包冒烟同步扩展到 `deploy/scripts/` 两个交付脚本；部署手册已更新参数分层表与脚本链接。
 
 ## 全量验证矩阵
 

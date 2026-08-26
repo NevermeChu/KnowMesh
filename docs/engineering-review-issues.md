@@ -20,7 +20,7 @@
 | ER-06 | Better Auth 核心配置存在双重实例 | 已解决 | 共享核心配置构造器，契约测试固定两端一致 | 中低 |
 | ER-07 | CI 缓存整个 `node_modules` 并跳过 `npm ci` | 已解决 | 每个 job 无条件从锁文件重建，只保留 npm 下载缓存 | 中 |
 | ER-08 | 覆盖率没有门槛，高复杂度 UI 缺少行为保护 | 已解决 | 纯领域模块阈值门槛与关键 UI 行为用例就位 | 中低 |
-| ER-09 | 部署实现集中在大型 YAML 且制品逻辑重复 | 已确认 | 难测试、环境耦合、Release 与 CI 漂移 | 中 |
+| ER-09 | 部署实现集中在大型 YAML 且制品逻辑重复 | 已解决 | 制品打包与远程激活收敛为版本化脚本，workflow 只负责编排与传参 | 中 |
 
 ## ER-01：侧栏导航承担过多职责
 
@@ -248,34 +248,26 @@ CI unit job 以覆盖率运行测试并把 `coverage/` 报告（HTML 与 JSON su
 
 ## ER-09：部署实现集中在大型 YAML 且制品逻辑重复
 
+状态：已解决（WP-11、WP-12 已完成）
+
 ### 当前实现
 
-`.github/workflows/CI.yml` 同时实现静态检查、测试、构建、制品打包、SSH 主机校验、上传、生产迁移、软链接切换、systemd 重启、内部健康检查、公开 HTTPS/WSS 验证和失败回滚。
+CI deploy job 和 Release workflow 共同调用版本化入口 `scripts/package-production-artifact.sh` 打包生产制品：脚本以显式参数接收仓库根、standalone、静态目录、输出和 revision，完成 esbuild bundle、静态文件与迁移复制、`REVISION` 写入、`.env*` 删除和逐项完整性校验，并输出同一 tgz 结构；两个 workflow 不再各自维护打包步骤。
 
-`.github/workflows/Release.yml` 又维护一套相似的 standalone 制品打包步骤。生产 host、用户、Node 可执行文件、release 路径和服务名由 CI workflow 直接声明。
-
-### 风险
-
-- Shell 逻辑只能在 Actions 或近似 Linux 环境中整体调试。
-- CI 部署与手动 Release 的制品内容检查可能分叉。
-- Node 安装位置或服务器路径变化需要修改工作流实现。
-- YAML 同时承担流程编排和部署程序职责，审查差异时难以识别真正的行为变化。
+远程激活与回滚实现在随制品交付的 `deploy/scripts/activate-release.sh` 与 `rollback-release.sh`。workflow 通过 SSH stdin 执行同一 Git SHA 的脚本，只传递 release ID、服务器路径、服务名和协作开关等受控位置参数；host、端口、用户、Node 路径、release 路径和服务名使用 GitHub Environment variable（`PRODUCTION_*`）覆盖加稳定默认值的分层，host fingerprint 保持固定 pin。
 
 ### 现有保护
 
-- SSH host fingerprint 被严格验证。
-- 制品包含 Git revision，并检查必要文件。
-- 迁移在切换前执行，失败不会切换应用。
-- 新应用和协作服务健康检查失败时会恢复旧软链接。
-- 文档明确要求生产迁移保持向后兼容，数据库 Schema 不随应用回滚。
+- CI `packaging` job 运行打包冒烟测试（缺少必需文件、revision 不匹配、未知参数、`.env` 排除、归档清单一致性）和部署脚本冒烟测试（九条激活/回滚场景），deploy 依赖该 job。
+- 激活脚本校验 release ID、绝对路径、派生路径与回滚目标位于 release 根目录内；迁移先于切换、协作先于应用、健康检查失败自动回滚的顺序不变。
+- 制品不包含 `.env` 或 Secret；公开 HTTPS/WSS 验证保留在 GitHub runner；SSH host fingerprint 校验保持严格且不可通过 Variable 替换。
+- 部署并发组仍不取消进行中的生产发布；数据库 Schema 仍不随应用回滚。
 
-### 目标状态
+### 后续边界
 
-- 建立一个可在 Linux runner 上独立执行和测试的制品打包脚本。
-- CI 和 Release workflow 调用同一个打包入口。
-- 将远程激活、健康检查和回滚脚本版本化，workflow 只负责传递受控参数和 Secret。
-- 稳定环境值使用 GitHub Environment variables 或服务器配置；Secret 继续只放 Secret 管理。
-- 不在本工作中擅自引入容器、改变 systemd/Nginx 拓扑或执行生产操作。
+- 部署脚本语义变化必须同步冒烟测试和 `operations/deployment.md`。
+- 不引入容器化部署，不改变 systemd/Nginx/sudoers 拓扑；生产操作只经 workflow 执行。
+- 更换服务器或 Node.js 时优先更新 GitHub Environment variable 并同步手册，而不是改写脚本默认值。
 
 ## 跨问题约束
 
