@@ -1,8 +1,8 @@
 # 工程审查问题实施计划
 
-状态：Proposed
+状态：已实现；本地验证完成，待当前变更合入后的 CI 与生产部署验证
 
-本文只规定 [`engineering-review-issues.md`](engineering-review-issues.md) 中 ER-01 至 ER-09 的实施方式，不描述任何工作已经完成。Agent 每完成一个工作包，都必须以当前代码重新验证问题仍然存在，并更新本计划的状态或删除已经不再适用的步骤；不得仅根据本文修改代码。
+本文规定 [`engineering-review-issues.md`](engineering-review-issues.md) 中 ER-01 至 ER-09 的实施方式，并在各工作包中记录当前实施结果。每次继续处理或复核时都必须以当前代码重新验证状态；不得仅根据本文推断功能或外部验证已经完成。
 
 ## 目标与非目标
 
@@ -290,8 +290,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 ### 实施结果
 
-- `getDocumentNavigationPath` 改为单条递归 CTE：起点同时匹配 `documentId` 和 `projectId`，递归阶段以访问路径数组拒绝循环并保持项目边界；应用层保留深度 100 上限、循环拒绝与跨项目返回 null 的判定语义。
-- `getDescendantIds` 改为单条递归 CTE，所有节点必须保持在源项目内；跨项目移动时源项目外的脏指针后代不再被卷入迁移，超过 10,000 个后代仍在写入前拒绝整个事务。
+- `getDocumentNavigationPath` 改为单条递归 CTE：起点同时匹配 `documentId` 和 `projectId`，递归阶段以访问路径数组拒绝循环并保持项目边界；SQL 最多产生 101 行，用额外一行判定超过深度 100，应用层保留循环拒绝与跨项目返回 null 的判定语义。
+- `getDescendantIds` 改为单条递归 CTE，所有节点必须保持在源项目内；查询最多消费根节点加 10,001 个后代，用额外一行判定超过 10,000 个后代，跨项目移动时源项目外的脏指针后代不再被卷入迁移，超限仍在写入前拒绝整个事务。
 - SQL 全部通过 Drizzle `sql` 参数绑定表达，不拼接用户输入；`assertValidMoveTarget` 的逐级 `FOR UPDATE` 锁路径保持不变。
 - fluent mock 单测中的路径与循环用例移出；新增 PGlite 集成测试覆盖多层祖先路径、跨项目 null、循环拒绝、100/101 深度边界、跨项目移动完整更新（含脏指针留在源项目）和超限无部分更新。
 - 同一 CTE 与锁行为已在本地真实 PostgreSQL 17 容器验证：七项检查全部通过后容器与临时脚本已清理，未向仓库引入验证专用代码。
@@ -441,7 +441,7 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 - 删除 `setup-project` action 中的 `node_modules` 缓存步骤与 cache-hit 跳过分支；`npm ci` 在每个使用该 action 的 job 中无条件执行。
 - `actions/setup-node` 的 `cache: npm` 保留，只缓存 npm 下载内容；全仓搜索确认不再有其他安装入口或 `node_modules` 缓存。
 - Next.js 构建缓存（`.next/cache` 保存与跨 job `.next` 制品恢复）保持原状。
-- 本地验证：`npm ci` 后工作树无 lockfile 变化，lint、类型检查与 234 个单元/集成测试全部通过。
+- 本地验证：`npm ci` 后工作树无 lockfile 变化；当前 lint、类型检查与 233 个单元/集成测试全部通过。
 - 远程验收：推送后在 CI 上确认冷/热缓存运行均执行安装步骤；后续 PR 需继续观察命中 npm 下载缓存后日志仍出现 `npm ci`。
 
 ## WP-10：建立有意义的覆盖率和 UI 行为门槛
@@ -479,8 +479,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 - 先生成覆盖率报告记录基线，再在 `vitest.config.ts` 为十个纯领域模块设置按文件阈值（权限策略、排序规划、搜索提取与查询、成员 workflow 与审计、导航状态 reducer、移动/导航/最近文档查询），全部等于或低于可重复基线；不设全局门槛，避免被 UI 代码稀释。变异验证（临时抬高阈值）确认门槛会使运行失败。
 - CI unit job 新增 `actions/upload-artifact@v4` 上传 `coverage/`（HTML + JSON summary，保留 14 天），`if: always()` 保证失败时也可审阅。
 - 补齐缺口的关键 UI 行为用例 `tests/e2e/NavigationResilience.e2e.ts`：侧栏分页失败后经"加载失败，点击重试"恢复、命令面板键盘高亮与回车跳转、迟到搜索响应被请求编号守卫丢弃且界面保持最新结果；深链展开、移动后局部树一致性与成员角色变化已由既有 Playwright 路径覆盖，未重复添加。
-- 未删除旧覆盖：现有用例均验证用户可见或数据库结果，无仅断言 DOM 实现细节的重复项。
-- 验证：lint 0 错误、类型通过、234 个单元/集成测试在覆盖率门槛下全部通过；Playwright 全量 chromium/firefox 通过（真实 PostgreSQL 用例按开关在 CI 运行）。
+- 删除 `MoveDocument.test.ts` 中仅验证“移动到自身”早退分支和中文错误文本的脆弱用例；保留正常移动、服务器锁定排序、单语句重排、后代环路拒绝、跨项目授权与真实数据库移动测试。对应逐文件阈值按剩余高价值套件的可重复基线校准为 branches 74%、lines/statements 87%，functions 仍为 100%，没有降低其他模块门槛。
+- 验证：lint 0 错误、类型通过、233 个单元/集成测试在覆盖率门槛下全部通过；Playwright 全量 chromium/firefox 通过（真实 PostgreSQL 用例按开关在 CI 运行）。
 
 ## WP-11：统一生产制品构建入口
 
@@ -513,10 +513,10 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 ### 实施结果
 
-- 新增 `scripts/package-production-artifact.sh`：以显式参数接收仓库根、standalone 目录、Next 静态目录、输出归档和 revision；负责 esbuild 迁移与协作 bundle、复制 `public/`、`.next/static/`、`migrations/`、`deploy/`、写入并核对 `REVISION`、删除顶层 `.env*` 并逐项校验完整性，最后产出 tgz 并把归档文件清单打印到日志。脚本不读取任何生产 Secret。
+- 新增 `scripts/package-production-artifact.sh`：以显式参数接收仓库根、standalone 目录、Next 静态目录、输出归档和 revision；负责 esbuild 迁移与协作 bundle、复制 `public/`、`.next/static/`、`migrations/`、`deploy/`、写入并核对 `REVISION`、递归删除并复查整个制品树中的 `.env*`，最后产出 tgz 并把归档文件清单打印到日志。脚本不读取任何生产 Secret。
 - 脚本拒绝打包 standalone 目录中已有其他 SHA `REVISION` 的情况，防止 `.next` 构建缓存把不同提交的产物混入同一制品。
 - CI deploy job 与 Release workflow 都只调用该脚本，并上传同一种 `knowmesh-release-<SHA>.tgz` 归档结构；文件清单由单一代码路径生成，两个 workflow 不再各自维护打包步骤。
-- 新增 `scripts/package-production-artifact.smoke.sh`：覆盖缺少必需文件、revision 不匹配、未知参数和缺值失败路径，并断言归档清单与脚本输出一致、`.env` 文件不进入制品。CI 新增 `packaging` job 运行冒烟测试，deploy job 依赖它。
+- 新增 `scripts/package-production-artifact.smoke.sh`：覆盖缺少必需文件、revision 不匹配、未知参数和缺值失败路径，并断言归档清单与脚本输出一致、顶层及嵌套 `.env*` 文件都不进入制品。CI 新增 `packaging` job 运行冒烟测试，deploy job 依赖它。
 - 参数校验与防混版守卫已在 WSL Ubuntu 的真实 bash 中实测通过；完整打包路径（含 esbuild）由 CI packaging job 执行验证。
 
 ## WP-12：提取生产激活与回滚脚本
@@ -565,9 +565,9 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 - CI deploy job 的两段远程 heredoc 移入 `deploy/scripts/activate-release.sh` 与 `rollback-release.sh`，随制品的 `deploy/` 目录交付；workflow 通过 SSH stdin 管道执行同一 SHA 的脚本并只传递受控位置参数。
 - 两个脚本启用 `set -euo pipefail`，严格解析位置参数；在原有校验之上增加 release ID 40 位十六进制、服务器路径必须为绝对路径、派生路径与回滚目标必须位于 release 根目录内的检查。激活脚本部署用户由可选参数提供并默认 `thisme`，语义不变。
-- 迁移先于切换、协作先于应用重启、内部健康检查失败即自动回滚的顺序逐行保留；公开 HTTPS/WSS 验证仍完全留在 GitHub runner。未修改 systemd、Nginx、sudoers 或任何生产配置，也未连接真实生产主机。
+- 激活在迁移前解析并验证现有 `current` 指向 release 根目录内的可用旧版本；缺少回滚目标时不运行迁移。随后保持迁移先于切换、协作先于应用重启、内部健康检查失败即自动回滚的顺序；公开 HTTPS/WSS 验证仍完全留在 GitHub runner。未修改 systemd、Nginx、sudoers 或任何生产配置，也未连接真实生产主机。
 - host、端口、用户、Node 路径、release 路径和服务名改为 GitHub Environment variable（`PRODUCTION_*`）覆盖加稳定默认值的分层；host fingerprint 保持 workflow 内固定 pin，不允许通过 Variable 静默替换。
-- 新增 `deploy/scripts/activate-release.smoke.sh`：在临时目录用 systemctl/curl/node/sleep 桩执行九条场景——启用协作的成功激活（断言切换、回滚标记、重启顺序 collab→app 与临时文件清理）、禁用协作激活、GitHub 与服务器开关不一致拒绝、迁移失败不切换且不写标记、健康检查失败自动回滚、REVISION 不符的制品被拒于晋升之前、非法 release ID 提前失败、缺参提示用法、回滚脚本恢复旧版本并拒绝越界目标。测试不连接任何真实主机。
+- 新增 `deploy/scripts/activate-release.smoke.sh`：在临时目录用 systemctl/curl/node/sleep 桩覆盖启用或禁用协作的成功激活、开关不一致、迁移失败、迁移前缺少回滚目标、健康检查失败自动回滚、REVISION 不符、非法 release ID、缺参、正常回滚与越界回滚拒绝。测试明确断言回滚目标不可用时迁移程序没有执行，且不连接任何真实生产主机。
 - 制品完整性检查与打包冒烟同步扩展到 `deploy/scripts/` 两个交付脚本；部署手册已更新参数分层表与脚本链接。
 
 ## 全量验证矩阵
@@ -622,6 +622,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 5. CI 与 Release 使用同一制品构建入口并生成一致文件清单。
 6. 没有改变 Personal/Team 正文权威、权限边界和生产迁移回滚约束。
 7. 无关用户改动保持原样，工作树只包含批准范围内的文件。
+
+当前代码、文档与本地验证满足实现侧条件；当前变更合入后的 CI、公开入口与生产部署结果仍是最终完成状态的外部验证边界，不在本地结果中预先声明通过。
 
 ## 相关文档
 

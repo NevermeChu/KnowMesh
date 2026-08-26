@@ -156,7 +156,7 @@ Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。CI deploy job
 - 接收显式参数：仓库根目录、standalone 目录、Next 静态目录、输出归档和 Git revision；不读取任何生产 Secret。
 - 用 esbuild 从同一仓库生成自包含的 `migrate-production.cjs` 和 `collaboration-server.cjs`。
 - 把 `public/`、`.next/static/`、`migrations/` 和 `deploy/` 复制进 standalone 目录，并写入 `REVISION`。
-- 打包前删除 standalone 顶层 `.env*`，并在校验阶段确认没有残留环境文件进入制品。
+- 打包前递归删除 standalone 中的 `.env*` 文件，并在整个目录树上复查没有同名文件、链接或目录进入制品。
 - 逐项校验必需文件与目录；若 standalone 目录中已有属于其他 SHA 的 `REVISION`，直接失败，防止 `.next` 缓存把不同提交的产物混进同一制品。
 - 产出 `knowmesh-release-<SHA>.tgz`，并把归档内全部文件清单打印到日志。
 
@@ -187,11 +187,12 @@ artifact 内容包括：
 4. SSH 以部署用户登录，再通过非交互 `sudo -n bash -s` 执行同一 Git SHA 中的 [`deploy/scripts/activate-release.sh`](../../deploy/scripts/activate-release.sh)；workflow 只传递受控参数（release ID、服务器路径、服务名、协作开关），不内嵌部署逻辑。
 5. 压缩包先解到 `/srv/knowmesh-app/releases/.<SHA>.staging`，逐项检查关键文件并校验 `REVISION`，再重命名为 `/srv/knowmesh-app/releases/<SHA>`。
 6. 检查 `/etc/knowmesh.env` 可读、Node.js 可执行，以及 GitHub 与服务器的协作开关一致。
-7. 新 release 中的迁移程序读取 `/etc/knowmesh.env`，对生产 PostgreSQL 执行尚未执行的迁移。
-8. 记录旧 release，用临时链接加 `mv -Tf` 原子切换 `/srv/knowmesh-app/current`。
-9. 先重启 Hocuspocus 并等待 `/ready`，再重启 Next.js 并检查 `http://127.0.0.1:3000/`。
-10. GitHub runner 从公网检查 `https://thisme.icu/`；协作启用时还要求 WSS 路径返回 `101 Switching Protocols`。
-11. 全部成功后删除本次回滚标记；失败则把 `current` 指回旧 release，并重启两个服务。
+7. 解析并验证 `current` 指向 release 根目录内仍然存在的旧版本；没有有效回滚目标时在数据库迁移前停止。
+8. 新 release 中的迁移程序读取 `/etc/knowmesh.env`，对生产 PostgreSQL 执行尚未执行的迁移。
+9. 记录旧 release，用临时链接加 `mv -Tf` 原子切换 `/srv/knowmesh-app/current`。
+10. 先重启 Hocuspocus 并等待 `/ready`，再重启 Next.js 并检查 `http://127.0.0.1:3000/`。
+11. GitHub runner 从公网检查 `https://thisme.icu/`；协作启用时还要求 WSS 路径返回 `101 Switching Protocols`。
+12. 全部成功后删除本次回滚标记；失败则把 `current` 指回旧 release，并重启两个服务。
 
 服务器上没有 Git checkout、`git pull` 或 `npm install`。服务器只运行 GitHub 已构建和验证过的 release，这避免了服务器工作树、依赖安装和未提交文件导致版本不确定。
 
@@ -226,7 +227,7 @@ deploy job 的服务器参数分为三类，避免散落的硬编码：
 
 Variable 缺省时使用表中的稳定默认值；更换服务器、Node.js 或服务名时优先在 GitHub production environment 配置 Variable，再同步本手册。host fingerprint 是安全控制而非环境配置：服务器重装后必须在可信通道重新核对并在 workflow 中显式修改，绝不能通过 Variable 静默替换或关闭 `StrictHostKeyChecking`。
 
-激活与回滚的服务器端实现在 [`deploy/scripts/activate-release.sh`](../../deploy/scripts/activate-release.sh) 和 [`rollback-release.sh`](../../deploy/scripts/rollback-release.sh)：脚本启用 `set -euo pipefail`，校验 release ID 为 40 位十六进制、所有解析路径和回滚目标都位于 release 根目录内，并保持迁移先于切换、协作先于应用、内部健康检查失败即回滚的既有顺序。公开 HTTPS/WSS 验证仍留在 GitHub runner。两个脚本由 CI 的 `packaging` job 在临时目录中配合 systemctl/curl 桩执行冒烟测试（[`deploy/scripts/activate-release.smoke.sh`](../../deploy/scripts/activate-release.smoke.sh)），测试从不连接真实生产主机。
+激活与回滚的服务器端实现在 [`deploy/scripts/activate-release.sh`](../../deploy/scripts/activate-release.sh) 和 [`rollback-release.sh`](../../deploy/scripts/rollback-release.sh)：脚本启用 `set -euo pipefail`，校验 release ID 为 40 位十六进制、所有解析路径和回滚目标都位于 release 根目录内。激活脚本在迁移前验证旧 release 可用于回滚，再保持迁移先于切换、协作先于应用、内部健康检查失败即回滚的既有顺序。公开 HTTPS/WSS 验证仍留在 GitHub runner。两个脚本由 CI 的 `packaging` job 在临时目录中配合 systemctl/curl 桩执行冒烟测试（[`deploy/scripts/activate-release.smoke.sh`](../../deploy/scripts/activate-release.smoke.sh)），测试从不连接真实生产主机。
 
 ### 服务器 `/etc/knowmesh.env`
 

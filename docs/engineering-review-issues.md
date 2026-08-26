@@ -1,10 +1,10 @@
 # 工程审查问题说明
 
-状态：Review baseline
+状态：Current implementation review
 
-基线：`feature/permissions` 分支，提交 `f0826fb5b9729e490dd3ba19b32c054c2747341e`
+基线：`feature/permissions` 当前工作区；提交级 CI 与部署结果必须在交付时重新核验。
 
-本文只描述当前实现中已经确认或部分确认的可维护性、性能和工程化问题，包括证据、触发条件、影响、现有保护与目标状态。本文不承诺任何修复已经实施；实施顺序、文件批次、验证命令和完成条件见 [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)。
+本文描述当前实现中已经确认、解决或保留后续边界的可维护性、性能和工程化问题。实施顺序、文件批次、验证命令和完成条件见 [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)。
 
 ## 结论摘要
 
@@ -129,9 +129,9 @@
 
 ### 当前实现
 
-`getDocumentNavigationPath` 使用单条有界递归 CTE 一次读取根到目标路径：起点同时匹配 `documentId` 与 `projectId`，递归阶段保持项目边界并以访问路径数组拒绝循环；应用层在结果上执行与旧实现相同的深度上限、循环拒绝和跨项目返回 null 判定。数据库往返数不再随路径深度增加。
+`getDocumentNavigationPath` 使用单条有界递归 CTE 一次读取根到目标路径：起点同时匹配 `documentId` 与 `projectId`，递归阶段保持项目边界并以访问路径数组拒绝循环；数据库最多产生 101 行，用额外一行判定超过 100 层。数据库往返数不再随路径深度增加。
 
-`moveDocument` 的跨项目后代集合同样由单条递归 CTE 读取，所有节点必须保持在源项目中；超过 10,000 个后代时整个事务拒绝，不截断后继续写入。
+`moveDocument` 的跨项目后代集合同样由单条递归 CTE 读取，所有节点必须保持在源项目中；查询最多消费根节点加 10,001 个后代，超过 10,000 个后代时整个事务拒绝，不截断后继续写入。
 
 排序间隙不足时的兄弟重排由 `planDocumentSortOrder` 纯计算后以单条 `UPDATE ... FROM (VALUES ...)` 参数化写入应用；空更新跳过 SQL。目标同级集合仍在计算和写入前通过 `FOR UPDATE` 加锁。
 
@@ -252,14 +252,14 @@ CI unit job 以覆盖率运行测试并把 `coverage/` 报告（HTML 与 JSON su
 
 ### 当前实现
 
-CI deploy job 和 Release workflow 共同调用版本化入口 `scripts/package-production-artifact.sh` 打包生产制品：脚本以显式参数接收仓库根、standalone、静态目录、输出和 revision，完成 esbuild bundle、静态文件与迁移复制、`REVISION` 写入、`.env*` 删除和逐项完整性校验，并输出同一 tgz 结构；两个 workflow 不再各自维护打包步骤。
+CI deploy job 和 Release workflow 共同调用版本化入口 `scripts/package-production-artifact.sh` 打包生产制品：脚本以显式参数接收仓库根、standalone、静态目录、输出和 revision，完成 esbuild bundle、静态文件与迁移复制、`REVISION` 写入、整个制品树的 `.env*` 递归删除与复查，并输出同一 tgz 结构；两个 workflow 不再各自维护打包步骤。
 
 远程激活与回滚实现在随制品交付的 `deploy/scripts/activate-release.sh` 与 `rollback-release.sh`。workflow 通过 SSH stdin 执行同一 Git SHA 的脚本，只传递 release ID、服务器路径、服务名和协作开关等受控位置参数；host、端口、用户、Node 路径、release 路径和服务名使用 GitHub Environment variable（`PRODUCTION_*`）覆盖加稳定默认值的分层，host fingerprint 保持固定 pin。
 
 ### 现有保护
 
-- CI `packaging` job 运行打包冒烟测试（缺少必需文件、revision 不匹配、未知参数、`.env` 排除、归档清单一致性）和部署脚本冒烟测试（九条激活/回滚场景），deploy 依赖该 job。
-- 激活脚本校验 release ID、绝对路径、派生路径与回滚目标位于 release 根目录内；迁移先于切换、协作先于应用、健康检查失败自动回滚的顺序不变。
+- CI `packaging` job 运行打包冒烟测试（缺少必需文件、revision 不匹配、未知参数、顶层与嵌套 `.env*` 排除、归档清单一致性）和部署脚本激活/回滚场景，deploy 依赖该 job。
+- 激活脚本校验 release ID、绝对路径、派生路径与回滚目标位于 release 根目录内；旧 release 在数据库迁移前完成验证，没有回滚目标时迁移不会执行。迁移先于切换、协作先于应用、健康检查失败自动回滚的顺序不变。
 - 制品不包含 `.env` 或 Secret；公开 HTTPS/WSS 验证保留在 GitHub runner；SSH host fingerprint 校验保持严格且不可通过 Variable 替换。
 - 部署并发组仍不取消进行中的生产发布；数据库 Schema 仍不随应用回滚。
 

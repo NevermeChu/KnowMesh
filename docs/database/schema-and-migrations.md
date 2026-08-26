@@ -84,6 +84,7 @@
 - `created_by_id` 通常保存创建者的 Better Auth user ID，不建立本地用户外键；账户删除但 Document 保留在其他人 Project 中时改为 `deleted_user`。
 - `(project_id, updated_at)` 索引支持读取项目文档并按更新时间排序。
 - `(project_id, parent_id, sort_order, id)` 索引支持直接子节点按稳定游标分页；`id` 在相同 `sort_order` 时提供确定顺序。
+- 祖先路径递归最多让数据库返回 101 行，用第 101 行判定超过 100 层；跨项目移动的后代查询最多返回根节点加 10,001 个后代，用额外一行判定超过 10,000 个后代。两个查询都在 SQL 侧停止继续消费结果，应用在任何写入前拒绝超限层级或子树。
 - `documents_search_text_trgm_idx` 与 `documents_title_trgm_idx` 分别为 `search_text` 和 `title` 建立基于 `pg_trgm` 扩展的 GIN 三元组倒排索引，支持全文模糊检索直接命中索引。
 
 ### `document_collaboration_states`
