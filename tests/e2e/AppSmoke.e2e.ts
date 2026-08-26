@@ -296,6 +296,95 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
+  test('moves a document through sidebar drag targets', async ({ baseURL, browser }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${childDocumentId}`);
+    const personalNavigation = page.getByRole('navigation', {
+      exact: true,
+      name: '个人区域',
+    });
+    const childItem = personalNavigation
+      .getByRole('link', { exact: true, name: childDocumentTitle })
+      .locator('..');
+    const projectItem = personalNavigation
+      .getByRole('link', { exact: true, name: 'Smoke Project' })
+      .locator('..');
+    const parentItem = personalNavigation
+      .getByRole('link', { exact: true, name: seededTitle })
+      .locator('..');
+
+    await childItem.dragTo(projectItem);
+    await expect(childItem).toHaveCSS('padding-left', '6px');
+
+    await childItem.dragTo(parentItem);
+    await expect(childItem).toHaveCSS('padding-left', '18px');
+
+    await close();
+  });
+
+  test('opens document creation and move dialogs from sidebar menus', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${childDocumentId}`);
+    const personalNavigation = page.getByRole('navigation', {
+      exact: true,
+      name: '个人区域',
+    });
+    const childLink = personalNavigation.getByRole('link', {
+      exact: true,
+      name: childDocumentTitle,
+    });
+    const projectLink = personalNavigation.getByRole('link', {
+      exact: true,
+      name: 'Smoke Project',
+    });
+
+    await childLink.click({ button: 'right' });
+    await page
+      .locator('#navigation-context-menu')
+      .getByRole('button', {
+        exact: true,
+        name: '新建子文件',
+      })
+      .click();
+    await expect(page.getByRole('heading', { exact: true, name: '新建子文件' })).toBeVisible();
+    await page.getByRole('button', { exact: true, name: '取消' }).click();
+
+    await childLink.click({ button: 'right' });
+    await page
+      .locator('#navigation-context-menu')
+      .getByRole('button', {
+        exact: true,
+        name: '移动文件',
+      })
+      .click();
+    await expect(page.getByRole('heading', { exact: true, name: '移动文件' })).toBeVisible();
+    await page.getByRole('button', { exact: true, name: '取消' }).click();
+
+    await projectLink.click({ button: 'right' });
+    await page
+      .locator('#navigation-context-menu')
+      .getByRole('button', {
+        exact: true,
+        name: '新建文件',
+      })
+      .click();
+    await expect(page.getByRole('heading', { exact: true, name: '新建文件' })).toBeVisible();
+    await page.getByRole('button', { exact: true, name: '取消' }).click();
+
+    await close();
+  });
+
   test('renders authenticated destination pages', async ({ baseURL, browser }) => {
     if (!baseURL) {
       throw new Error('Playwright base URL is unavailable');

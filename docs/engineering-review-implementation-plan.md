@@ -119,6 +119,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 依赖：WP-01
 
+状态：已完成（2026-08-26）
+
 ### 目标
 
 让递归树渲染、拖拽语义和对话框分别拥有单一变化原因。
@@ -150,6 +152,14 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 建议提交
 
 `refactor: separate sidebar tree drag and dialog boundaries`
+
+### 实施结果
+
+- `SidebarDocumentTree.tsx` 独立承担区域、项目和递归文档树渲染，保持原有 ARIA 标签和键盘按钮结构。
+- `useDocumentNavigationDragAndDrop.ts` 把浏览器事件转换为移动意图，纯函数覆盖 `before | inside | after` 阈值及循环输入。
+- `SidebarNavigationDialogs.tsx` 统一管理上下文菜单、根/子文档创建和移动弹窗状态。
+- 移动成功后只刷新源节点和不同的目标节点；失败时没有 optimistic 树修改需要回滚。
+- Playwright 覆盖从父文档拖到项目根再拖回父文档的真实路径，并恢复测试种子结构。
 
 ## WP-03：抽取成员流程的窄领域 helper
 
