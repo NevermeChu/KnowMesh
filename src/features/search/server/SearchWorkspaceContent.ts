@@ -84,52 +84,62 @@ export async function searchWorkspaceContent(
     END
   `;
 
-  const [countResult, rows] = await Promise.all([
-    db
-      .select({
-        count: sql<number>`count(*)::int`,
-      })
-      .from(documentsSchema)
-      .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
-      .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
-      .innerJoin(
-        projectMembersSchema,
-        and(
-          eq(projectMembersSchema.projectId, projectsSchema.id),
-          eq(projectMembersSchema.userId, userId),
-        ),
-      )
-      .where(and(...whereConditions)),
-    db
-      .select({
-        documentId: documentsSchema.id,
-        projectId: projectsSchema.id,
-        projectName: projectsSchema.name,
-        searchText: documentsSchema.searchText,
-        title: documentsSchema.title,
-        updatedAt: documentsSchema.updatedAt,
-        workspaceId: workspacesSchema.id,
-        workspaceKind: workspacesSchema.kind,
-        workspaceName: workspacesSchema.name,
-      })
-      .from(documentsSchema)
-      .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
-      .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
-      .innerJoin(
-        projectMembersSchema,
-        and(
-          eq(projectMembersSchema.projectId, projectsSchema.id),
-          eq(projectMembersSchema.userId, userId),
-        ),
-      )
-      .where(and(...whereConditions))
-      .orderBy(desc(scoreSql), desc(documentsSchema.updatedAt))
-      .limit(pageSize)
-      .offset(offset),
-  ]);
+  const [countRow] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+    })
+    .from(documentsSchema)
+    .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
+    .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
+    .innerJoin(
+      projectMembersSchema,
+      and(
+        eq(projectMembersSchema.projectId, projectsSchema.id),
+        eq(projectMembersSchema.userId, userId),
+      ),
+    )
+    .where(and(...whereConditions));
 
-  const totalCount = countResult[0]?.count ?? 0;
+  const totalCount = countRow?.count ?? 0;
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  if (totalCount === 0 || offset >= totalCount) {
+    return {
+      hasMore: false,
+      items: [],
+      page,
+      pageSize,
+      totalCount,
+      totalPages,
+    };
+  }
+
+  const rows = await db
+    .select({
+      documentId: documentsSchema.id,
+      projectId: projectsSchema.id,
+      projectName: projectsSchema.name,
+      searchText: documentsSchema.searchText,
+      title: documentsSchema.title,
+      updatedAt: documentsSchema.updatedAt,
+      workspaceId: workspacesSchema.id,
+      workspaceKind: workspacesSchema.kind,
+      workspaceName: workspacesSchema.name,
+    })
+    .from(documentsSchema)
+    .innerJoin(projectsSchema, eq(projectsSchema.id, documentsSchema.projectId))
+    .innerJoin(workspacesSchema, eq(workspacesSchema.id, projectsSchema.workspaceId))
+    .innerJoin(
+      projectMembersSchema,
+      and(
+        eq(projectMembersSchema.projectId, projectsSchema.id),
+        eq(projectMembersSchema.userId, userId),
+      ),
+    )
+    .where(and(...whereConditions))
+    .orderBy(desc(scoreSql), desc(documentsSchema.updatedAt), desc(documentsSchema.id))
+    .limit(pageSize)
+    .offset(offset);
 
   const items = rows.map((row) => ({
     documentId: row.documentId,
