@@ -9,7 +9,8 @@ import { requireUser } from '@/features/auth/server/CurrentUser';
 import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorkspaceInvitationEmail';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { markRelatedNotificationsRead } from '@/features/notifications/server/MarkRelatedNotificationsRead';
-import { MEMBER_INVITATION_LIFETIME_MS } from '@/features/permissions/MemberInvitation';
+import { getMemberInvitationExpiration } from '@/features/permissions/MemberWorkflow';
+import { recordMemberAuditLog } from '@/features/permissions/server/RecordMemberAuditLog';
 import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
 import {
   formatWorkspaceInvitationExpiration,
@@ -164,7 +165,7 @@ export async function inviteWorkspaceMember(input: InviteWorkspaceMemberInput) {
 
   const token = randomBytes(32).toString('base64url');
   const tokenHash = hashWorkspaceInvitationToken(token);
-  const expiresAt = new Date(Date.now() + MEMBER_INVITATION_LIFETIME_MS);
+  const expiresAt = getMemberInvitationExpiration();
   const invitation = await db.transaction(async (transaction) => {
     const [createdInvitation] = await transaction
       .insert(workspaceInvitationsSchema)
@@ -319,14 +320,11 @@ async function acceptWorkspaceInvitationByCondition(options: {
       title: '工作区邀请已接受',
       type: 'workspace_invitation_accepted',
     });
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'workspace_invitation_accepted',
       actorUserId: options.user.id,
-      metadata: {
-        resourceName: workspace.name,
-      },
-      targetId: options.user.id,
-      targetKind: 'member',
+      metadata: { resourceName: workspace.name },
+      targetUserId: options.user.id,
       workspaceId: invitation.workspaceId,
     });
     await markRelatedNotificationsRead(transaction, {
@@ -524,7 +522,7 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
       });
     }
 
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'workspace_member_role_updated',
       actorUserId: userId,
       metadata: {
@@ -532,8 +530,7 @@ export async function updateWorkspaceMemberRole(input: WorkspaceMemberMutationIn
         resourceName: authorization.workspace.name,
         targetUserId: memberInput.memberUserId,
       },
-      targetId: memberInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: memberInput.memberUserId,
       workspaceId: memberInput.workspaceId,
     });
 
@@ -626,7 +623,7 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
       title: '工作区权限申请已通过',
       type: 'workspace_access_approved',
     });
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'workspace_access_approved',
       actorUserId: userId,
       metadata: {
@@ -634,8 +631,7 @@ export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReview
         resourceName: authorization.workspace.name,
         targetUserId: reviewInput.memberUserId,
       },
-      targetId: reviewInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: reviewInput.memberUserId,
       workspaceId: reviewInput.workspaceId,
     });
     await markRelatedNotificationsRead(transaction, {
@@ -685,15 +681,14 @@ export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewI
       title: '工作区权限申请未通过',
       type: 'workspace_access_rejected',
     });
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'workspace_access_rejected',
       actorUserId: userId,
       metadata: {
         resourceName: authorization.workspace.name,
         targetUserId: reviewInput.memberUserId,
       },
-      targetId: reviewInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: reviewInput.memberUserId,
       workspaceId: reviewInput.workspaceId,
     });
     await markRelatedNotificationsRead(transaction, {
@@ -830,15 +825,14 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
       });
     }
 
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'workspace_member_removed',
       actorUserId: userId,
       metadata: {
         resourceName: authorization.workspace.name,
         targetUserId: memberInput.memberUserId,
       },
-      targetId: memberInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: memberInput.memberUserId,
       workspaceId: memberInput.workspaceId,
     });
   });
@@ -959,15 +953,14 @@ export async function transferWorkspaceOwnership(input: TransferWorkspaceOwnersh
       type: 'workspace_member_role_updated',
     });
 
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'workspace_ownership_transferred',
       actorUserId: userId,
       metadata: {
         resourceName: authorization.workspace.name,
         targetUserId: transferInput.targetUserId,
       },
-      targetId: transferInput.targetUserId,
-      targetKind: 'member',
+      targetUserId: transferInput.targetUserId,
       workspaceId: transferInput.workspaceId,
     });
   });

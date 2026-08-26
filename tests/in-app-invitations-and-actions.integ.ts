@@ -224,6 +224,56 @@ describe('in-app invitations and direct actions', () => {
     expect(memberResult.rows).toEqual([{ role: 'viewer' }]);
   });
 
+  it('rejects expired and revoked workspace invitations', async () => {
+    currentUser = {
+      email: 'other@knowmesh.test',
+      id: 'user_other',
+      name: 'Other User',
+    };
+    const expiredWorkspaceId = '10000000-0000-4000-8000-000000000202';
+    const revokedWorkspaceId = '10000000-0000-4000-8000-000000000204';
+
+    await database.query(`
+      INSERT INTO workspace_invitations (
+        id, workspace_id, email, token_hash, invited_by_id, expires_at, revoked_at
+      )
+      VALUES
+        (
+          '40000000-0000-4000-8000-000000000205',
+          '${expiredWorkspaceId}',
+          'other@knowmesh.test',
+          'expired-hash',
+          'user_owner',
+          NOW() - INTERVAL '1 second',
+          NULL
+        ),
+        (
+          '40000000-0000-4000-8000-000000000206',
+          '${revokedWorkspaceId}',
+          'other@knowmesh.test',
+          'revoked-hash',
+          'user_owner',
+          NOW() + INTERVAL '7 days',
+          NOW()
+        )
+    `);
+
+    await expect(
+      acceptWorkspaceInvitationInApp({ workspaceId: expiredWorkspaceId }),
+    ).rejects.toThrow('邀请无效、已过期或已被处理');
+    await expect(
+      acceptWorkspaceInvitationInApp({ workspaceId: revokedWorkspaceId }),
+    ).rejects.toThrow('邀请无效、已过期或已被处理');
+
+    const membershipResult = await database.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM workspace_members
+      WHERE user_id = 'user_other'
+        AND workspace_id IN ('${expiredWorkspaceId}', '${revokedWorkspaceId}')
+    `);
+    expect(membershipResult.rows[0]?.count).toBe('0');
+  });
+
   it('declines workspace invitation in-app and auto-marks notification as read', async () => {
     currentUser = {
       email: 'invitee@knowmesh.test',
@@ -446,6 +496,39 @@ describe('in-app invitations and direct actions', () => {
     );
     expect(notifResult1.rows[0]?.read_at).not.toBeNull();
     expect(notifResult2.rows[0]?.read_at).not.toBeNull();
+  });
+
+  it('keeps one winner for concurrent project invitation acceptance', async () => {
+    currentUser = {
+      email: 'other@knowmesh.test',
+      id: 'user_other',
+      name: 'Other User',
+    };
+    const projectId = '20000000-0000-4000-8000-000000000202';
+
+    await database.query(`
+      INSERT INTO workspace_members (workspace_id, user_id, role)
+      VALUES ('10000000-0000-4000-8000-000000000201', 'user_other', 'viewer')
+      ON CONFLICT DO NOTHING
+    `);
+    await database.query(`
+      INSERT INTO project_invitations (project_id, user_id, invited_by_id, expires_at)
+      VALUES ('${projectId}', 'user_other', 'user_owner', NOW() + INTERVAL '7 days')
+    `);
+
+    const results = await Promise.allSettled([
+      acceptProjectInvitation({ projectId }),
+      acceptProjectInvitation({ projectId }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const membershipResult = await database.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM project_members
+      WHERE project_id = '${projectId}' AND user_id = 'user_other'
+    `);
+    expect(membershipResult.rows[0]?.count).toBe('1');
   });
 
   it('approves and rejects project access requests and marks notifications as read', async () => {

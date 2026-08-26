@@ -6,7 +6,11 @@ import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { markRelatedNotificationsRead } from '@/features/notifications/server/MarkRelatedNotificationsRead';
-import { MEMBER_INVITATION_LIFETIME_MS } from '@/features/permissions/MemberInvitation';
+import {
+  getMemberInvitationExpiration,
+  isMemberInvitationExpired,
+} from '@/features/permissions/MemberWorkflow';
+import { recordMemberAuditLog } from '@/features/permissions/server/RecordMemberAuditLog';
 import { db } from '@/libs/DB';
 import {
   projectAccessRequestsSchema,
@@ -92,7 +96,7 @@ export async function inviteProjectMember(input: ProjectInvitationInput) {
     const [invitation] = await transaction
       .insert(projectInvitationsSchema)
       .values({
-        expiresAt: new Date(Date.now() + MEMBER_INVITATION_LIFETIME_MS),
+        expiresAt: getMemberInvitationExpiration(),
         invitedById: userId,
         projectId: memberInput.projectId,
         userId: memberInput.memberUserId,
@@ -174,7 +178,7 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
       throw new Error('项目邀请不存在');
     }
 
-    if (invitation.expiresAt <= new Date()) {
+    if (isMemberInvitationExpired(invitation.expiresAt)) {
       throw new Error('项目邀请已过期');
     }
 
@@ -203,14 +207,11 @@ export async function acceptProjectInvitation(input: { projectId: string }) {
       title: '项目邀请已接受',
       type: 'project_invitation_accepted',
     });
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'project_invitation_accepted',
       actorUserId: userId,
-      metadata: {
-        resourceName: project.name,
-      },
-      targetId: userId,
-      targetKind: 'member',
+      metadata: { resourceName: project.name },
+      targetUserId: userId,
       workspaceId: project.workspaceId,
     });
     await markRelatedNotificationsRead(transaction, {
@@ -347,7 +348,7 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
       title: '项目权限申请已通过',
       type: 'project_access_approved',
     });
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'project_access_approved',
       actorUserId: userId,
       metadata: {
@@ -355,8 +356,7 @@ export async function approveProjectAccessRequest(input: ProjectAccessReviewInpu
         resourceName: project.name,
         targetUserId: reviewInput.memberUserId,
       },
-      targetId: reviewInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: reviewInput.memberUserId,
       workspaceId: project.workspaceId,
     });
     await markRelatedNotificationsRead(transaction, {
@@ -411,15 +411,14 @@ export async function rejectProjectAccessRequest(input: ProjectAccessReviewInput
       title: '项目权限申请未通过',
       type: 'project_access_rejected',
     });
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'project_access_rejected',
       actorUserId: userId,
       metadata: {
         resourceName: project.name,
         targetUserId: reviewInput.memberUserId,
       },
-      targetId: reviewInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: reviewInput.memberUserId,
       workspaceId: project.workspaceId,
     });
     await markRelatedNotificationsRead(transaction, {
@@ -488,7 +487,7 @@ export async function updateProjectMemberRole(input: ProjectMemberMutationInput)
       });
     }
 
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'project_member_role_updated',
       actorUserId: userId,
       metadata: {
@@ -496,8 +495,7 @@ export async function updateProjectMemberRole(input: ProjectMemberMutationInput)
         resourceName: authorization.project.name,
         targetUserId: memberInput.memberUserId,
       },
-      targetId: memberInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: memberInput.memberUserId,
       workspaceId: authorization.project.workspaceId,
     });
 
@@ -566,15 +564,14 @@ export async function removeProjectMember(input: ProjectMemberMutationInput) {
       });
     }
 
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'project_member_removed',
       actorUserId: userId,
       metadata: {
         resourceName: authorization.project.name,
         targetUserId: memberInput.memberUserId,
       },
-      targetId: memberInput.memberUserId,
-      targetKind: 'member',
+      targetUserId: memberInput.memberUserId,
       workspaceId: authorization.project.workspaceId,
     });
 
@@ -737,15 +734,14 @@ export async function transferProjectOwnership(input: TransferProjectOwnershipIn
       type: 'project_member_role_updated',
     });
 
-    await recordAuditLog(transaction, {
+    await recordMemberAuditLog(transaction, {
       action: 'project_ownership_transferred',
       actorUserId: userId,
       metadata: {
         resourceName: authorization.project.name,
         targetUserId: transferInput.targetUserId,
       },
-      targetId: transferInput.targetUserId,
-      targetKind: 'member',
+      targetUserId: transferInput.targetUserId,
       workspaceId: authorization.project.workspaceId,
     });
   });

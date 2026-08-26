@@ -165,6 +165,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 关联问题：ER-02
 
+状态：已完成（2026-08-26）
+
 ### 目标
 
 消除真正同义的重复步骤，同时保持 Workspace 与 Project 的事务和授权边界独立。
@@ -198,6 +200,14 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 建议提交
 
 `refactor: share invitation notification and audit steps`
+
+### 实施结果
+
+- `MemberWorkflow.ts` 统一邀请到期时间、边界判断和成员审计上下文；`RecordMemberAuditLog.ts` 接收当前事务并写入审计，两者都不拥有事务或资源授权。
+- Workspace/Project 的邀请接受、访问审批、角色变更、成员移除和所有权转移使用同一审计 target 构造。
+- `markRelatedNotificationsRead` 已经是双方共用的事务内 helper，因此没有增加无价值包装。
+- 冲突安全插入在不同入口具有不同结果语义，保留在资源流程中；Workspace/Project 授权、锁和级联处理未抽象。
+- 真实数据库测试补充过期、撤销及并发接受场景，并继续覆盖通知已读与 owner 不变量。
 
 ## WP-04：稳定搜索分页并下推摘要生成
 
