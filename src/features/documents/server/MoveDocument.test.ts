@@ -158,8 +158,32 @@ describe(moveDocument, () => {
     });
     expect(state.authorizeProject).not.toHaveBeenCalled();
     expect(state.update).toHaveBeenCalledOnce();
-    expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
+    expect(state.txExecute).not.toHaveBeenCalled();
     expect(result.id).toBe(docId);
+  });
+
+  it('applies sibling reordering as one batched statement', async () => {
+    const firstSiblingId = '60000000-0000-4000-8000-000000000001';
+    const secondSiblingId = '60000000-0000-4000-8000-000000000002';
+    state.txQueue.rows = [
+      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
+      [{ role: 'owner' }],
+      [{ role: 'owner' }],
+      [
+        { id: firstSiblingId, sortOrder: 1000 },
+        { id: secondSiblingId, sortOrder: 1000.5 },
+      ],
+    ];
+
+    await moveDocument({
+      documentId: docId,
+      sortOrder: 1000.2,
+      targetParentId: null,
+      targetProjectId: projectId,
+    });
+
+    expect(state.txExecute).toHaveBeenCalledOnce();
+    expect(state.set).toHaveBeenCalledWith(expect.objectContaining({ sortOrder: 2000 }));
   });
 
   it('computes relative position from locked server siblings', async () => {

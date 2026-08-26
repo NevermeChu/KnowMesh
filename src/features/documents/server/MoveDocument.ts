@@ -220,11 +220,19 @@ export async function moveDocument(input: MoveDocumentInput) {
       siblings,
     });
 
-    for (const sibling of sortOrderPlan.updates) {
-      await transaction
-        .update(documentsSchema)
-        .set({ sortOrder: sibling.sortOrder })
-        .where(eq(documentsSchema.id, sibling.id));
+    if (sortOrderPlan.updates.length > 0) {
+      const rebalanceValues = sql.join(
+        sortOrderPlan.updates.map(
+          (sibling) => sql`(${sibling.id}::uuid, ${sibling.sortOrder}::double precision)`,
+        ),
+        sql`, `,
+      );
+      await transaction.execute(sql`
+        update documents
+        set sort_order = reorder.sort_order
+        from (values ${rebalanceValues}) as reorder(id, sort_order)
+        where documents.id = reorder.id
+      `);
     }
 
     if (isCrossProjectMove) {

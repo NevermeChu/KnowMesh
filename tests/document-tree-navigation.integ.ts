@@ -18,6 +18,7 @@ const deepProjectId = '20000000-0000-4000-8000-00000000a002';
 const sourceProjectId = '20000000-0000-4000-8000-00000000a003';
 const targetProjectId = '20000000-0000-4000-8000-00000000a004';
 const bigProjectId = '20000000-0000-4000-8000-00000000a005';
+const reorderProjectId = '20000000-0000-4000-8000-00000000a006';
 
 const navRootId = '3a000000-0000-4000-8000-00000000a001';
 const navMidId = '3a000000-0000-4000-8000-00000000a002';
@@ -37,6 +38,16 @@ const untouchedSiblingId = '3b000000-0000-4000-8000-00000000a009';
 const oversizedMoverId = '3c000000-0000-4000-8000-00000000a001';
 
 const crossLinkedOutsiderId = '3a000000-0000-4000-8000-00000000c001';
+
+const reorderParentId = '3d000000-0000-4000-8000-000000000001';
+const reorderChildIds = [
+  '3d000000-0000-4000-8000-000000000002',
+  '3d000000-0000-4000-8000-000000000003',
+  '3d000000-0000-4000-8000-000000000004',
+  '3d000000-0000-4000-8000-000000000005',
+  '3d000000-0000-4000-8000-000000000006',
+];
+const reorderMoverId = '3d000000-0000-4000-8000-000000000007';
 
 const formatDeepChainId = (index: number) =>
   `d0000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
@@ -67,7 +78,8 @@ beforeAll(async () => {
         ('${deepProjectId}', '${workspaceId}', 'Deep Project', '${userId}'),
         ('${sourceProjectId}', '${workspaceId}', 'Source Project', '${userId}'),
         ('${targetProjectId}', '${workspaceId}', 'Target Project', '${userId}'),
-        ('${bigProjectId}', '${workspaceId}', 'Big Project', '${userId}')
+        ('${bigProjectId}', '${workspaceId}', 'Big Project', '${userId}'),
+        ('${reorderProjectId}', '${workspaceId}', 'Reorder Project', '${userId}')
     `);
     await transaction.query(`
       INSERT INTO project_members (project_id, workspace_id, user_id, role)
@@ -100,6 +112,19 @@ beforeAll(async () => {
           9500,
           '${userId}'
         );
+    `);
+
+    await transaction.query(`
+      INSERT INTO documents (id, project_id, parent_id, title, sort_order, created_by_id)
+      VALUES
+        ('${reorderParentId}', '${reorderProjectId}', NULL, '重排父节点', 1000, '${userId}'),
+        ${reorderChildIds
+          .map(
+            (childId) =>
+              `('${childId}', '${reorderProjectId}', '${reorderParentId}', '碰撞同级', 1000, '${userId}')`,
+          )
+          .join(',\n        ')},
+        ('${reorderMoverId}', '${reorderProjectId}', NULL, '重排移动者', 9000, '${userId}')
     `);
 
     await transaction.query(`
@@ -264,5 +289,32 @@ describe('cross-project document moves', () => {
     `);
     expect(counts.rows[0]?.big_count).toBe(10_002);
     expect(counts.rows[0]?.moved_count).toBe(0);
+  });
+});
+
+describe('sibling reordering moves', () => {
+  it('renumbers colliding siblings into a unique stable order through one move', async () => {
+    currentUserId = userId;
+
+    const moved = await moveDocument({
+      documentId: reorderMoverId,
+      sortOrder: 1000,
+      targetParentId: reorderParentId,
+      targetProjectId: reorderProjectId,
+    });
+    expect(moved.sortOrder).toBe(1000);
+
+    const rows = await database.query<{ id: string; sort_order: number }>(`
+      SELECT id, sort_order
+      FROM documents
+      WHERE parent_id = '${reorderParentId}'
+      ORDER BY sort_order, id;
+    `);
+    expect(rows.rows.map((row) => row.sort_order)).toStrictEqual([
+      1000, 2000, 3000, 4000, 5000, 6000,
+    ]);
+    expect(rows.rows[0]?.id).toBe(reorderMoverId);
+    const siblingIds = rows.rows.map((row) => row.id).filter((id) => id !== reorderMoverId);
+    expect([...siblingIds].toSorted()).toStrictEqual(reorderChildIds.toSorted());
   });
 });
