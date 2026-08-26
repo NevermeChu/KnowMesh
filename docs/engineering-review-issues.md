@@ -1,0 +1,347 @@
+# 工程审查问题说明
+
+状态：Review baseline
+
+基线：`feature/permissions` 分支，提交 `f0826fb5b9729e490dd3ba19b32c054c2747341e`
+
+本文只描述当前实现中已经确认或部分确认的可维护性、性能和工程化问题，包括证据、触发条件、影响、现有保护与目标状态。本文不承诺任何修复已经实施；实施顺序、文件批次、验证命令和完成条件见 [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)。
+
+## 结论摘要
+
+当前实现没有因为以下问题而失去基本正确性：权限写入仍在事务内复核，文档树写入具有项目锁和循环检查，搜索正文仍受 Project 直接成员关系约束，Team 正文仍以 Yjs 状态为权威。问题主要表现为变化原因集中、查询成本随数据规模上升、缓存失效过宽，以及工程反馈不能阻止质量缓慢退化。
+
+| 编号 | 问题 | 状态 | 主要风险 | 优先级 |
+| --- | --- | --- | --- | --- |
+| ER-01 | 侧栏导航承担过多职责 | 部分解决 | 拖拽、递归渲染和弹窗仍共享变更边界 | 中 |
+| ER-02 | Workspace 与 Project 成员流程重复 | 已确认 | 事务语义和通知/审计规则分叉 | 中 |
+| ER-03 | 搜索分页缺少唯一稳定排序且搬运完整正文投影 | 已确认 | 重复/遗漏结果、数据库到应用数据量过大 | 中 |
+| ER-04 | 文档树读取和重排产生深度或节点数相关往返 | 已确认 | 深层树和大同级集合下延迟放大 | 中 |
+| ER-05 | 工作区布局缓存失效范围过大 | 已确认 | 不必要的服务端读取、序列化和客户端刷新 | 中低 |
+| ER-06 | Better Auth 核心配置存在双重实例 | 已确认 | Session 配置未来漂移 | 中低 |
+| ER-07 | CI 缓存整个 `node_modules` 并跳过 `npm ci` | 已确认 | 依赖安装不可重复、缓存损坏难诊断 | 中 |
+| ER-08 | 覆盖率没有门槛，高复杂度 UI 缺少行为保护 | 部分确认 | 回归不能在 CI 中稳定暴露 | 中低 |
+| ER-09 | 部署实现集中在大型 YAML 且制品逻辑重复 | 已确认 | 难测试、环境耦合、Release 与 CI 漂移 | 中 |
+
+## ER-01：侧栏导航承担过多职责
+
+状态：部分解决（WP-01 已完成，WP-02 待实施）
+
+### 当前实现
+
+分页和深链状态已经从 `SidebarWorkspaceNavigation.tsx` 抽出：
+
+- `SidebarDocumentNavigationState.ts` 包含纯树构建、分页合并、节点失效、项目清理和请求版本跟踪；
+- `useSidebarDocumentNavigation.ts` 管理导航读取、深链路径注入、请求去重、迟到响应保护和展开状态；
+- 共置单元测试不依赖 React、router 或 Server Action mock 链。
+
+`SidebarWorkspaceNavigation.tsx` 仍同时包含以下职责：
+
+- `DocumentTreeItem` 和 `WorkspaceSectionNavigation` 递归渲染；
+- 文档拖拽目标计算和 `moveDocument` 调用；
+- 创建根文档、创建子文档、移动弹窗和上下文菜单；
+- 服务端操作后的局部状态更新、`router.refresh()` 与导航回调。
+
+`DocumentTreeItem` 还需要接收大量状态和事件 props，再递归传递给所有子节点。状态所有权、远程读取、领域命令和 JSX 结构因此共享同一个变更边界。
+
+### 触发条件
+
+- 增加新的节点操作时需要继续扩大顶层组件和递归 props。
+- 修改拖拽或弹窗生命周期时仍需要同时理解递归渲染、路由刷新和局部节点失效。
+- 创建、移动、删除后的 UI 编排稍有差异，仍可能出现刷新所有权分叉。
+
+### 用户和维护影响
+
+- 单次修改的回归面超过需求本身，代码审查难以证明只影响一个能力。
+- 拖拽语义、视觉行为和弹窗编排仍不能分别验证。
+- 未来加入虚拟滚动、键盘树导航或细粒度缓存时，现有组件会继续扩大。
+
+### 现有保护
+
+- 服务端仍负责权限、循环检测和最终排序，客户端拖拽结果不是权威。
+- 分页使用稳定的 `(sortOrder, id)` 游标。
+- 深链路径有循环和最大深度限制。
+- 当前 E2E 覆盖深层文档路径注入，但没有完整覆盖分页失败重试、拖拽和局部失效组合。
+
+### 目标状态
+
+- 一个局部导航状态 hook 或 reducer 只负责节点、分页、请求合并和失效。
+- 一个拖拽 hook 只把浏览器事件转换为 `before | inside | after` 位置语义。
+- `DocumentTree` 和 `DocumentTreeItem` 只根据 props 渲染，不直接调用 Server Action 或路由刷新。
+- 弹窗和上下文菜单拥有独立边界。
+- 纯树函数保持无 React、无网络依赖并具有小型单元测试。
+
+### 不应采用的方案
+
+- 不为这一个侧栏引入全局状态库。
+- 不把服务端权限、防环或排序权威迁移到客户端。
+- 不在拆分过程中同时重写 UI、拖拽协议或导航数据契约。
+
+## ER-02：Workspace 与 Project 成员流程重复
+
+### 当前实现
+
+`src/features/permissions/server/WorkspaceMembers.ts` 和 `ProjectMembers.ts` 分别实现邀请、接受、拒绝、访问申请、审批、角色变更、移除成员和所有权转移。两组 Server Action 反复组合：
+
+- 输入 Schema 与 `requireUser()`；
+- 资源授权和事务内所有权复核；
+- 成员、邀请或访问申请写入；
+- `createNotification`；
+- `markRelatedNotificationsRead`；
+- `recordAuditLog`；
+- `revalidatePath('/(workspace)', 'layout')`。
+
+Workspace 邀请还存在链接接受与站内接受两个入口；当前已经共享 `acceptWorkspaceInvitationByCondition`，说明“入口适配与领域事务分离”是可行模式，但其他重复步骤仍分散在多个操作中。
+
+### 必须保留的差异
+
+- Workspace 成员身份决定结构发现；Project 直接成员关系决定正文访问。
+- Workspace 邀请以邮箱和令牌为边界；Project 邀请面向已存在的用户。
+- Workspace owner、Project owner、Workspace role 和 Project role 的不变量不同。
+- 移除 Workspace 成员必须处理其拥有的 Project；移除 Project 成员不具有同样的级联语义。
+- 所有权转移需要各自的锁顺序和数据库不变量。
+
+### 风险
+
+风险不是文件行数本身，而是同一个领域步骤存在多个手写版本。例如新增邀请过期、通知完成或审计字段时，某个入口可能遗漏，形成“功能大体可用但事务语义不同”的长期分叉。
+
+### 目标状态
+
+只抽取具有相同语义的窄 helper：
+
+- 邀请有效期和状态判断；
+- 在同一事务内完成关联通知；
+- 标准化审计 actor、target 和资源名称上下文；
+- 通用的冲突安全插入结果解释；
+- Server Action 成功后的工作区数据失效入口。
+
+Workspace 与 Project 的授权、所有权锁、成员不变量和最终领域事务继续保留在各自模块中。不得建立通过大量条件分支工作的通用成员管理引擎。
+
+## ER-03：搜索分页不稳定并搬运完整正文投影
+
+### 当前实现
+
+`searchWorkspaceContent`：
+
+1. 通过 `project_members.user_id` 限制正文候选集；
+2. 使用 `ILIKE` 匹配标题和 `documents.search_text`；
+3. 以相关度分值和 `documents.updated_at` 倒序；
+4. 使用 `page/pageSize` 计算 offset；
+5. 从数据库读取匹配行的完整 `search_text`；
+6. 在 Node.js 中调用 `extractSnippet` 截取最多 140 个字符。
+
+### 问题一：排序不是全序
+
+相关度和 `updatedAt` 都可能相同，查询没有以 `documents.id` 作为最终唯一排序键。PostgreSQL 不保证相同排序键记录之间的顺序。即使数据没有改变，两次 offset 查询也没有契约保证返回相同的相对顺序；有并发更新时更容易跨页重复或遗漏。
+
+### 问题二：offset 缺少总边界
+
+`page` 只验证为正整数，没有最大值。大 offset 会让数据库扫描并丢弃大量匹配行，且前后页之间的数据变更会改变后续页位置。
+
+### 问题三：摘要在应用层生成
+
+`DocumentSchema` 允许的正文 JSON 最大为 512 KiB，`search_text` 可能接近该数量级。`pageSize` 最大为 100，因此极端请求可能把大量只为生成短摘要的文本从数据库传到 Node.js。
+
+### 现有保护
+
+- 查询词最大 200 个字符，`pageSize` 最大 100。
+- `%`、`_` 等 LIKE 元字符被转义。
+- 标题和正文投影具有 `pg_trgm` GIN 索引。
+- 集成测试覆盖正文权限、筛选、分页和字面量元字符。
+
+### 目标状态
+
+- 所有搜索排序都以 `documentId` 作为最终稳定键。
+- 第一阶段可保留页码 UI，但必须限制可接受页码并稳定排序。
+- 数据规模要求更高时改为 `(score, updatedAt, documentId)` 游标；不要在没有产品需求时同时维护 offset 和 cursor 两种公开契约。
+- 数据库只返回摘要所需的文本窗口，应用层不读取完整 `search_text`。
+- PostgreSQL FTS 只在相关度、语言分词或数据规模证明当前 trigram 方案不足时引入。
+
+## ER-04：文档树操作产生深度或节点数相关往返
+
+### 当前实现
+
+`getDocumentNavigationPath` 从选中文档开始循环查询父节点，最多允许 100 层。一次深链读取的数据库往返数与路径深度成正比。
+
+`moveDocument` 的 `getDescendantIds` 按层级循环查询子节点，跨项目移动时往返数与子树深度成正比。排序间隙不足时，`planDocumentSortOrder` 返回全部兄弟更新，调用方再逐条执行 `UPDATE`。
+
+### 风险
+
+- 深层树访问的尾延迟随深度线性增加。
+- 宽同级集合触发重排时产生大量顺序写入。
+- 大子树移动长时间持有项目和文档相关锁，增加其他写入等待。
+- 多次语句虽然处于同一事务，但会放大网络延迟和数据库连接占用。
+
+### 现有保护
+
+- 深链最大 100 层。
+- 移动子树最大 10,000 个后代。
+- 移动在事务内重新验证源和目标项目权限。
+- 目标同级集合在计算顺序前加锁；服务端执行循环检测和重排。
+- 数据库索引覆盖 `(project_id, parent_id, sort_order, id)`。
+
+### 目标状态
+
+- 使用 PostgreSQL 递归 CTE 一次读取祖先路径或后代集合。
+- CTE 仍必须保留循环检测、项目边界、深度和节点数限制。
+- 排序重排使用单次批量更新或数量有界的批处理，不改变 `planDocumentSortOrder` 的纯计算职责。
+- 在真实 PostgreSQL 集成测试中使用深层链、宽同级集合和跨项目子树验证事务结果。
+
+## ER-05：工作区布局缓存失效范围过大
+
+### 当前实现
+
+文档、项目、Workspace、偏好和成员等多个写入入口统一调用 `revalidatePath('/(workspace)', 'layout')`。部分客户端在 Server Action 完成后还会执行局部状态修正和 `router.refresh()`。
+
+共享布局已经只加载 Workspace 与 Project 导航基础数据，文档节点按需加载，因此全布局失效的成本低于旧的全量文档树实现；但不同数据域仍被视为同一个失效单元。
+
+### 风险
+
+- 标题、偏好或单节点操作会使与其无关的工作区数据重新读取。
+- “Server Action 自动刷新、显式 `revalidatePath`、客户端 `router.refresh`、本地 optimistic 更新”之间的职责不清晰。
+- 未来增加更多布局查询后，当前全量失效成本会无声增长。
+
+### 目标状态
+
+先建立失效清单，再按实际数据所有者收窄：
+
+| 数据域 | 典型变化 | 期望刷新边界 |
+| --- | --- | --- |
+| Workspace 列表与活动 Workspace | 创建、删除、切换 Workspace | Workspace 上下文和切换器 |
+| Project 导航 | 创建、删除、重命名、成员可见性变化 | 对应 Workspace 的项目列表 |
+| 文档节点 | 创建、移动、删除、标题变化 | 受影响的项目或父节点 |
+| 权限概览 | 成员、邀请、申请、角色变化 | 当前打开的权限面板及相关导航权限 |
+| 偏好 | 主题、内容宽度 | 偏好拥有者和必要布局镜像 |
+| 通知 | 新通知、已读 | 通知列表与未读计数 |
+
+第一阶段只删除可以证明重复的刷新，不为了“细粒度”立即引入复杂 tag 体系。需要使用 Next.js cache tag 时，应先确认相关查询确实被缓存以及 tag 的所有者。
+
+## ER-06：Better Auth 核心配置存在双重实例
+
+### 当前实现
+
+`src/libs/Auth.ts` 创建主 Better Auth 实例，包含数据库适配、邮件密码、邮箱验证、rate limit、trusted origins 和用户生命周期 hook。
+
+`DocumentCollaborationAuthentication.ts` 为独立 Hocuspocus 进程创建最小 Better Auth 实例，只配置 base URL、数据库适配和 secret，并使用 `getSession({ disableCookieCache: true })` 读取连接身份。
+
+独立最小实例避免协作进程加载认证邮件和用户初始化副作用，这一隔离意图合理；问题在于数据库 Schema、base URL、secret 和未来可能影响 Session 解码的选项被手写两次。
+
+### 风险
+
+- 调整 cookie、Session 或核心插件时只修改主实例，协作服务仍按旧配置读取身份。
+- 为消除重复而直接导入完整 `auth`，又可能把邮件组件、Resend 和生命周期 hook 带入协作服务 bundle。
+
+### 目标状态
+
+- 抽取不带副作用的 `getAuthCoreOptions()` 或等价配置构造器。
+- 共享数据库 adapter Schema、base URL、secret 以及确实影响 Session 读取的核心选项。
+- 主应用在共享核心之上增加邮件、rate limit 和数据库 hook。
+- 协作实例继续保持最小依赖，并继续禁用 cookie cache 重新校验 Session。
+
+## ER-07：CI 依赖缓存方式不够确定
+
+### 当前实现
+
+`.github/actions/setup-project/action.yml` 同时启用 `actions/setup-node` 的 npm cache，并额外缓存整个 `node_modules`。缓存命中时跳过 `npm ci`。
+
+### 风险
+
+- `node_modules` 缓存可能包含中断安装留下的部分状态。
+- Node、npm、系统原生依赖或安装脚本行为变化时，锁文件哈希未必表达全部兼容条件。
+- CI 成功依赖缓存内容，而不是每次从 `package-lock.json` 重建依赖树。
+- setup-node npm cache 与 node_modules cache 重复占用缓存容量。
+
+### 目标状态
+
+- 只保留 npm 下载缓存。
+- 每个 job 始终执行 `npm ci`。
+- Next.js 构建缓存和已构建 `.next` 制品继续按其独立用途管理，不与依赖安装混合。
+
+## ER-08：覆盖率没有门槛，高复杂度 UI 缺少行为保护
+
+### 已确认部分
+
+CI 使用 `npm run test -- --coverage`，`vitest.config.ts` 只设置 `coverage.include`，没有 threshold，也没有上传覆盖率报告。因此覆盖率下降不会使 CI 失败，也缺少可审阅的趋势产物。
+
+以下关键服务端不变量已有单元、集成或 E2E 保护：权限决策、所有权、文档树、搜索权限、通知、协作持久化、撤权和浏览器恢复。
+
+### 部分确认部分
+
+复杂 UI 的直接行为覆盖较少，尤其是：
+
+- 侧栏分页错误重试、加载更多与请求去重组合；
+- 文档拖拽后的局部树失效；
+- Command Palette 键盘选择、迟到搜索响应和最近文档；
+- Workspace/Project 成员管理的主要对话框路径。
+
+“缺少独立测试文件”不自动等于完全没有间接覆盖，因此本项标记为部分确认。实施前应生成覆盖率报告并把缺口映射到真实用户路径。
+
+### 目标状态
+
+- 不追求全仓统一的高覆盖率数字。
+- 对权限、事务、协作恢复、导航状态 reducer 和搜索查询设置可解释的门槛。
+- 为高复杂度 UI 保留少量关键 Playwright 路径，不复制组件实现细节。
+- CI 保留可下载的覆盖率摘要或报告，使门槛变化可以审查。
+
+## ER-09：部署实现集中在大型 YAML 且制品逻辑重复
+
+### 当前实现
+
+`.github/workflows/CI.yml` 同时实现静态检查、测试、构建、制品打包、SSH 主机校验、上传、生产迁移、软链接切换、systemd 重启、内部健康检查、公开 HTTPS/WSS 验证和失败回滚。
+
+`.github/workflows/Release.yml` 又维护一套相似的 standalone 制品打包步骤。生产 host、用户、Node 可执行文件、release 路径和服务名由 CI workflow 直接声明。
+
+### 风险
+
+- Shell 逻辑只能在 Actions 或近似 Linux 环境中整体调试。
+- CI 部署与手动 Release 的制品内容检查可能分叉。
+- Node 安装位置或服务器路径变化需要修改工作流实现。
+- YAML 同时承担流程编排和部署程序职责，审查差异时难以识别真正的行为变化。
+
+### 现有保护
+
+- SSH host fingerprint 被严格验证。
+- 制品包含 Git revision，并检查必要文件。
+- 迁移在切换前执行，失败不会切换应用。
+- 新应用和协作服务健康检查失败时会恢复旧软链接。
+- 文档明确要求生产迁移保持向后兼容，数据库 Schema 不随应用回滚。
+
+### 目标状态
+
+- 建立一个可在 Linux runner 上独立执行和测试的制品打包脚本。
+- CI 和 Release workflow 调用同一个打包入口。
+- 将远程激活、健康检查和回滚脚本版本化，workflow 只负责传递受控参数和 Secret。
+- 稳定环境值使用 GitHub Environment variables 或服务器配置；Secret 继续只放 Secret 管理。
+- 不在本工作中擅自引入容器、改变 systemd/Nginx 拓扑或执行生产操作。
+
+## 跨问题约束
+
+任何修复都必须保持以下当前不变量：
+
+- 当前代码、Schema、迁移、配置和测试是实现事实来源；本文只描述审查基线。
+- Personal 正文继续由版本化 ProseMirror JSON 和乐观锁保存。
+- Team 正文继续由 Yjs 状态权威持久化；不得恢复 JSON 正文写入回退。
+- Project 直接成员关系继续控制正文读取；Workspace 成员身份只提供结构发现和 Workspace 能力。
+- 成员、所有权、通知和审计的业务变化必须位于同一事务边界。
+- 文档移动的权限、防环、项目边界和最终顺序由服务端决定。
+- 生产迁移必须向后兼容旧应用回滚。
+
+## 相关代码和文档
+
+- `src/components/layout/AppSidebar/SidebarWorkspaceNavigation.tsx`
+- `src/features/permissions/server/WorkspaceMembers.ts`
+- `src/features/permissions/server/ProjectMembers.ts`
+- `src/features/search/server/SearchWorkspaceContent.ts`
+- `src/features/documents/server/GetDocumentNavigation.ts`
+- `src/features/documents/server/MoveDocument.ts`
+- `src/libs/Auth.ts`
+- `src/features/documents/collaboration/DocumentCollaborationAuthentication.ts`
+- `.github/actions/setup-project/action.yml`
+- `.github/workflows/CI.yml`
+- `.github/workflows/Release.yml`
+- `vitest.config.ts`
+- [`features/documents.md`](features/documents.md)
+- [`features/projects.md`](features/projects.md)
+- [`features/search.md`](features/search.md)
+- [`architecture/rendering-and-data-flow.md`](architecture/rendering-and-data-flow.md)
+- [`operations/deployment.md`](operations/deployment.md)
+- [`PROBLEMS.md`](PROBLEMS.md)

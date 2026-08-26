@@ -3,7 +3,13 @@
 import { ChevronRight, FileText, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useState } from 'react';
+import {
+  buildDocumentTree,
+  emptyNavigationNodeState,
+  getNavigationNodeKey,
+} from '@/components/layout/AppSidebar/SidebarDocumentNavigationState';
+import type { NavigationNodeState } from '@/components/layout/AppSidebar/SidebarDocumentNavigationState';
 import { SidebarNavigationContextMenus } from '@/components/layout/AppSidebar/SidebarNavigationContextMenus';
 import type {
   NavigationContextMenu,
@@ -12,17 +18,11 @@ import type {
   WorkspaceProject,
   WorkspaceSection,
 } from '@/components/layout/AppSidebar/SidebarWorkspaceNavigationTypes';
+import { useSidebarDocumentNavigation } from '@/components/layout/AppSidebar/useSidebarDocumentNavigation';
 import { fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import { CreateDocumentDialog } from '@/features/documents/components/CreateDocumentDialog';
 import { MoveDocumentDialog } from '@/features/documents/components/MoveDocumentDialog';
-import type {
-  DocumentNavigationCursor,
-  DocumentNavigationItem,
-} from '@/features/documents/Document';
-import {
-  getDocumentNavigationChildren,
-  getDocumentNavigationPath,
-} from '@/features/documents/server/GetDocumentNavigation';
+import type { DocumentNavigationItem } from '@/features/documents/Document';
 import { moveDocument } from '@/features/documents/server/MoveDocument';
 import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
 import type { Project, ProjectArea } from '@/features/projects/Project';
@@ -41,23 +41,6 @@ type DropTargetState = {
   id: string;
   kind: 'document' | 'project';
   position: 'before' | 'inside' | 'after';
-};
-
-type NavigationNodeState = {
-  error: string | null;
-  hasLoadedFirstPage: boolean;
-  isLoading: boolean;
-  nextCursor: DocumentNavigationCursor | null;
-};
-
-const getNavigationNodeKey = (projectId: string, parentId: string | null) =>
-  `${projectId}:${parentId ?? 'root'}`;
-
-const emptyNavigationNodeState: NavigationNodeState = {
-  error: null,
-  hasLoadedFirstPage: false,
-  isLoading: false,
-  nextCursor: null,
 };
 
 function isDescendant(
@@ -82,38 +65,6 @@ function isDescendant(
     current = docMap.get(current.parentId);
   }
   return false;
-}
-
-const compareDocuments = (left: WorkspaceDocument, right: WorkspaceDocument) =>
-  left.sortOrder - right.sortOrder || left.id.localeCompare(right.id);
-
-function buildDocumentTree(documents: WorkspaceDocument[]): WorkspaceDocument[] {
-  const docMap = new Map<string, WorkspaceDocument>();
-  const rootDocs: WorkspaceDocument[] = [];
-
-  for (const doc of documents) {
-    docMap.set(doc.id, { ...doc, children: [] });
-  }
-
-  for (const doc of documents) {
-    const treeNode = docMap.get(doc.id);
-    if (!treeNode) {
-      continue;
-    }
-
-    if (doc.parentId && docMap.has(doc.parentId)) {
-      docMap.get(doc.parentId)?.children?.push(treeNode);
-    } else if (!doc.parentId) {
-      rootDocs.push(treeNode);
-    }
-  }
-
-  rootDocs.sort(compareDocuments);
-  for (const document of docMap.values()) {
-    document.children?.sort(compareDocuments);
-  }
-
-  return rootDocs;
 }
 
 function getDocumentItemClassName(options: {
@@ -691,27 +642,23 @@ export function SidebarWorkspaceNavigation(props: {
   const searchParams = useSearchParams();
   const selectedDocumentId = searchParams.get('document') ?? undefined;
   const selectedProjectId = searchParams.get('project') ?? undefined;
-  const selectedProjectArea = props.projects.find(
-    (project) => project.id === selectedProjectId,
-  )?.workspaceKind;
-  const projectIdsKey = props.projects.map((project) => project.id).join(':');
-
-  const [expandedSections, setExpandedSections] = useState<Record<ProjectArea, boolean>>({
-    collaboration: selectedProjectArea === 'team',
-    personal: selectedProjectArea === 'personal',
+  const {
+    documents,
+    expandedDocIds,
+    expandedProjectIds,
+    expandedSections,
+    loadDocumentChildren,
+    nodeStates,
+    reloadDocumentChildren,
+    setExpandedDocIds,
+    setExpandedProjectIds,
+    setExpandedSections,
+  } = useSidebarDocumentNavigation({
+    onDocumentsChange: props.onNavigationDocumentsChange,
+    projects: props.projects,
+    selectedDocumentId,
+    selectedProjectId,
   });
-  const [expandedProjectIds, setExpandedProjectIds] = useState<Record<string, boolean>>(
-    selectedProjectId ? { [selectedProjectId]: true } : {},
-  );
-
-  const [documents, setDocuments] = useState<DocumentNavigationItem[]>([]);
-  const [expandedDocIds, setExpandedDocIds] = useState<Record<string, boolean>>({});
-  const [nodeStates, setNodeStates] = useState<Record<string, NavigationNodeState>>({});
-  const nodeStatesRef = useRef<Record<string, NavigationNodeState>>({});
-  const loadingNodeKeys = useRef(new Set<string>());
-  const pathRequestId = useRef(0);
-  const visibleProjectIds = useRef(new Set(props.projects.map((project) => project.id)));
-  visibleProjectIds.current = new Set(props.projects.map((project) => project.id));
   const [contextMenu, setContextMenu] = useState<NavigationContextMenu | null>(null);
   const [creatingDocumentProject, setCreatingDocumentProject] = useState<WorkspaceProject | null>(
     null,
@@ -726,143 +673,6 @@ export function SidebarWorkspaceNavigation(props: {
   } | null>(null);
   const [draggingDoc, setDraggingDoc] = useState<DraggingDocument | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
-
-  const updateNodeState = (key: string, state: NavigationNodeState) => {
-    nodeStatesRef.current = { ...nodeStatesRef.current, [key]: state };
-    setNodeStates(nodeStatesRef.current);
-  };
-
-  const mergeDocuments = (items: DocumentNavigationItem[]) => {
-    setDocuments((currentDocuments) => {
-      const documentsById = new Map(currentDocuments.map((document) => [document.id, document]));
-      for (const item of items) {
-        const current = documentsById.get(item.id);
-        documentsById.set(item.id, {
-          ...current,
-          ...item,
-          hasChildren: current?.hasChildren === true || item.hasChildren,
-        });
-      }
-      return [...documentsById.values()];
-    });
-  };
-
-  const loadDocumentChildren = async (projectId: string, parentId: string | null) => {
-    const key = getNavigationNodeKey(projectId, parentId);
-    if (loadingNodeKeys.current.has(key)) {
-      return;
-    }
-
-    const currentState = nodeStatesRef.current[key] ?? emptyNavigationNodeState;
-    loadingNodeKeys.current.add(key);
-    updateNodeState(key, { ...currentState, error: null, isLoading: true });
-
-    try {
-      const page = await getDocumentNavigationChildren({
-        cursor: currentState.nextCursor ?? undefined,
-        limit: 50,
-        parentId,
-        projectId,
-      });
-      if (!visibleProjectIds.current.has(projectId)) {
-        return;
-      }
-      mergeDocuments(page.items);
-      if (parentId && !currentState.hasLoadedFirstPage) {
-        setDocuments((currentDocuments) =>
-          currentDocuments.map((document) =>
-            document.id === parentId
-              ? { ...document, hasChildren: page.items.length > 0 }
-              : document,
-          ),
-        );
-      }
-      updateNodeState(key, {
-        error: null,
-        hasLoadedFirstPage: true,
-        isLoading: false,
-        nextCursor: page.nextCursor,
-      });
-    } catch {
-      updateNodeState(key, {
-        ...currentState,
-        error: '文档导航加载失败',
-        isLoading: false,
-      });
-    } finally {
-      loadingNodeKeys.current.delete(key);
-    }
-  };
-
-  const reloadDocumentChildren = (projectId: string, parentId: string | null) => {
-    const key = getNavigationNodeKey(projectId, parentId);
-    setDocuments((currentDocuments) =>
-      currentDocuments.filter(
-        (document) => document.projectId !== projectId || document.parentId !== parentId,
-      ),
-    );
-    updateNodeState(key, emptyNavigationNodeState);
-    void loadDocumentChildren(projectId, parentId);
-  };
-
-  const loadSelectedDocumentPath = useEffectEvent(async () => {
-    const requestId = pathRequestId.current + 1;
-    pathRequestId.current = requestId;
-    if (!selectedDocumentId || !selectedProjectId) {
-      return;
-    }
-
-    const selectedProject = props.projects.find((project) => project.id === selectedProjectId);
-    if (!selectedProject) {
-      return;
-    }
-
-    let path;
-    try {
-      path = await getDocumentNavigationPath({
-        documentId: selectedDocumentId,
-        projectId: selectedProjectId,
-      });
-    } catch {
-      return;
-    }
-    if (pathRequestId.current !== requestId || !path) {
-      return;
-    }
-
-    mergeDocuments(path);
-    setExpandedProjectIds((current) => ({ ...current, [selectedProjectId]: true }));
-    setExpandedSections((current) => ({
-      ...current,
-      [selectedProject.workspaceKind === 'personal' ? 'personal' : 'collaboration']: true,
-    }));
-    setExpandedDocIds((current) => ({
-      ...current,
-      ...Object.fromEntries(path.slice(0, -1).map((document) => [document.id, true])),
-    }));
-    void loadDocumentChildren(selectedProjectId, null);
-    for (const document of path.slice(0, -1)) {
-      void loadDocumentChildren(selectedProjectId, document.id);
-    }
-  });
-
-  const notifyNavigationDocumentsChange = useEffectEvent((items: DocumentNavigationItem[]) => {
-    props.onNavigationDocumentsChange(items);
-  });
-
-  useEffect(() => {
-    notifyNavigationDocumentsChange(documents);
-  }, [documents]);
-
-  useEffect(() => {
-    void loadSelectedDocumentPath();
-  }, [projectIdsKey, selectedDocumentId, selectedProjectId]);
-
-  useEffect(() => {
-    setDocuments((currentDocuments) =>
-      currentDocuments.filter((document) => visibleProjectIds.current.has(document.projectId)),
-    );
-  }, [projectIdsKey]);
 
   const handleDragStartDoc = (
     event: React.DragEvent<HTMLElement>,
@@ -1176,8 +986,7 @@ export function SidebarWorkspaceNavigation(props: {
                 [docId]: !currentDocs[docId],
               }));
               const nodeState =
-                nodeStatesRef.current[getNavigationNodeKey(projectId, docId)] ??
-                emptyNavigationNodeState;
+                nodeStates[getNavigationNodeKey(projectId, docId)] ?? emptyNavigationNodeState;
               if (willExpand && !nodeState.hasLoadedFirstPage) {
                 void loadDocumentChildren(projectId, docId);
               }
@@ -1189,8 +998,7 @@ export function SidebarWorkspaceNavigation(props: {
                 [projectId]: !currentProjects[projectId],
               }));
               const nodeState =
-                nodeStatesRef.current[getNavigationNodeKey(projectId, null)] ??
-                emptyNavigationNodeState;
+                nodeStates[getNavigationNodeKey(projectId, null)] ?? emptyNavigationNodeState;
               if (willExpand && !nodeState.hasLoadedFirstPage) {
                 void loadDocumentChildren(projectId, null);
               }

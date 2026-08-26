@@ -18,6 +18,8 @@
 | 修改全文搜索、命令面板或搜索结果排序 | [`features/search.md`](features/search.md) 和 [`adr/0006-separate-workspace-discovery-from-project-content-access.md`](adr/0006-separate-workspace-discovery-from-project-content-access.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
 | 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |
+| 审查可维护性、性能与工程化问题 | [`engineering-review-issues.md`](engineering-review-issues.md) |
+| 实施工程审查整改计划 | [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md) 和 [`engineering-review-issues.md`](engineering-review-issues.md) |
 | 理解“为什么这样选” | [`adr/README.md`](adr/README.md) 和相关 Accepted ADR |
 | 查看非权威 UI 参考 | [`design-references/README.md`](design-references/README.md) |
 | 新增或维护知识文档 | [`KNOWLEDGE_MAINTENANCE.md`](KNOWLEDGE_MAINTENANCE.md) |
