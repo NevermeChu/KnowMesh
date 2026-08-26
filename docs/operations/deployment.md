@@ -141,24 +141,38 @@ deploy job 使用 `production-deployment` 并发组且不取消进行中的部�
 
 这里的 PostgreSQL 是本次 GitHub job 的临时测试数据库，不是生产数据库。job 结束后容器和数据都会销毁。
 
-### 5. `deploy`：生产部署
+### 5. `packaging`：制品打包冒烟
 
-deploy 只有在 `build`、`static`、`unit` 和 `e2e` 全部成功后才开始。它不会下载 `build` job 的产物直接发布，而是使用生产 URL 再构建一次 standalone 应用，确保浏览器代码包含生产地址。
+它安装依赖后运行打包脚本的 smoke test，验证缺少必需文件、revision 不匹配、未知参数和 `.env` 泄漏等失败路径都会被正确拒绝。deploy 依赖该 job，打包入口回归时不会发布生产。
 
-## 生产 artifact 包含什么
+### 6. `deploy`：生产部署
 
-Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。deploy job 在 standalone 目录中补齐：
+deploy 只有在 `build`、`static`、`unit`、`e2e` 和 `packaging` 全部成功后才开始。它不会下载 `build` job 的产物直接发布，而是使用生产 URL 再构建一次 standalone 应用，确保浏览器代码包含生产地址，然后用统一打包脚本生成制品。
+
+## 生产 artifact 包包含什么
+
+Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。CI deploy job 和 Release workflow 都调用同一个版本化入口 [`scripts/package-production-artifact.sh`](../../../scripts/package-production-artifact.sh) 完成打包，该脚本：
+
+- 接收显式参数：仓库根目录、standalone 目录、Next 静态目录、输出归档和 Git revision；不读取任何生产 Secret。
+- 用 esbuild 从同一仓库生成自包含的 `migrate-production.cjs` 和 `collaboration-server.cjs`。
+- 把 `public/`、`.next/static/`、`migrations/` 和 `deploy/` 复制进 standalone 目录，并写入 `REVISION`。
+- 打包前删除 standalone 顶层 `.env*`，并在校验阶段确认没有残留环境文件进入制品。
+- 逐项校验必需文件与目录；若 standalone 目录中已有属于其他 SHA 的 `REVISION`，直接失败，防止 `.next` 缓存把不同提交的产物混进同一制品。
+- 产出 `knowmesh-release-<SHA>.tgz`，并把归档内全部文件清单打印到日志。
+
+两个 workflow 因此上传完全相同的 tgz 结构；文件清单由同一代码路径生成，不会漂移。CI 另有 `packaging` job 运行 [`scripts/package-production-artifact.smoke.sh`](../../../scripts/package-production-artifact.smoke.sh)，覆盖缺少必需文件、revision 不匹配、未知参数和 `.env` 排除等失败路径。
+
+artifact 内容包括：
 
 - `server.js` 和 Next.js 运行依赖。
 - `public/` 与 `.next/static/` 静态文件。
 - `migrations/` 及 Drizzle journal。
-- 自包含的 `migrate-production.cjs`。
-- 自包含的 `collaboration-server.cjs`。
+- 自包含的 `migrate-production.cjs` 和 `collaboration-server.cjs`。
 - `deploy/systemd/knowmesh-collaboration.service`。
 - `deploy/nginx/` 下的两个协作代理片段。
 - `REVISION`，保存构建该 artifact 的完整 Git SHA。
 
-打包前会删除 `.next/standalone/.env*`，所以生产密钥不会进入 artifact。CI workflow 同时把压缩 artifact 保存 14 天，便于审计或人工恢复。
+生产密钥不会进入 artifact。CI workflow 同时把压缩 artifact 保存 14 天，便于审计或人工恢复。
 
 应用、迁移程序和 Hocuspocus 来自同一个 Git SHA；切换或回滚 `current` 时，两个服务因此会一起切换版本。
 
@@ -604,6 +618,8 @@ workflow 不会继续启动新 Next.js，并会回滚。检查协作服务日志
 - [CI workflow](../../.github/workflows/CI.yml)
 - [Release workflow](../../.github/workflows/Release.yml)
 - [GitHub 项目初始化 action](../../.github/actions/setup-project/action.yml)
+- [生产制品打包入口](../../scripts/package-production-artifact.sh)
+- [打包冒烟测试](../../scripts/package-production-artifact.smoke.sh)
 - [生产迁移入口](../../scripts/migrate-production.ts)
 - [协作服务入口](../../scripts/collaboration-server.ts)
 - [协作 systemd unit](../../deploy/systemd/knowmesh-collaboration.service)

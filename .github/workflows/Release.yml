@@ -26,39 +26,18 @@ jobs:
 
       - name: Prepare production artifact
         run: |
-          npx --no-install esbuild scripts/migrate-production.ts \
-            --bundle \
-            --platform=node \
-            --target=node24 \
-            --format=cjs \
-            --outfile=.next/standalone/migrate-production.cjs
-          npx --no-install esbuild scripts/collaboration-server.ts \
-            --bundle \
-            --platform=node \
-            --target=node24 \
-            --format=cjs \
-            --define:import.meta.url=import_meta_url \
-            --banner:js="const import_meta_url = require('node:url').pathToFileURL(__filename).href;" \
-            --outfile=.next/standalone/collaboration-server.cjs
-          mkdir -p .next/standalone/public .next/standalone/.next/static .next/standalone/migrations .next/standalone/deploy
-          cp -r public/. .next/standalone/public/
-          cp -r .next/static/. .next/standalone/.next/static/
-          cp -r migrations/. .next/standalone/migrations/
-          cp -r deploy/. .next/standalone/deploy/
-          printf '%s\n' "${GITHUB_SHA}" > .next/standalone/REVISION
-          rm -f .next/standalone/.env*
-          test -f .next/standalone/server.js
-          test -f .next/standalone/migrate-production.cjs
-          test -f .next/standalone/collaboration-server.cjs
-          test -f .next/standalone/deploy/systemd/knowmesh-collaboration.service
-          test -f .next/standalone/deploy/nginx/knowmesh-websocket-map.conf
-          test -f .next/standalone/deploy/nginx/knowmesh-collaboration-location.conf
-          test "$(cat .next/standalone/REVISION)" = "${GITHUB_SHA}"
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}"
+          bash scripts/package-production-artifact.sh \
+            --repository-root . \
+            --standalone-dir .next/standalone \
+            --static-dir .next/static \
+            --output "${RUNNER_TEMP}/knowmesh-release-${GITHUB_SHA}.tgz" \
+            --revision "${GITHUB_SHA}"
 
       - name: Upload production artifact
         uses: actions/upload-artifact@v7
         with:
           name: knowmesh-${{ github.sha }}
-          path: .next/standalone
-          include-hidden-files: true
+          path: ${{ runner.temp }}/knowmesh-release-${{ github.sha }}.tgz
           retention-days: 14

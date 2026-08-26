@@ -156,12 +156,28 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  packaging:
+    name: Verify production packaging scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js environment
+        uses: ./.github/actions/setup-project
+        with:
+          node-version: 24.x
+
+      - name: Run packaging smoke tests
+        run: bash scripts/package-production-artifact.smoke.sh
+
   deploy:
     name: Deploy production
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    needs: [build, static, unit, e2e]
+    needs: [build, static, unit, e2e, packaging]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
@@ -205,38 +221,13 @@ jobs:
       - name: Prepare production release
         run: |
           set -euo pipefail
-          npx --no-install esbuild scripts/migrate-production.ts \
-            --bundle \
-            --platform=node \
-            --target=node24 \
-            --format=cjs \
-            --outfile=.next/standalone/migrate-production.cjs
-          npx --no-install esbuild scripts/collaboration-server.ts \
-            --bundle \
-            --platform=node \
-            --target=node24 \
-            --format=cjs \
-            --define:import.meta.url=import_meta_url \
-            --banner:js="const import_meta_url = require('node:url').pathToFileURL(__filename).href;" \
-            --outfile=.next/standalone/collaboration-server.cjs
-          mkdir -p .next/standalone/public .next/standalone/.next/static .next/standalone/migrations .next/standalone/deploy
-          cp -r public/. .next/standalone/public/
-          cp -r .next/static/. .next/standalone/.next/static/
-          cp -r migrations/. .next/standalone/migrations/
-          cp -r deploy/. .next/standalone/deploy/
-          printf '%s\n' "${GITHUB_SHA}" > .next/standalone/REVISION
-          rm -f .next/standalone/.env*
-          test -f .next/standalone/server.js
-          test -f .next/standalone/migrate-production.cjs
-          test -f .next/standalone/collaboration-server.cjs
-          test -d .next/standalone/.next/static
-          test -d .next/standalone/public
-          test -f .next/standalone/migrations/meta/_journal.json
-          test -f .next/standalone/deploy/systemd/knowmesh-collaboration.service
-          test -f .next/standalone/deploy/nginx/knowmesh-websocket-map.conf
-          test -f .next/standalone/deploy/nginx/knowmesh-collaboration-location.conf
-          test "$(cat .next/standalone/REVISION)" = "${GITHUB_SHA}"
-          tar -C .next/standalone -czf "${RUNNER_TEMP}/knowmesh-release-${GITHUB_SHA}.tgz" .
+          mkdir -p "${RUNNER_TEMP}"
+          bash scripts/package-production-artifact.sh \
+            --repository-root . \
+            --standalone-dir .next/standalone \
+            --static-dir .next/static \
+            --output "${RUNNER_TEMP}/knowmesh-release-${GITHUB_SHA}.tgz" \
+            --revision "${GITHUB_SHA}"
 
       - name: Retain production artifact
         uses: actions/upload-artifact@v7
