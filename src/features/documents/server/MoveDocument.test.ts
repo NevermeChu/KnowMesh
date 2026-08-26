@@ -43,15 +43,21 @@ const state = vi.hoisted(() => {
     where: txDeleteWhere,
   }));
 
+  const txExecute = vi.fn<() => Promise<{ rows: unknown[] }>>(() => Promise.resolve({ rows: [] }));
+
   const transaction = vi.fn<
     (
       callback: (transaction: {
         delete: typeof txDelete;
+        execute: typeof txExecute;
         select: typeof txSelect;
         update: typeof update;
       }) => Promise<unknown>,
     ) => Promise<unknown>
-  >(async (callback) => await callback({ delete: txDelete, select: txSelect, update }));
+  >(
+    async (callback) =>
+      await callback({ delete: txDelete, execute: txExecute, select: txSelect, update }),
+  );
 
   const authorizeDocument = vi.fn<() => Promise<unknown>>();
   const authorizeProject = vi.fn<() => Promise<unknown>>();
@@ -71,6 +77,7 @@ const state = vi.hoisted(() => {
     set,
     transaction,
     txDelete,
+    txExecute,
     txQueue,
     txSelect,
     update,
@@ -220,7 +227,6 @@ describe(moveDocument, () => {
       [{ role: 'owner' }],
       [{ id: parentId, parentId: null, projectId: targetProjectId }],
       [],
-      [],
     ];
 
     await moveDocument({
@@ -236,6 +242,7 @@ describe(moveDocument, () => {
     });
     expect(state.update).toHaveBeenCalledOnce();
     expect(state.txDelete).toHaveBeenCalledOnce();
+    expect(state.txExecute).toHaveBeenCalledOnce();
     expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
   });
 });

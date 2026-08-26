@@ -1,6 +1,6 @@
 'use server';
 
-import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { db } from '@/libs/DB';
@@ -13,6 +13,15 @@ import type {
 } from '../DocumentSchema';
 
 const MAX_DOCUMENT_NAVIGATION_DEPTH = 100;
+
+type DocumentPathRow = {
+  depth: number;
+  id: string;
+  parentId: string | null;
+  projectId: string;
+  sortOrder: number;
+  title: string;
+};
 
 async function requireNavigationAccess(projectId: string) {
   const { id: userId } = await requireUser();
@@ -124,42 +133,64 @@ export async function getDocumentNavigationPath(
 ): Promise<DocumentNavigationItem[] | null> {
   const options = documentNavigationPathSchema.parse(input);
   await requireNavigationAccess(options.projectId);
-  const reversedPath: Omit<DocumentNavigationItem, 'hasChildren'>[] = [];
-  const visited = new Set<string>();
-  let currentDocumentId: string | null = options.documentId;
 
-  while (currentDocumentId) {
-    if (visited.has(currentDocumentId) || reversedPath.length >= MAX_DOCUMENT_NAVIGATION_DEPTH) {
-      throw new Error('文档导航层级存在循环或超过最大深度');
-    }
-    visited.add(currentDocumentId);
+  const result = await db.execute<DocumentPathRow>(sql`
+    with recursive navigation_path as (
+      select
+        documents.id,
+        documents.parent_id as "parentId",
+        documents.project_id as "projectId",
+        documents.sort_order as "sortOrder",
+        documents.title,
+        1 as depth,
+        array[documents.id] as visited_ids
+      from documents
+      where documents.id = ${options.documentId}
+        and documents.project_id = ${options.projectId}
 
-    const [document] = await db
-      .select({
-        id: documentsSchema.id,
-        parentId: documentsSchema.parentId,
-        projectId: documentsSchema.projectId,
-        sortOrder: documentsSchema.sortOrder,
-        title: documentsSchema.title,
-      })
-      .from(documentsSchema)
-      .where(
-        and(
-          eq(documentsSchema.id, currentDocumentId),
-          eq(documentsSchema.projectId, options.projectId),
-        ),
-      )
-      .limit(1);
+      union all
 
-    if (!document) {
-      return null;
-    }
+      select
+        ancestor.id,
+        ancestor.parent_id as "parentId",
+        ancestor.project_id as "projectId",
+        ancestor.sort_order as "sortOrder",
+        ancestor.title,
+        navigation_path.depth + 1 as depth,
+        navigation_path.visited_ids || ancestor.id as visited_ids
+      from documents as ancestor
+        inner join navigation_path on ancestor.id = navigation_path."parentId"
+      where
+        ancestor.project_id = ${options.projectId}
+        and ancestor.id <> all(navigation_path.visited_ids)
+    )
+    select id, "parentId", "projectId", "sortOrder", title, depth
+    from navigation_path
+    order by depth desc
+  `);
 
-    reversedPath.push(document);
-    currentDocumentId = document.parentId;
+  const [topmostAncestor] = result.rows;
+  if (!topmostAncestor) {
+    return null;
   }
 
-  const path = reversedPath.toReversed();
+  const reachedIds = new Set(result.rows.map((row) => row.id));
+  const isCyclic = topmostAncestor.parentId !== null && reachedIds.has(topmostAncestor.parentId);
+  if (isCyclic || result.rows.length > MAX_DOCUMENT_NAVIGATION_DEPTH) {
+    throw new Error('文档导航层级存在循环或超过最大深度');
+  }
+
+  if (topmostAncestor.parentId !== null) {
+    return null;
+  }
+
+  const path = result.rows.map((row) => ({
+    id: row.id,
+    parentId: row.parentId,
+    projectId: row.projectId,
+    sortOrder: row.sortOrder,
+    title: row.title,
+  }));
   const selectedWithChildren = await addHasChildren(path.slice(-1));
 
   return path.map((document, index) => ({

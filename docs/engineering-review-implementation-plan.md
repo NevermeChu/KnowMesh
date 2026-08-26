@@ -256,6 +256,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 关联问题：ER-04
 
+状态：已完成（2026-08-26）
+
 ### 目标
 
 将祖先路径和后代集合从按层循环查询改为有界递归 SQL，同时保持全部安全限制。
@@ -285,6 +287,14 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 建议提交
 
 `perf: load document paths and subtrees with recursive queries`
+
+### 实施结果
+
+- `getDocumentNavigationPath` 改为单条递归 CTE：起点同时匹配 `documentId` 和 `projectId`，递归阶段以访问路径数组拒绝循环并保持项目边界；应用层保留深度 100 上限、循环拒绝与跨项目返回 null 的判定语义。
+- `getDescendantIds` 改为单条递归 CTE，所有节点必须保持在源项目内；跨项目移动时源项目外的脏指针后代不再被卷入迁移，超过 10,000 个后代仍在写入前拒绝整个事务。
+- SQL 全部通过 Drizzle `sql` 参数绑定表达，不拼接用户输入；`assertValidMoveTarget` 的逐级 `FOR UPDATE` 锁路径保持不变。
+- fluent mock 单测中的路径与循环用例移出；新增 PGlite 集成测试覆盖多层祖先路径、跨项目 null、循环拒绝、100/101 深度边界、跨项目移动完整更新（含脏指针留在源项目）和超限无部分更新。
+- 同一 CTE 与锁行为已在本地真实 PostgreSQL 17 容器验证：七项检查全部通过后容器与临时脚本已清理，未向仓库引入验证专用代码。
 
 ## WP-06：批量写入文档排序重排
 

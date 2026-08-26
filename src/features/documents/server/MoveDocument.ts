@@ -1,6 +1,6 @@
 'use server';
 
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
@@ -101,28 +101,37 @@ async function assertValidMoveTarget(options: {
   }
 }
 
-async function getDescendantIds(transaction: Transaction, documentId: string) {
-  const descendantIds: string[] = [];
-  const visitedIds = new Set([documentId]);
-  let pendingParentIds = [documentId];
+async function getDescendantIds(
+  transaction: Transaction,
+  sourceProjectId: string,
+  documentId: string,
+) {
+  const result = await transaction.execute<{ id: string }>(sql`
+    with recursive move_subtree as (
+      select
+        documents.id,
+        array[documents.id] as visited_ids
+      from documents
+      where documents.id = ${documentId}
 
-  while (pendingParentIds.length > 0) {
-    const children = await transaction
-      .select({ id: documentsSchema.id })
-      .from(documentsSchema)
-      .where(inArray(documentsSchema.parentId, pendingParentIds));
-    const childIds = children
-      .map((child) => child.id)
-      .filter((childId) => !visitedIds.has(childId));
+      union all
 
-    for (const childId of childIds) {
-      visitedIds.add(childId);
-      descendantIds.push(childId);
-    }
-    if (descendantIds.length > MAX_MOVED_SUBTREE_DOCUMENTS) {
-      throw new Error('移动的文档子树规模超过限制');
-    }
-    pendingParentIds = childIds;
+      select
+        child_documents.id,
+        move_subtree.visited_ids || child_documents.id as visited_ids
+      from documents as child_documents
+        inner join move_subtree on child_documents.parent_id = move_subtree.id
+      where
+        child_documents.project_id = ${sourceProjectId}
+        and child_documents.id <> all(move_subtree.visited_ids)
+    )
+    select id from move_subtree
+  `);
+
+  const descendantIds = result.rows.map((row) => row.id).filter((id) => id !== documentId);
+
+  if (descendantIds.length > MAX_MOVED_SUBTREE_DOCUMENTS) {
+    throw new Error('移动的文档子树规模超过限制');
   }
 
   return descendantIds;
@@ -219,7 +228,11 @@ export async function moveDocument(input: MoveDocumentInput) {
     }
 
     if (isCrossProjectMove) {
-      const descendantIds = await getDescendantIds(transaction, documentInput.documentId);
+      const descendantIds = await getDescendantIds(
+        transaction,
+        sourceAuthorization.document.projectId,
+        documentInput.documentId,
+      );
 
       if (descendantIds.length > 0) {
         await transaction

@@ -3,7 +3,7 @@
 /* oxlint-disable typescript/promise-function-async -- Builder methods intentionally return pending promises. */
 /* oxlint-disable vitest/prefer-import-in-mock -- Loose fluent database mocks cannot satisfy the production module type. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDocumentNavigationChildren, getDocumentNavigationPath } from './GetDocumentNavigation';
+import { getDocumentNavigationChildren } from './GetDocumentNavigation';
 
 const state = vi.hoisted(() => {
   const rows = [] as unknown[][];
@@ -96,42 +96,5 @@ describe('document navigation queries', () => {
     await expect(
       getDocumentNavigationChildren({ limit: 20, parentId: rootId, projectId }),
     ).rejects.toThrow('指定的导航父文档不存在或不属于当前项目');
-  });
-
-  it('returns bounded root-to-document path', async () => {
-    state.rows.push(
-      [{ id: siblingId, parentId: rootId, projectId, sortOrder: 2000, title: 'Child' }],
-      [{ id: rootId, parentId: null, projectId, sortOrder: 1000, title: 'Root' }],
-      [],
-    );
-
-    await expect(
-      getDocumentNavigationPath({ documentId: siblingId, projectId }),
-    ).resolves.toStrictEqual([
-      {
-        hasChildren: true,
-        id: rootId,
-        parentId: null,
-        projectId,
-        sortOrder: 1000,
-        title: 'Root',
-      },
-      {
-        hasChildren: false,
-        id: siblingId,
-        parentId: rootId,
-        projectId,
-        sortOrder: 2000,
-        title: 'Child',
-      },
-    ]);
-  });
-
-  it('rejects cyclic ancestor path', async () => {
-    state.rows.push([{ id: rootId, parentId: rootId, projectId, sortOrder: 1000, title: 'Cycle' }]);
-
-    await expect(getDocumentNavigationPath({ documentId: rootId, projectId })).rejects.toThrow(
-      '文档导航层级存在循环或超过最大深度',
-    );
   });
 });
