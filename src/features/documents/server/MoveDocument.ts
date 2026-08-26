@@ -126,6 +126,7 @@ async function getDescendantIds(
         and child_documents.id <> all(move_subtree.visited_ids)
     )
     select id from move_subtree
+    limit ${MAX_MOVED_SUBTREE_DOCUMENTS + 2}
   `);
 
   const descendantIds = result.rows.map((row) => row.id).filter((id) => id !== documentId);

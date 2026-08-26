@@ -163,6 +163,7 @@ export async function getDocumentNavigationPath(
       where
         ancestor.project_id = ${options.projectId}
         and ancestor.id <> all(navigation_path.visited_ids)
+        and navigation_path.depth <= ${MAX_DOCUMENT_NAVIGATION_DEPTH}
     )
     select id, "parentId", "projectId", "sortOrder", title, depth
     from navigation_path
