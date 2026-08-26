@@ -213,6 +213,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 关联问题：ER-03
 
+状态：已完成（2026-08-26）
+
 ### 第一阶段：低风险修复
 
 1. 在 `score DESC, updatedAt DESC` 后增加 `documentId DESC`。
@@ -241,6 +243,14 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 - `fix: stabilize search pagination ordering`
 - `perf: generate search snippets in PostgreSQL`
+
+### 实施结果
+
+- 排序在 `score DESC, updatedAt DESC` 后增加 `documents.id DESC`，同分同更新时间的记录跨页顺序唯一；集成测试用 6 条相同分值和相同 `updated_at` 的文档验证三页拼接无重复、重复请求结果一致。
+- 计数查询先行，offset 超出结果总数时直接返回空页和完整分页元数据，不再向数据库下发大 offset 行查询；该行为与 `/search` 页面对超界 URL 页码的既有空结果契约一致。
+- 摘要由 PostgreSQL 查询内表达式围绕首次匹配位置截取最长 140 字符窗口并添加省略号，无正文命中但标题命中时回退为正文头部截断，行为与原 `extractSnippet` 一致。
+- 查询投影移除完整 `search_text`，只返回摘要字段；长正文集成测试证明响应不含窗口外文本。摘要匹配使用参数绑定的字面量定位，LIKE 元字符转义保持不变。
+- `extractSnippet` 失去全部调用方后连同其单测删除；第三阶段（游标分页或 FTS）仍按计划等待测量证据。
 
 ## WP-05：使用递归 CTE 读取文档路径和子树
 

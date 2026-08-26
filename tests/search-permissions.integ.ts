@@ -27,6 +27,10 @@ const tieDocumentIds = [
   '30000000-0000-4000-8000-000000000414',
   '30000000-0000-4000-8000-000000000415',
 ];
+const longBodyDocId = '30000000-0000-4000-8000-000000000420';
+const titleOnlyDocId = '30000000-0000-4000-8000-000000000421';
+
+const longBodyText = `${'a'.repeat(3000)} needlelong ${'b'.repeat(3000)} TAILMARKER99`;
 
 let currentUserId = 'user_direct';
 
@@ -100,6 +104,20 @@ beforeAll(async () => {
           '${personalProjectId}',
           'Personal 笔记',
           '个人 quantum 笔记',
+          'user_owner'
+        ),
+        (
+          '${longBodyDocId}',
+          '${memberProjectId}',
+          '长文正文匹配记录',
+          '${longBodyText}',
+          'user_owner'
+        ),
+        (
+          '${titleOnlyDocId}',
+          '${memberProjectId}',
+          'needlelong 标题命中',
+          'plain body text without the term',
           'user_owner'
         )
     `);
@@ -247,5 +265,28 @@ describe('search pagination ordering', () => {
       totalCount: tieDocumentIds.length,
       totalPages: 3,
     });
+  });
+});
+
+describe('search snippet generation', () => {
+  it('returns a bounded window around the first body match without shipping full text', async () => {
+    currentUserId = 'user_direct';
+    const results = await searchWorkspaceContent({ query: 'needlelong' });
+
+    expect(results.items[0]?.documentId).toBe(titleOnlyDocId);
+    const longBodyItem = results.items.find((item) => item.documentId === longBodyDocId);
+    expect(longBodyItem?.snippet).toContain('needlelong');
+    expect(longBodyItem?.snippet.startsWith('…')).toBe(true);
+    expect(longBodyItem?.snippet.endsWith('…')).toBe(true);
+    expect(longBodyItem?.snippet.length).toBeLessThanOrEqual(142);
+    expect(JSON.stringify(results.items)).not.toContain('TAILMARKER99');
+  });
+
+  it('falls back to head-truncated body when only the title matches', async () => {
+    currentUserId = 'user_direct';
+    const results = await searchWorkspaceContent({ query: 'needlelong' });
+
+    const titleOnlyItem = results.items.find((item) => item.documentId === titleOnlyDocId);
+    expect(titleOnlyItem?.snippet).toBe('plain body text without the term');
   });
 });

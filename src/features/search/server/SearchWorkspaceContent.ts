@@ -11,11 +11,14 @@ import {
   workspacesSchema,
 } from '@/models/Schema';
 import { escapeSqlLikePattern } from '@/utils/SqlPattern';
-import { extractSnippet, searchFilters } from '../Search';
+import { searchFilters } from '../Search';
 import type { SearchFilter, SearchResults } from '../Search';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_SEARCH_QUERY_CHARS = 200;
+const SNIPPET_MAX_LENGTH = 140;
+const SNIPPET_LEAD_LENGTH = Math.floor(SNIPPET_MAX_LENGTH / 3);
+const SNIPPET_TRIM_CHARS = '\t\n\r ';
 
 const searchWorkspaceOptionsSchema = z.object({
   filter: z.enum(searchFilters).optional(),
@@ -84,6 +87,30 @@ export async function searchWorkspaceContent(
     END
   `;
 
+  const matchPositionSql = sql<number>`position(lower(${trimmedQuery}) in lower(${documentsSchema.searchText}))`;
+  const textLengthSql = sql<number>`char_length(${documentsSchema.searchText})`;
+  const snippetStartSql = sql<number>`greatest(1, ${matchPositionSql} - ${SNIPPET_LEAD_LENGTH})`;
+  const snippetWindowSql = sql<number>`least(${textLengthSql} - ${snippetStartSql} + 1, ${SNIPPET_MAX_LENGTH})`;
+
+  const snippetSql = sql<string>`
+    CASE
+      WHEN ${documentsSchema.searchText} = '' THEN ''
+      WHEN ${matchPositionSql} = 0 THEN
+        CASE
+          WHEN ${textLengthSql} > ${SNIPPET_MAX_LENGTH}
+            THEN btrim(substring(${documentsSchema.searchText} for ${SNIPPET_MAX_LENGTH}), ${SNIPPET_TRIM_CHARS}) || '…'
+          ELSE ${documentsSchema.searchText}
+        END
+      ELSE
+        CASE WHEN ${snippetStartSql} > 1 THEN '…' ELSE '' END
+        || btrim(
+          substring(${documentsSchema.searchText} from ${snippetStartSql} for ${snippetWindowSql}),
+          ${SNIPPET_TRIM_CHARS}
+        )
+        || CASE WHEN ${snippetStartSql} - 1 + ${snippetWindowSql} < ${textLengthSql} THEN '…' ELSE '' END
+    END
+  `;
+
   const [countRow] = await db
     .select({
       count: sql<number>`count(*)::int`,
@@ -119,7 +146,7 @@ export async function searchWorkspaceContent(
       documentId: documentsSchema.id,
       projectId: projectsSchema.id,
       projectName: projectsSchema.name,
-      searchText: documentsSchema.searchText,
+      snippet: snippetSql,
       title: documentsSchema.title,
       updatedAt: documentsSchema.updatedAt,
       workspaceId: workspacesSchema.id,
@@ -145,7 +172,7 @@ export async function searchWorkspaceContent(
     documentId: row.documentId,
     projectId: row.projectId,
     projectName: row.projectName,
-    snippet: extractSnippet(row.searchText, trimmedQuery),
+    snippet: row.snippet,
     title: row.title,
     updatedAt: row.updatedAt,
     workspaceId: row.workspaceId,

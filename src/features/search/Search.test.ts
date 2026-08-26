@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractPlainText, extractSnippet } from './Search';
+import { extractPlainText } from './Search';
 
 describe('search text extraction utils', () => {
   it('extracts plain text from nested ProseMirror document tree', () => {
@@ -29,14 +29,5 @@ describe('search text extraction utils', () => {
     expect(extractPlainText('')).toBe('');
     expect(extractPlainText({})).toBe('');
     expect(extractPlainText({ type: 'doc' })).toBe('');
-  });
-
-  it('extracts centered snippet around matched query', () => {
-    const fullText =
-      '这是一段很长很长的文本，我们在中间讨论了关于分布式事务和一致性不变量的核心设计，后面还有很多其他相关总结内容。';
-    const snippet = extractSnippet(fullText, '一致性不变量', 40);
-
-    expect(snippet).toContain('一致性不变量');
-    expect(snippet).toContain('…');
   });
 });
