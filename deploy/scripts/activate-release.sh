@@ -113,9 +113,7 @@ if [[ "${collaboration_deploy_enabled}" == true ]]; then
   systemctl cat "${collaboration_service_name}" >/dev/null
 fi
 
-"${node_binary}" "${release_dir}/migrate-production.cjs" "${environment_file}"
-
-old_release=$(readlink -f "${current_link}")
+old_release=$(readlink -f "${current_link}" || true)
 if [[ -z "${old_release}" || ! -d "${old_release}" ]]; then
   fail 'Current production release is unavailable for rollback'
 fi
@@ -123,6 +121,9 @@ case "${old_release}" in
   "${release_root}"/*) ;;
   *) fail "Rollback target is outside the release root: ${old_release}" ;;
 esac
+
+"${node_binary}" "${release_dir}/migrate-production.cjs" "${environment_file}"
+
 printf '%s\n' "${old_release}" > "${rollback_marker}"
 
 rm -f -- "${temporary_link}"

@@ -242,6 +242,21 @@ if grep -q '^restart ' "${migration_failed}/systemctl.log" 2>/dev/null; then
   fail_test "services were restarted even though the migration failed"
 fi
 
+missing_current_sha=$(random_sha missing-current)
+missing_current="${work}/missing-current"
+new_sandbox "${missing_current}"
+write_env_file "${missing_current}" true
+build_archive "${missing_current_sha}" yes
+rm -f -- "${missing_current}/srv/knowmesh-app/current"
+expect_failure "activation validates rollback availability before migration" "Current production release is unavailable for rollback" \
+  run_activate "${missing_current}" "${missing_current_sha}" true
+if [[ -s "${missing_current}/node.log" ]]; then
+  fail_test "migration ran without an available rollback release"
+fi
+if [[ -e "${missing_current}/srv/knowmesh-app/releases/.previous-${missing_current_sha}" ]]; then
+  fail_test "activation without a rollback release wrote a rollback marker"
+fi
+
 health_failed_sha=$(random_sha health)
 health_failed="${work}/health-failed"
 new_sandbox "${health_failed}"
