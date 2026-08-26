@@ -412,6 +412,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 关联问题：ER-07
 
+状态：已完成（2026-08-26）
+
 ### 目标
 
 缓存下载内容而不是安装结果，确保每个 job 都通过 `npm ci` 从锁文件重建依赖树。
@@ -433,6 +435,14 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 建议提交
 
 `ci: install dependencies from lockfile in every job`
+
+### 实施结果
+
+- 删除 `setup-project` action 中的 `node_modules` 缓存步骤与 cache-hit 跳过分支；`npm ci` 在每个使用该 action 的 job 中无条件执行。
+- `actions/setup-node` 的 `cache: npm` 保留，只缓存 npm 下载内容；全仓搜索确认不再有其他安装入口或 `node_modules` 缓存。
+- Next.js 构建缓存（`.next/cache` 保存与跨 job `.next` 制品恢复）保持原状。
+- 本地验证：`npm ci` 后工作树无 lockfile 变化，lint、类型检查与 234 个单元/集成测试全部通过。
+- 远程验收：推送后在 CI 上确认冷/热缓存运行均执行安装步骤；后续 PR 需继续观察命中 npm 下载缓存后日志仍出现 `npm ci`。
 
 ## WP-10：建立有意义的覆盖率和 UI 行为门槛
 

@@ -18,7 +18,7 @@
 | ER-04 | 文档树读取和重排产生深度或节点数相关往返 | 已解决 | 路径、子树与重排写入均已收敛为单条 SQL | 中 |
 | ER-05 | 工作区布局缓存失效范围过大 | 已解决 | 建立刷新所有权清单，去除可证明重复的客户端刷新 | 中低 |
 | ER-06 | Better Auth 核心配置存在双重实例 | 已解决 | 共享核心配置构造器，契约测试固定两端一致 | 中低 |
-| ER-07 | CI 缓存整个 `node_modules` 并跳过 `npm ci` | 已确认 | 依赖安装不可重复、缓存损坏难诊断 | 中 |
+| ER-07 | CI 缓存整个 `node_modules` 并跳过 `npm ci` | 已解决 | 每个 job 无条件从锁文件重建，只保留 npm 下载缓存 | 中 |
 | ER-08 | 覆盖率没有门槛，高复杂度 UI 缺少行为保护 | 部分确认 | 回归不能在 CI 中稳定暴露 | 中低 |
 | ER-09 | 部署实现集中在大型 YAML 且制品逻辑重复 | 已确认 | 难测试、环境耦合、Release 与 CI 漂移 | 中 |
 
@@ -205,22 +205,24 @@
 
 ## ER-07：CI 依赖缓存方式不够确定
 
+状态：已解决（WP-09 已完成）
+
 ### 当前实现
 
-`.github/actions/setup-project/action.yml` 同时启用 `actions/setup-node` 的 npm cache，并额外缓存整个 `node_modules`。缓存命中时跳过 `npm ci`。
+`.github/actions/setup-project/action.yml` 只保留 `actions/setup-node` 的 npm 下载缓存，并在每个 job 中无条件执行 `npm ci` 从锁文件重建依赖树。整个 `node_modules` 不再作为缓存单元，也不存在缓存命中即跳过安装的分支。
 
-### 风险
+Next.js 构建缓存（`.next/cache` 与跨 job 的 `.next` 制品恢复）保持独立管理，不与依赖安装混合。
 
-- `node_modules` 缓存可能包含中断安装留下的部分状态。
-- Node、npm、系统原生依赖或安装脚本行为变化时，锁文件哈希未必表达全部兼容条件。
-- CI 成功依赖缓存内容，而不是每次从 `package-lock.json` 重建依赖树。
-- setup-node npm cache 与 node_modules cache 重复占用缓存容量。
+### 现有保护
 
-### 目标状态
+- 安装结果始终由 `package-lock.json` 决定；npm 下载缓存只加速获取，不影响依赖树内容。
+- 本地已验证 `npm ci` 后工作树无 lockfile 变化，lint、类型与全部测试通过。
+- CI 观察点：冷缓存与热缓存运行都必须出现安装步骤；命中 npm 下载缓存后日志仍应显示 `npm ci` 执行。
 
-- 只保留 npm 下载缓存。
-- 每个 job 始终执行 `npm ci`。
-- Next.js 构建缓存和已构建 `.next` 制品继续按其独立用途管理，不与依赖安装混合。
+### 后续边界
+
+- 不得为加速而重新缓存安装产物或跳过安装步骤。
+- 依赖兼容性问题只能通过更新锁文件解决，不能通过复用旧 `node_modules` 掩盖。
 
 ## ER-08：覆盖率没有门槛，高复杂度 UI 缺少行为保护
 
