@@ -477,7 +477,7 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 实施结果
 
 - 先生成覆盖率报告记录基线，再在 `vitest.config.ts` 为十个纯领域模块设置按文件阈值（权限策略、排序规划、搜索提取与查询、成员 workflow 与审计、导航状态 reducer、移动/导航/最近文档查询），全部等于或低于可重复基线；不设全局门槛，避免被 UI 代码稀释。变异验证（临时抬高阈值）确认门槛会使运行失败。
-- CI unit job 新增 `actions/upload-artifact@v4` 上传 `coverage/`（HTML + JSON summary，保留 14 天），`if: always()` 保证失败时也可审阅。
+- CI unit job 使用 `actions/upload-artifact@v7` 上传 `coverage/`（HTML + JSON summary，保留 14 天），`if: always()` 保证失败时也可审阅；该版本使用 Node.js 24 action runtime，与当前 CI 基线一致。
 - 补齐缺口的关键 UI 行为用例 `tests/e2e/NavigationResilience.e2e.ts`：侧栏分页失败后经"加载失败，点击重试"恢复、命令面板键盘高亮与回车跳转、迟到搜索响应被请求编号守卫丢弃且界面保持最新结果；深链展开、移动后局部树一致性与成员角色变化已由既有 Playwright 路径覆盖，未重复添加。
 - 删除 `MoveDocument.test.ts` 中仅验证“移动到自身”早退分支和中文错误文本的脆弱用例；保留正常移动、服务器锁定排序、单语句重排、后代环路拒绝、跨项目授权与真实数据库移动测试。对应逐文件阈值按剩余高价值套件的可重复基线校准为 branches 74%、lines/statements 87%，functions 仍为 100%，没有降低其他模块门槛。
 - 验证：lint 0 错误、类型通过、233 个单元/集成测试在覆盖率门槛下全部通过；Playwright 全量 chromium/firefox 通过（真实 PostgreSQL 用例按开关在 CI 运行）。
