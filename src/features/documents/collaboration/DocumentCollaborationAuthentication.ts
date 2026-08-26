@@ -1,22 +1,8 @@
 import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { db } from '@/libs/DB';
-import { Env } from '@/libs/Env';
-import { accountSchema, sessionSchema, userSchema, verificationSchema } from '@/models/Schema';
-import { getBaseUrl } from '@/utils/Helpers';
+import { getAuthenticationCoreOptions } from '@/libs/AuthCore';
 
 const collaborationAuth = betterAuth({
-  baseURL: getBaseUrl(),
-  database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema: {
-      account: accountSchema,
-      session: sessionSchema,
-      user: userSchema,
-      verification: verificationSchema,
-    },
-  }),
-  secret: Env.BETTER_AUTH_SECRET,
+  ...getAuthenticationCoreOptions(),
 });
 
 export async function getDocumentCollaborationIdentity(requestHeaders: Headers) {

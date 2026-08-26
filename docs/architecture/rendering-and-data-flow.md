@@ -171,7 +171,8 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/app/(workspace)/layout.tsx`：服务端初始查询入口。
 - `src/app/api/auth/[...all]/route.ts`：挂载 Better Auth Route Handler。
 - `src/app/api/realtime/notifications/route.ts`：挂载 SSE 实时通知长连接 Route Handler。
-- `src/libs/Auth.ts`：配置 Better Auth、Drizzle adapter、邮件和用户生命周期 hook。
+- `src/libs/Auth.ts`：在共享核心选项之上组合邮件、rate limit、trusted origins 和用户生命周期 hook。
+- `src/libs/AuthCore.ts`：主应用与协作进程共享的 Better Auth 核心配置构造器（base URL、secret、认证表 adapter）。
 - `src/features/auth/server/DeleteAccount.ts`：验证当前密码，并在单个事务中组合业务清理与身份删除。
 - `src/features/users/server/DeleteUserData.ts`：使用调用方事务清理用户拥有的资源并退出其他共享资源。
 - `src/features/permissions/server/ResourceRemoval.ts`：统一执行 Workspace/Project 的 owner 删除与 member 退出事务步骤。

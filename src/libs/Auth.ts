@@ -1,26 +1,14 @@
 import 'server-only';
 import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { sendAuthenticationEmail } from '@/features/emails/server/SendAuthenticationEmail';
 import { ensureUserWorkspace } from '@/features/workspaces/server/EnsureUserWorkspace';
 import { syncPendingWorkspaceInvitations } from '@/features/workspaces/server/SyncPendingInvitations';
-import { db } from '@/libs/DB';
-import { Env } from '@/libs/Env';
-import { accountSchema, sessionSchema, userSchema, verificationSchema } from '@/models/Schema';
+import { getAuthenticationCoreOptions } from '@/libs/AuthCore';
 import { getBaseUrl } from '@/utils/Helpers';
 
 export const auth = betterAuth({
   appName: 'KnowMesh',
-  baseURL: getBaseUrl(),
-  database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema: {
-      account: accountSchema,
-      session: sessionSchema,
-      user: userSchema,
-      verification: verificationSchema,
-    },
-  }),
+  ...getAuthenticationCoreOptions(),
   databaseHooks: {
     session: {
       create: {
@@ -62,5 +50,4 @@ export const auth = betterAuth({
       await sendAuthenticationEmail({ kind: 'verification', to: user.email, url });
     },
   },
-  secret: Env.BETTER_AUTH_SECRET,
 });

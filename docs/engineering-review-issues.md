@@ -17,7 +17,7 @@
 | ER-03 | 搜索分页缺少唯一稳定排序且搬运完整正文投影 | 已解决 | 排序以 documentId 收尾，摘要由数据库截取有限窗口 | 中 |
 | ER-04 | 文档树读取和重排产生深度或节点数相关往返 | 已解决 | 路径、子树与重排写入均已收敛为单条 SQL | 中 |
 | ER-05 | 工作区布局缓存失效范围过大 | 已解决 | 建立刷新所有权清单，去除可证明重复的客户端刷新 | 中低 |
-| ER-06 | Better Auth 核心配置存在双重实例 | 已确认 | Session 配置未来漂移 | 中低 |
+| ER-06 | Better Auth 核心配置存在双重实例 | 已解决 | 共享核心配置构造器，契约测试固定两端一致 | 中低 |
 | ER-07 | CI 缓存整个 `node_modules` 并跳过 `npm ci` | 已确认 | 依赖安装不可重复、缓存损坏难诊断 | 中 |
 | ER-08 | 覆盖率没有门槛，高复杂度 UI 缺少行为保护 | 部分确认 | 回归不能在 CI 中稳定暴露 | 中低 |
 | ER-09 | 部署实现集中在大型 YAML 且制品逻辑重复 | 已确认 | 难测试、环境耦合、Release 与 CI 漂移 | 中 |
@@ -184,25 +184,24 @@
 
 ## ER-06：Better Auth 核心配置存在双重实例
 
+状态：已解决（WP-08 已完成）
+
 ### 当前实现
 
-`src/libs/Auth.ts` 创建主 Better Auth 实例，包含数据库适配、邮件密码、邮箱验证、rate limit、trusted origins 和用户生命周期 hook。
+`src/libs/AuthCore.ts` 提供无副作用的 `getAuthenticationCoreOptions()`：base URL、secret 和认证表 Drizzle adapter（account/session/user/verification）只在此定义一次，且不引入邮件、Workspace 初始化或邀请同步依赖。
 
-`DocumentCollaborationAuthentication.ts` 为独立 Hocuspocus 进程创建最小 Better Auth 实例，只配置 base URL、数据库适配和 secret，并使用 `getSession({ disableCookieCache: true })` 读取连接身份。
+`src/libs/Auth.ts` 在共享核心之上组合 `appName`、`databaseHooks`、邮箱密码、邮箱验证、rate limit 与 trusted origins；`DocumentCollaborationAuthentication.ts` 仅展开共享核心创建最小实例，并继续用 `getSession({ disableCookieCache: true })` 读取连接身份。
 
-独立最小实例避免协作进程加载认证邮件和用户初始化副作用，这一隔离意图合理；问题在于数据库 Schema、base URL、secret 和未来可能影响 Session 解码的选项被手写两次。
+### 现有保护
 
-### 风险
+- 共享核心模块不导入 Resend 邮件、`EnsureUserWorkspace` 或邀请同步，协作 bundle 的无副作用边界保持。
+- 协作连接仍强制 `disableCookieCache: true`；未验证邮箱在 `getDocumentCollaborationIdentity` 返回 null。
+- 契约集成测试（`tests/auth-session-contract.integ.ts`）对同一有效、过期、撤销和未验证邮箱 Session 断言主端 `auth.api.getSession` 与协作端身份解析结果一致；配置漂移会使该测试失败。
 
-- 调整 cookie、Session 或核心插件时只修改主实例，协作服务仍按旧配置读取身份。
-- 为消除重复而直接导入完整 `auth`，又可能把邮件组件、Resend 和生命周期 hook 带入协作服务 bundle。
+### 后续边界
 
-### 目标状态
-
-- 抽取不带副作用的 `getAuthCoreOptions()` 或等价配置构造器。
-- 共享数据库 adapter Schema、base URL、secret 以及确实影响 Session 读取的核心选项。
-- 主应用在共享核心之上增加邮件、rate limit 和数据库 hook。
-- 协作实例继续保持最小依赖，并继续禁用 cookie cache 重新校验 Session。
+- 影响会话解码的核心选项变化必须落在共享核心内，不得回写单一实例。
+- 协作进程继续保持不发邮件、不建 Workspace、不同步邀请的最小职责。
 
 ## ER-07：CI 依赖缓存方式不够确定
 

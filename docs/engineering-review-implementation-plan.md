@@ -376,6 +376,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 关联问题：ER-06
 
+状态：已完成（2026-08-26）
+
 ### 目标
 
 让主应用和协作进程共享 Session 读取所需的核心配置，同时保留协作 bundle 的最小依赖和无副作用边界。
@@ -398,6 +400,13 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 建议提交
 
 `refactor: share Better Auth session configuration`
+
+### 实施结果
+
+- 新增 `src/libs/AuthCore.ts`：`getAuthenticationCoreOptions()` 单点定义 base URL、secret 与认证表 Drizzle adapter；模块不导入邮件、Resend、Workspace 初始化或邀请同步，协作 bundle 边界不变。
+- 主 `auth` 在核心选项之上组合 appName、数据库 hook、邮箱密码与验证、rate limit 和 trusted origins；`collaborationAuth` 只展开共享核心，`disableCookieCache: true` 保持不变。
+- 未在模块加载时创建额外 Auth 实例：共享构造器仅返回配置对象，两个实例各调用一次。
+- 新增契约集成测试 `tests/auth-session-contract.integ.ts`：对有效、过期、撤销和未验证邮箱四类会话断言主端 Session 读取与协作端身份解析结果一致（未验证邮箱两端一致地拒绝进入协作），并已用"移除共享核心"的变异验证测试能捕获漂移。
 
 ## WP-09：让 CI 每次从锁文件安装依赖
 

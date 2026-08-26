@@ -50,6 +50,7 @@ ADR 0008 中“owner 删除、member 退出”、保留文档时匿名化创建�
 ## 相关代码和文档
 
 - `src/libs/Auth.ts`
+- `src/libs/AuthCore.ts`
 - `src/libs/AuthClient.ts`
 - `src/models/Schema.ts`
 - `src/features/workspaces/server/EnsureUserWorkspace.ts`
