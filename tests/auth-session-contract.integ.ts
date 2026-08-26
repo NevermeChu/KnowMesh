@@ -4,9 +4,11 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { getDocumentCollaborationIdentity as getCollaborationIdentityFunction } from '@/features/documents/collaboration/DocumentCollaborationAuthentication';
 import type { auth as authInstance } from '@/libs/Auth';
-import { Env } from '@/libs/Env';
 import * as schema from '@/models/Schema';
 import { createTestPGlite, executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
+
+const CONTRACT_SECRET = 'contract-test-secret';
+const CONTRACT_APP_URL = 'http://localhost:3000';
 
 let database: PGlite;
 let auth: typeof authInstance;
@@ -22,7 +24,7 @@ const sessionTokenByKind = {
 } as const;
 
 const buildSessionHeaders = async (token: string) => {
-  const signedToken = `${token}.${await makeSignature(token, Env.BETTER_AUTH_SECRET)}`;
+  const signedToken = `${token}.${await makeSignature(token, CONTRACT_SECRET)}`;
   return new Headers({ cookie: `better-auth.session_token=${signedToken}` });
 };
 
@@ -59,6 +61,14 @@ beforeAll(async () => {
 
   const testDb = drizzle(database, { schema });
   vi.doMock('server-only', () => ({}));
+  // The unit job runs without BETTER_AUTH_SECRET; a fixed test secret keeps Env validation self-contained.
+  vi.doMock('@/libs/Env', () => ({
+    Env: {
+      BETTER_AUTH_SECRET: CONTRACT_SECRET,
+      NODE_ENV: 'test',
+      NEXT_PUBLIC_APP_URL: CONTRACT_APP_URL,
+    },
+  }));
   vi.doMock('@/libs/DB', () => ({ db: testDb }));
 
   ({ auth } = await import('@/libs/Auth'));
@@ -68,6 +78,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   vi.doUnmock('@/libs/DB');
+  vi.doUnmock('@/libs/Env');
   vi.doUnmock('server-only');
   await database.close();
 });
