@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { MemberRole } from '@/features/permissions/Permission';
@@ -16,7 +15,6 @@ export function ProjectAccessActions(props: {
   projectRole: MemberRole | null;
   requestedRole: MemberRole | null;
 }) {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const requestedRole = props.projectRole === 'viewer' ? 'editor' : 'viewer';
@@ -44,7 +42,6 @@ export function ProjectAccessActions(props: {
               startTransition(async () => {
                 try {
                   await acceptProjectInvitation({ projectId: props.projectId });
-                  router.refresh();
                 } catch {
                   setError('接受邀请失败，请稍后重试。');
                 }
@@ -62,7 +59,6 @@ export function ProjectAccessActions(props: {
               startTransition(async () => {
                 try {
                   await rejectProjectInvitation({ projectId: props.projectId });
-                  router.refresh();
                 } catch {
                   setError('拒绝邀请失败，请稍后重试。');
                 }
@@ -82,7 +78,6 @@ export function ProjectAccessActions(props: {
             startTransition(async () => {
               try {
                 await requestProjectAccess({ projectId: props.projectId, requestedRole });
-                router.refresh();
               } catch {
                 setError('权限操作失败，请稍后重试。');
               }

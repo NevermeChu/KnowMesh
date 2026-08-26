@@ -19,6 +19,13 @@ Team 正文：Client Component → 浏览器 Yjs 副本 + Hocuspocus Provider �
 
 `async` 不决定函数是否为 Server Action。决定因素是调用发生在哪个运行边界，以及导出函数是否使用 `'use server'` 暴露为 Action。
 
+## 写入后的刷新所有权
+
+- 修改共享布局数据的 Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 拥有唯一刷新职责；Action 响应本身携带当前路由的最新载荷，客户端调用这类 Action 后不得再执行 `router.refresh()`。
+- 文档树节点继续由客户端局部失效刷新（来源与目标父节点），不依赖全布局重渲染。
+- `router.refresh()` 仅保留给没有对应 Server Action 的服务端状态变化，例如远端协作者修改标题后经 WebSocket stateless 消息触发的当前页刷新。
+- 全站路由因根布局读取主题 cookie 而动态渲染，业务查询不进入 Next 数据缓存，因此当前不使用 `revalidateTag`；引入缓存标签前必须先把对应查询迁入数据缓存。
+
 ## 受保护页面的认证回跳
 
 `src/proxy.ts` 为页面请求生成 CSP nonce，并把严格脚本策略写入请求与响应头；Next.js 从请求 CSP 自动把同一 nonce 应用到框架脚本和根布局主题脚本，应用组件不重复传递浏览器会隐藏的 nonce 属性。Plus Jakarta Sans、Noto Sans SC 与 JetBrains Mono 由锁文件固定的 Fontsource 包随应用同源发布，CSP 不开放外部样式或字体来源。代理同时保护工作区与邀请页面：未检测到 Better Auth Session cookie 时，它将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。

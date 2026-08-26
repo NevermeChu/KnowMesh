@@ -137,7 +137,6 @@ export function AcceptWorkspaceInvitation(props: {
                       await acceptWorkspaceInvitationInApp({ workspaceId: props.workspaceId });
                     }
                     router.push('/dashboard');
-                    router.refresh();
                   } catch {
                     setError('邀请状态已变更。请刷新页面后重试。');
                   }

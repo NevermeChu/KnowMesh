@@ -323,7 +323,6 @@ export function AppSidebar(props: {
                       ? '/personal'
                       : pathname,
                   );
-                  router.refresh();
                 } catch {
                   setWorkspaceError('切换工作区失败，请稍后重试');
                 }
@@ -383,7 +382,6 @@ export function AppSidebar(props: {
           onCreated={() => {
             setIsCreatingWorkspace(false);
             router.replace(pathname);
-            router.refresh();
           }}
         />
       )}
@@ -403,7 +401,6 @@ export function AppSidebar(props: {
               setNavigationRevision((revision) => revision + 1);
               router.replace(pathname);
             }
-            router.refresh();
           }}
           onNavigate={openPermissionOverview}
         />

@@ -338,6 +338,8 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 
 关联问题：ER-05
 
+状态：已完成（2026-08-26）
+
 ### 目标
 
 先建立证据，再减少全布局 revalidation 和客户端 refresh；正确性优先于刷新数量。
@@ -362,6 +364,13 @@ WP-03、WP-04、WP-05、WP-07、WP-08 和 WP-09 可分别实施，但同一工�
 ### 建议提交
 
 `perf: narrow workspace data revalidation`
+
+### 实施结果
+
+- 建立刷新所有权清单并写入 `architecture/rendering-and-data-flow.md`：修改布局数据的 Server Action 通过布局失效拥有唯一刷新，文档树节点由客户端局部失效负责，`router.refresh()` 只保留给远端协作标题广播这类无 Action 的服务端状态变化。
+- 删除 10 处可证明重复的 `router.refresh()`：拖拽与弹窗移动后两处、Workspace 切换与创建后两处、权限弹窗变更后一处、接受 Workspace 邀请一处、项目邀请接受/拒绝与访问申请三处、Personal 与协作编辑器标题保存后两处（其中协作编辑器远端标题的刷新按所有权保留）。
+- 确认全站路由因根布局读取主题 cookie 动态渲染、业务查询不经 Next 数据缓存，因此不引入 `revalidateTag`，也不给未缓存查询添加无效 tag；服务端各入口的 `revalidatePath` 调用全部保留。
+- 验证：lint、类型与 230 个单元/集成测试通过；Playwright 关键路径 20 条全部通过，覆盖创建/改名/移动/删除后的侧栏一致性、Workspace 切换、成员角色变化、编辑器保存与协作恢复。
 
 ## WP-08：共享 Better Auth 核心配置
 

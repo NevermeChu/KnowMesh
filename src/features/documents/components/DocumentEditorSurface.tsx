@@ -2,7 +2,6 @@
 
 import type { Editor } from '@tiptap/react';
 import { EditorContent } from '@tiptap/react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
@@ -36,7 +35,6 @@ export function DocumentEditorSurface(props: {
   setSaveState: (state: SaveState) => void;
   wordCount: number;
 }) {
-  const router = useRouter();
   const toolbarRegistration = useDocumentEditorToolbarRegistration();
   const editorCommands = useDocumentEditorCommands();
   const [title, setTitle] = useState(props.document.title);
@@ -102,7 +100,6 @@ export function DocumentEditorSurface(props: {
       lastSavedTitle.current = normalizedTitle;
       hasTitleConflict.current = false;
       props.setSaveState('saved');
-      router.refresh();
     } catch {
       props.setSaveState('error');
     }

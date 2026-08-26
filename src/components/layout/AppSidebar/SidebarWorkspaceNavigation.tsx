@@ -100,7 +100,6 @@ export function SidebarWorkspaceNavigation(props: {
       targetParentId,
       targetProjectId,
     });
-    router.refresh();
   };
 
   const dragAndDrop = useDocumentNavigationDragAndDrop({ onMove: moveDraggedDocument });
@@ -253,7 +252,6 @@ export function SidebarWorkspaceNavigation(props: {
         onDocumentMoved={(input) => {
           router.push(`${input.href}&document=${input.documentId}`);
           refreshMovedNodes(input);
-          router.refresh();
           props.onNavigate();
         }}
         onOpenPermissionOverview={props.onOpenPermissionOverview}
