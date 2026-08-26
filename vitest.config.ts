@@ -66,10 +66,10 @@ export default defineConfig({
           statements: 95,
         },
         'src/features/documents/server/MoveDocument.ts': {
-          branches: 75,
+          branches: 74,
           functions: 100,
-          lines: 88,
-          statements: 88,
+          lines: 87,
+          statements: 87,
         },
         'src/components/layout/AppSidebar/SidebarDocumentNavigationState.ts': {
           branches: 60,

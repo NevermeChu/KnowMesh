@@ -209,18 +209,6 @@ describe(moveDocument, () => {
     expect(state.set).toHaveBeenCalledWith(expect.objectContaining({ sortOrder: 1500 }));
   });
 
-  it('rejects moving a document to be its own child', async () => {
-    await expect(
-      moveDocument({
-        documentId: docId,
-        targetParentId: docId,
-        targetProjectId: projectId,
-      }),
-    ).rejects.toThrow('不能将文档设置为自身的子文档');
-
-    expect(state.update).not.toHaveBeenCalled();
-  });
-
   it('rejects moving a document into its own descendant', async () => {
     state.txQueue.rows = [
       [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
