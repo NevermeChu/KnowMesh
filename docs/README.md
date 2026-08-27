@@ -14,12 +14,12 @@
 | 修改站内通知、未读状态或通知触发事件 | [`features/notifications.md`](features/notifications.md) |
 | 修改系统偏好、外观主题或全站颜色 token | [`features/preferences.md`](features/preferences.md) |
 | 修改文档模型、编辑器或文档权限 | [`features/documents.md`](features/documents.md) 和 [`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) |
-| 实施文档实时协作写作 | [`document-collaboration-plan.md`](document-collaboration-plan.md)、[`features/documents.md`](features/documents.md)、[`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) 和 [`adr/0012-use-yjs-for-team-document-collaboration.md`](adr/0012-use-yjs-for-team-document-collaboration.md) |
+| 修改文档实时协作 | [`features/documents.md`](features/documents.md)、[`architecture/rendering-and-data-flow.md`](architecture/rendering-and-data-flow.md)、[`adr/0012-use-yjs-for-team-document-collaboration.md`](adr/0012-use-yjs-for-team-document-collaboration.md) 和 [`adr/0014-use-browser-yjs-replicas-for-crash-recovery.md`](adr/0014-use-browser-yjs-replicas-for-crash-recovery.md) |
 | 修改全文搜索、命令面板或搜索结果排序 | [`features/search.md`](features/search.md) 和 [`adr/0006-separate-workspace-discovery-from-project-content-access.md`](adr/0006-separate-workspace-discovery-from-project-content-access.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
 | 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |
-| 审查可维护性、性能与工程化问题 | [`engineering-review-issues.md`](engineering-review-issues.md) |
-| 实施工程审查整改计划 | [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md) 和 [`engineering-review-issues.md`](engineering-review-issues.md) |
+| 查看长期保留的重要工程问题 | [`PROBLEMS.md`](PROBLEMS.md) |
+| 回看已完成的工程审查 | [`engineering-review-issues.md`](engineering-review-issues.md) 和 [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)（历史记录） |
 | 理解“为什么这样选” | [`adr/README.md`](adr/README.md) 和相关 Accepted ADR |
 | 查看非权威 UI 参考 | [`design-references/README.md`](design-references/README.md) |
 | 新增或维护知识文档 | [`KNOWLEDGE_MAINTENANCE.md`](KNOWLEDGE_MAINTENANCE.md) |
@@ -78,7 +78,20 @@
 - `database/`：描述持久化模型、迁移规则和本地数据库操作。
 - `adr/`：记录重要决策的背景、取舍和后果；Accepted ADR 保留历史。
 - `design-references/`：保存非权威视觉参考；不得据此推断已实现功能。
-- 根目录中的旧说明：已标记为历史资料，不作为当前实现依据。
+- `docs/` 根目录中的实施计划与旧说明：已标记为历史资料，不作为当前实现依据。
+
+## 历史实施记录
+
+下列文档保留实施背景、阶段性验证和取舍过程，但不描述当前状态。继续开发时先读上面的 Current 文档与 Accepted ADR，再按需回看这些记录：
+
+- [`Better-Auth替换Clerk实施计划.md`](Better-Auth替换Clerk实施计划.md)
+- [`document-collaboration-plan.md`](document-collaboration-plan.md)
+- [`engineering-review-issues.md`](engineering-review-issues.md)
+- [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)
+- [`SSE实时通知.md`](SSE实时通知.md)
+- [`SIMPLIFY.md`](SIMPLIFY.md)
+- [`STRUCTURE.md`](STRUCTURE.md)
+- [`TECH_STACK_REMOVAL_ORDER.md`](TECH_STACK_REMOVAL_ORDER.md)
 
 ## 事实来源
 

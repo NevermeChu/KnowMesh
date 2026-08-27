@@ -1,10 +1,10 @@
 # 工程审查问题说明
 
-状态：Current implementation review
+状态：Historical completed review（2026-08-27）
 
 基线：`feature/permissions` 当前工作区；提交级 CI 与部署结果必须在交付时重新核验。
 
-本文描述当前实现中已经确认、解决或保留后续边界的可维护性、性能和工程化问题。实施顺序、文件批次、验证命令和完成条件见 [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)。
+本文保留 ER-01 至 ER-09 在 2026-08-27 完成时的审查与整改记录，不再作为当前问题清单。当前实现以代码和 Current 文档为准；长期问题见 [`PROBLEMS.md`](PROBLEMS.md)。实施顺序、文件批次和当时的验证记录见 [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)。
 
 ## 结论摘要
 

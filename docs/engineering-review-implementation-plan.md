@@ -1,8 +1,8 @@
 # 工程审查问题实施计划
 
-状态：已完成（2026-08-27）；实现、CI、公开入口与生产部署验证均已通过
+状态：Historical completed implementation record（2026-08-27）
 
-本文规定 [`engineering-review-issues.md`](engineering-review-issues.md) 中 ER-01 至 ER-09 的实施方式，并在各工作包中记录当前实施结果。每次继续处理或复核时都必须以当前代码重新验证状态；不得仅根据本文推断功能或外部验证已经完成。
+本文保留 [`engineering-review-issues.md`](engineering-review-issues.md) 中 ER-01 至 ER-09 的实施方式和完成时结果。它不再是待执行计划；复核时必须以当前代码和 Current 文档重新验证，不得仅根据本文推断功能或外部验证仍然有效。
 
 ## 目标与非目标
 

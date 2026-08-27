@@ -1,6 +1,6 @@
 # KnowMesh 生产部署手册
 
-本文面向第一次接触服务器部署的维护者，说明 KnowMesh 当前如何从 GitHub 仓库变成 `https://thisme.icu` 上运行的服务，以及每个配置由谁管理。当前代码、workflow、迁移和部署模板是事实来源；服务器上的未版本化文件必须通过本文命令现场核对。
+本文面向第一次接触服务器部署的维护者，说明 KnowMesh 如何从 GitHub 仓库变成 `https://thisme.icu` 上运行的服务，以及每个配置由谁管理。当前代码、workflow、迁移和部署模板是仓库事实来源；文中的服务器现场值来自 2026-08-23 只读审计，只是带日期的快照，未经重新执行检查命令不得当作当前生产事实。
 
 ## 先理解部署是什么
 
@@ -29,6 +29,7 @@
         ├─ build：构建 Next.js
         ├─ unit：运行 Vitest
         ├─ e2e：真实 PostgreSQL + Hocuspocus + Playwright
+        ├─ packaging：制品与激活/回滚脚本冒烟
         └─ deploy：重新构建生产制品并通过 SSH 上传
                 │
                 ▼
@@ -151,7 +152,7 @@ deploy 只有在 `build`、`static`、`unit`、`e2e` 和 `packaging` 全部成�
 
 ## 生产 artifact 包包含什么
 
-Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。CI deploy job 和 Release workflow 都调用同一个版本化入口 [`scripts/package-production-artifact.sh`](../../../scripts/package-production-artifact.sh) 完成打包，该脚本：
+Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。CI deploy job 和 Release workflow 都调用同一个版本化入口 [`scripts/package-production-artifact.sh`](../../scripts/package-production-artifact.sh) 完成打包，该脚本：
 
 - 接收显式参数：仓库根目录、standalone 目录、Next 静态目录、输出归档和 Git revision；不读取任何生产 Secret。
 - 用 esbuild 从同一仓库生成自包含的 `migrate-production.cjs` 和 `collaboration-server.cjs`。
@@ -160,7 +161,7 @@ Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。CI deploy job
 - 逐项校验必需文件与目录；若 standalone 目录中已有属于其他 SHA 的 `REVISION`，直接失败，防止 `.next` 缓存把不同提交的产物混进同一制品。
 - 产出 `knowmesh-release-<SHA>.tgz`，并把归档内全部文件清单打印到日志。
 
-两个 workflow 因此上传完全相同的 tgz 结构；文件清单由同一代码路径生成，不会漂移。CI 另有 `packaging` job 运行 [`scripts/package-production-artifact.smoke.sh`](../../../scripts/package-production-artifact.smoke.sh)，覆盖缺少必需文件、revision 不匹配、未知参数和 `.env` 排除等失败路径。
+两个 workflow 因此上传完全相同的 tgz 结构；文件清单由同一代码路径生成，不会漂移。CI 另有 `packaging` job 运行 [`scripts/package-production-artifact.smoke.sh`](../../scripts/package-production-artifact.smoke.sh)，覆盖缺少必需文件、revision 不匹配、未知参数和 `.env` 排除等失败路径。
 
 artifact 内容包括：
 
@@ -487,7 +488,7 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 1. 在本地完成修改和必要验证。
 2. 提交并 push 到会部署的分支。
 3. 打开 GitHub 仓库的 **Actions → CI**。
-4. 先看 `static`、`build`、`unit`、`e2e`；任何一个失败都不会开始部署。
+4. 先看 `static`、`build`、`unit`、`e2e` 和 `packaging`；任何一个失败都不会开始部署。
 5. 再看 `Deploy production` 中的构建、SSH 上传、迁移、服务切换和公网验证。
 6. 所有 job 绿色后访问生产站点，完成与改动风险相称的人工业务验收。
 
@@ -500,7 +501,7 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 ### GitHub 侧
 
 - 确认 workflow 的 commit SHA 正是要发布的版本。
-- 确认五个 job 全部成功，而不是只看 build。
+- 确认六个 job 全部成功，而不是只看 build。
 - 在 deploy log 中确认迁移、服务健康检查、公网 HTTPS 和 WSS Upgrade 都成功。
 - 不要把失败日志中的命令输出复制到公开位置前，先检查是否含敏感信息。
 
