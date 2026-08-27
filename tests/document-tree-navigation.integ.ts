@@ -1,12 +1,16 @@
 import type { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { getDocumentNavigationPath as getDocumentNavigationPathFunction } from '@/features/documents/server/GetDocumentNavigation';
+import type {
+  getDocumentNavigationChildren as getDocumentNavigationChildrenFunction,
+  getDocumentNavigationPath as getDocumentNavigationPathFunction,
+} from '@/features/documents/server/GetDocumentNavigation';
 import type { moveDocument as moveDocumentFunction } from '@/features/documents/server/MoveDocument';
 import * as schema from '@/models/Schema';
 import { createTestPGlite, executeMigrations, migrationFiles } from './helpers/PGliteMigrations';
 
 let database: PGlite;
+let getDocumentNavigationChildren: typeof getDocumentNavigationChildrenFunction;
 let getDocumentNavigationPath: typeof getDocumentNavigationPathFunction;
 let moveDocument: typeof moveDocumentFunction;
 
@@ -24,6 +28,8 @@ const navRootId = '3a000000-0000-4000-8000-00000000a001';
 const navMidId = '3a000000-0000-4000-8000-00000000a002';
 const navLeafId = '3a000000-0000-4000-8000-00000000a003';
 const navLeafChildId = '3a000000-0000-4000-8000-00000000a004';
+const navRootSiblingId = '3a000000-0000-4000-8000-00000000a005';
+const navRootOverflowId = '3a000000-0000-4000-8000-00000000a006';
 
 const cycleFirstId = '3a000000-0000-4000-8000-00000000b001';
 const cycleSecondId = '3a000000-0000-4000-8000-00000000b002';
@@ -95,6 +101,8 @@ beforeAll(async () => {
         ('${navMidId}', '${navProjectId}', '${navRootId}', '导航中层', 1000, '${userId}'),
         ('${navLeafId}', '${navProjectId}', '${navMidId}', '导航叶子', 1000, '${userId}'),
         ('${navLeafChildId}', '${navProjectId}', '${navLeafId}', '导航叶子子级', 1000, '${userId}'),
+        ('${navRootSiblingId}', '${navProjectId}', NULL, '导航同级', 1000, '${userId}'),
+        ('${navRootOverflowId}', '${navProjectId}', NULL, '导航下一页', 2000, '${userId}'),
         ('${cycleFirstId}', '${navProjectId}', '${cycleSecondId}', '循环一', 9000, '${userId}'),
         ('${cycleSecondId}', '${navProjectId}', '${cycleThirdId}', '循环二', 9000, '${userId}'),
         ('${cycleThirdId}', '${navProjectId}', '${cycleFirstId}', '循环三', 9000, '${userId}'),
@@ -163,7 +171,7 @@ beforeAll(async () => {
     requireUser: async () => ({ id: currentUserId }),
   }));
 
-  ({ getDocumentNavigationPath } =
+  ({ getDocumentNavigationChildren, getDocumentNavigationPath } =
     await import('@/features/documents/server/GetDocumentNavigation'));
   ({ moveDocument } = await import('@/features/documents/server/MoveDocument'));
 }, 30_000);
@@ -236,6 +244,36 @@ describe('document navigation path queries', () => {
     await expect(
       getDocumentNavigationPath({ documentId: formatDeepChainId(101), projectId: deepProjectId }),
     ).rejects.toThrow('文档导航层级存在循环或超过最大深度');
+  });
+});
+
+describe('document navigation child queries', () => {
+  it('returns direct children with a stable next cursor and child metadata', async () => {
+    currentUserId = userId;
+
+    const page = await getDocumentNavigationChildren({
+      limit: 2,
+      parentId: null,
+      projectId: navProjectId,
+    });
+
+    expect(page.items.map((item) => [item.id, item.hasChildren])).toStrictEqual([
+      [navRootId, true],
+      [navRootSiblingId, false],
+    ]);
+    expect(page.nextCursor).toStrictEqual({ id: navRootSiblingId, sortOrder: 1000 });
+  });
+
+  it('rejects a parent outside the requested project', async () => {
+    currentUserId = userId;
+
+    await expect(
+      getDocumentNavigationChildren({
+        limit: 20,
+        parentId: movedDocumentId,
+        projectId: navProjectId,
+      }),
+    ).rejects.toThrow('指定的导航父文档不存在或不属于当前项目');
   });
 });
 
