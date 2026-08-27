@@ -61,6 +61,14 @@ const state = vi.hoisted(() => {
 
   const authorizeDocument = vi.fn<() => Promise<unknown>>();
   const authorizeProject = vi.fn<() => Promise<unknown>>();
+  const requireProjectPermissionInTransaction = vi.fn<
+    (options: { projectId: string }) => Promise<{
+      kind: 'personal' | 'team';
+      name: string;
+      ownerId: string;
+      workspaceId: string;
+    }>
+  >();
   const requireUser = vi.fn<() => Promise<{ id: string }>>();
   const revalidatePath = vi.fn<(path: string, type?: 'layout' | 'page') => void>();
 
@@ -70,6 +78,7 @@ const state = vi.hoisted(() => {
     from,
     limit,
     orderBy,
+    requireProjectPermissionInTransaction,
     requireUser,
     returning,
     revalidatePath,
@@ -99,6 +108,10 @@ vi.mock('@/features/permissions/server/DocumentAuthorization', () => ({
 vi.mock('@/features/permissions/server/ProjectAuthorization', () => ({
   authorizeProject: state.authorizeProject,
 }));
+// oxlint-disable-next-line vitest/prefer-import-in-mock -- Transaction authorization is controlled per move scenario.
+vi.mock('@/features/permissions/server/RevalidateProjectPermission', () => ({
+  requireProjectPermissionInTransaction: state.requireProjectPermissionInTransaction,
+}));
 // oxlint-disable-next-line vitest/prefer-import-in-mock -- Fluent query builders isolate database updates.
 vi.mock('@/libs/DB', () => ({
   db: {
@@ -124,6 +137,14 @@ describe(moveDocument, () => {
     state.authorizeProject.mockResolvedValue({
       project: { id: targetProjectId, workspaceKind: 'personal' },
     });
+    state.requireProjectPermissionInTransaction.mockImplementation((options) =>
+      Promise.resolve({
+        kind: options.projectId === targetProjectId ? 'personal' : 'team',
+        name: options.projectId === targetProjectId ? '目标项目' : '源项目',
+        ownerId: 'user_1',
+        workspaceId: options.projectId === targetProjectId ? 'ws-target' : 'ws-source',
+      }),
+    );
     state.limit.mockResolvedValue([]);
     state.returning.mockResolvedValue([
       {
@@ -137,13 +158,7 @@ describe(moveDocument, () => {
   });
 
   it('moves document to new parent within same project', async () => {
-    state.txQueue.rows = [
-      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
-      [{ role: 'owner' }],
-      [{ role: 'owner' }],
-      [{ id: parentId, parentId: null, projectId }],
-      [],
-    ];
+    state.txQueue.rows = [[{ id: docId }], [{ id: parentId, parentId: null, projectId }], []];
 
     const result = await moveDocument({
       documentId: docId,
@@ -166,9 +181,7 @@ describe(moveDocument, () => {
     const firstSiblingId = '60000000-0000-4000-8000-000000000001';
     const secondSiblingId = '60000000-0000-4000-8000-000000000002';
     state.txQueue.rows = [
-      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
-      [{ role: 'owner' }],
-      [{ role: 'owner' }],
+      [{ id: docId }],
       [
         { id: firstSiblingId, sortOrder: 1000 },
         { id: secondSiblingId, sortOrder: 1000.5 },
@@ -189,9 +202,7 @@ describe(moveDocument, () => {
   it('computes relative position from locked server siblings', async () => {
     const targetId = '50000000-0000-4000-8000-000000000005';
     state.txQueue.rows = [
-      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
-      [{ role: 'owner' }],
-      [{ role: 'owner' }],
+      [{ id: docId }],
       [
         { id: parentId, sortOrder: 1000 },
         { id: targetId, sortOrder: 2000 },
@@ -211,9 +222,7 @@ describe(moveDocument, () => {
 
   it('rejects moving a document into its own descendant', async () => {
     state.txQueue.rows = [
-      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
-      [{ role: 'owner' }],
-      [{ role: 'owner' }],
+      [{ id: docId }],
       [{ id: parentId, parentId: 'descendant_intermediate', projectId }],
       [{ parentId: docId }],
     ];
@@ -231,12 +240,7 @@ describe(moveDocument, () => {
 
   it('authorizes target project and updates descendants when moving across projects', async () => {
     state.txQueue.rows = [
-      [{ kind: 'team', name: '源项目', ownerId: 'user_1', workspaceId: 'ws-source' }],
-      [{ role: 'owner' }],
-      [{ role: 'owner' }],
-      [{ kind: 'personal', name: '目标项目', ownerId: 'user_1', workspaceId: 'ws-target' }],
-      [{ role: 'owner' }],
-      [{ role: 'owner' }],
+      [{ id: docId }],
       [{ id: parentId, parentId: null, projectId: targetProjectId }],
       [],
     ];
@@ -256,5 +260,45 @@ describe(moveDocument, () => {
     expect(state.txDelete).toHaveBeenCalledOnce();
     expect(state.txExecute).toHaveBeenCalledOnce();
     expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
+  });
+
+  it('rejects a document moved after the initial authorization', async () => {
+    state.txQueue.rows = [[]];
+
+    await expect(
+      moveDocument({
+        documentId: docId,
+        targetParentId: null,
+        targetProjectId,
+      }),
+    ).rejects.toThrow('文档位置已发生变化，请刷新后重试');
+
+    expect(state.update).not.toHaveBeenCalled();
+  });
+
+  it('locks cross-project permissions in stable project order', async () => {
+    const laterSourceProjectId = 'f0000000-0000-4000-8000-000000000001';
+    const earlierTargetProjectId = '20000000-0000-4000-8000-000000000001';
+    state.authorizeDocument.mockResolvedValue({
+      document: { id: docId, projectId: laterSourceProjectId },
+      project: { id: laterSourceProjectId, workspaceKind: 'team' },
+    });
+    state.requireProjectPermissionInTransaction.mockResolvedValue({
+      kind: 'team',
+      name: '项目',
+      ownerId: 'user_1',
+      workspaceId: 'ws-source',
+    });
+    state.txQueue.rows = [[{ id: docId }], []];
+
+    await moveDocument({
+      documentId: docId,
+      targetParentId: null,
+      targetProjectId: earlierTargetProjectId,
+    });
+
+    expect(
+      state.requireProjectPermissionInTransaction.mock.calls.map(([options]) => options.projectId),
+    ).toStrictEqual([earlierTargetProjectId, laterSourceProjectId]);
   });
 });

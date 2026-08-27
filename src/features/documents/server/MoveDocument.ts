@@ -170,23 +170,64 @@ export async function moveDocument(input: MoveDocumentInput) {
   }
 
   const updatedDocument = await db.transaction(async (transaction) => {
-    const sourceProject = await requireProjectPermissionInTransaction({
-      permission: 'document.update',
-      projectId: sourceAuthorization.document.projectId,
-      transaction,
-      userId,
-    });
+    const sourceProjectId = sourceAuthorization.document.projectId;
+    const permissionRequests = [
+      {
+        permission: 'document.update' as const,
+        projectId: sourceProjectId,
+        purpose: 'source' as const,
+      },
+      ...(isCrossProjectMove
+        ? [
+            {
+              permission: 'document.create' as const,
+              projectId: documentInput.targetProjectId,
+              purpose: 'target' as const,
+            },
+          ]
+        : []),
+    ].toSorted((first, second) => first.projectId.localeCompare(second.projectId));
 
-    let targetWorkspaceKind = sourceProject.kind;
-    if (isCrossProjectMove) {
-      const targetProject = await requireProjectPermissionInTransaction({
-        permission: 'document.create',
-        projectId: documentInput.targetProjectId,
+    let sourceProject: Awaited<ReturnType<typeof requireProjectPermissionInTransaction>> | null =
+      null;
+    let targetProject: Awaited<ReturnType<typeof requireProjectPermissionInTransaction>> | null =
+      null;
+
+    for (const request of permissionRequests) {
+      const project = await requireProjectPermissionInTransaction({
+        permission: request.permission,
+        projectId: request.projectId,
         transaction,
         userId,
       });
-      targetWorkspaceKind = targetProject.kind;
+      if (request.purpose === 'source') {
+        sourceProject = project;
+      } else {
+        targetProject = project;
+      }
     }
+
+    if (!sourceProject) {
+      throw new Error('文档来源项目不可用');
+    }
+
+    const [lockedDocument] = await transaction
+      .select({ id: documentsSchema.id })
+      .from(documentsSchema)
+      .where(
+        and(
+          eq(documentsSchema.id, documentInput.documentId),
+          eq(documentsSchema.projectId, sourceProjectId),
+        ),
+      )
+      .limit(1)
+      .for('update', { of: documentsSchema });
+
+    if (!lockedDocument) {
+      throw new Error('文档位置已发生变化，请刷新后重试');
+    }
+
+    const targetWorkspaceKind = targetProject?.kind ?? sourceProject.kind;
 
     await assertValidMoveTarget({
       documentId: documentInput.documentId,
@@ -239,7 +280,7 @@ export async function moveDocument(input: MoveDocumentInput) {
     if (isCrossProjectMove) {
       const descendantIds = await getDescendantIds(
         transaction,
-        sourceAuthorization.document.projectId,
+        sourceProjectId,
         documentInput.documentId,
       );
 
@@ -270,7 +311,12 @@ export async function moveDocument(input: MoveDocumentInput) {
         sortOrder: sortOrderPlan.sortOrder,
         updatedAt: new Date(),
       })
-      .where(eq(documentsSchema.id, documentInput.documentId))
+      .where(
+        and(
+          eq(documentsSchema.id, documentInput.documentId),
+          eq(documentsSchema.projectId, sourceProjectId),
+        ),
+      )
       .returning({
         id: documentsSchema.id,
         parentId: documentsSchema.parentId,
