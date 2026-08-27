@@ -24,8 +24,9 @@ export type StarredDocumentItem = {
   workspaceKind: 'personal' | 'team';
 };
 
-const documentIdSchema = z.object({
+const starredDocumentInputSchema = z.object({
   documentId: z.uuid(),
+  isStarred: z.boolean(),
 });
 
 /**
@@ -62,16 +63,17 @@ export async function getStarredDocuments(): Promise<StarredDocumentItem[]> {
 }
 
 /**
- * Toggles the starred status of a document for the authenticated user.
+ * Sets the starred status of a document for the authenticated user.
  *
  * @param input - Target document identifier.
  * @returns The new star status.
  */
-export async function toggleStarredDocument(input: {
+export async function setDocumentStarred(input: {
   documentId: string;
+  isStarred: boolean;
 }): Promise<{ isStarred: boolean }> {
   const { id: userId } = await requireUser();
-  const { documentId } = documentIdSchema.parse(input);
+  const { documentId, isStarred } = starredDocumentInputSchema.parse(input);
 
   await authorizeDocument({
     documentId,
@@ -79,36 +81,27 @@ export async function toggleStarredDocument(input: {
     userId,
   });
 
-  const [existing] = await db
-    .select({ documentId: starredDocumentsSchema.documentId })
-    .from(starredDocumentsSchema)
+  if (isStarred) {
+    await db
+      .insert(starredDocumentsSchema)
+      .values({ documentId, userId })
+      .onConflictDoNothing({
+        target: [starredDocumentsSchema.userId, starredDocumentsSchema.documentId],
+      });
+
+    revalidatePath('/starred');
+    return { isStarred };
+  }
+
+  await db
+    .delete(starredDocumentsSchema)
     .where(
       and(
         eq(starredDocumentsSchema.userId, userId),
         eq(starredDocumentsSchema.documentId, documentId),
       ),
-    )
-    .limit(1);
-
-  if (existing) {
-    await db
-      .delete(starredDocumentsSchema)
-      .where(
-        and(
-          eq(starredDocumentsSchema.userId, userId),
-          eq(starredDocumentsSchema.documentId, documentId),
-        ),
-      );
-
-    revalidatePath('/starred');
-    return { isStarred: false };
-  }
-
-  await db.insert(starredDocumentsSchema).values({
-    documentId,
-    userId,
-  });
+    );
 
   revalidatePath('/starred');
-  return { isStarred: true };
+  return { isStarred };
 }

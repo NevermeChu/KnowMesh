@@ -118,20 +118,22 @@
 
 - `(user_id, document_id)` 联合主键。
 - `document_id` 非空外键指向 `documents.id`，删除文档时数据库自动级联删除其收藏记录。
-- `user_id` 保存 Better Auth 用户 ID 字符串。
+- `user_id` 非空外键指向 Better Auth `user.id`，删除用户时数据库自动级联删除其收藏记录。
 - `(user_id, created_at DESC)` 索引支持按收藏时间倒序检索用户的收藏文档。
 - 包含收藏记录创建时间。
 
 
 当前已经加入 Better Auth 本地用户表。认证迁移完成后，业务表中的 `owner_id` 和 `user_id` 保存 Better Auth 字符串用户 ID；账户删除由应用事务同时删除该用户拥有的 Workspace、Project、其他业务关系和 Better Auth `user` 行。其他通知中的触发者引用置空，其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`，因此这些业务引用不会全部直接级联到 `user`。
 
-自 `0027_woozy_magus.sql` 起，上述用户引用关系由数据库外键兜底：归属类列（通知收件人、偏好、收藏、成员、访问请求、邀请双方、Workspace/Project 的 owner）对 `user.id` 级联删除；`notifications.actor_user_id` 为可空外键并随触发者删除置空，与既有清理语义一致。两个例外保持无外键：`audit_logs.actor_user_id` 在账户删除后必须保留审计历史，`documents.created_by_id` 会被替换为哨兵值 `deleted_user` 而非真实用户行。同一迁移把全部时间戳列统一为 `timestamptz`（按 UTC 解释存量值），为 `project_invitations` 补充七天过期的 `expires_at`（存量行按 `created_at + 7 天` 回填），并新增 `(workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL` 部分唯一索引防止重复待处理工作区邀请；迁移在清理孤儿行与回填期间临时禁用 owner 不变量触发器。
+自 `0027_woozy_magus.sql` 起，除收藏外的上述用户引用关系由数据库外键兜底：归属类列（通知收件人、偏好、成员、访问请求、邀请双方、Workspace/Project 的 owner）对 `user.id` 级联删除；`notifications.actor_user_id` 为可空外键并随触发者删除置空，与既有清理语义一致。两个例外保持无外键：`audit_logs.actor_user_id` 在账户删除后必须保留审计历史，`documents.created_by_id` 会被替换为哨兵值 `deleted_user` 而非真实用户行。同一迁移把全部时间戳列统一为 `timestamptz`（按 UTC 解释存量值），为 `project_invitations` 补充七天过期的 `expires_at`（存量行按 `created_at + 7 天` 回填），并新增 `(workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL` 部分唯一索引防止重复待处理工作区邀请；迁移在清理孤儿行与回填期间临时禁用 owner 不变量触发器。
 
 自 `0029_majestic_orphan.sql` 起，`audit_logs.workspace_id` 也不再引用 `workspaces`：它保存产生事件时的稳定 Workspace UUID，而不是活跃资源关系。该边界保证删除 Workspace 后旧历史和同事务写入的 `workspace_deleted` 事件仍存在；普通业务子表仍继续通过外键级联清理。
 
 自 `0030_flowery_domino.sql` 起，`documents.title_version` 独立记录标题保存版本，不受协作正文更新 `updated_at` 影响。标题更新递增版本并在事务提交后向协作失效频道发布标题、文档 ID 与新版本；协作进程只把该消息广播给当前文档房间，不把标题写入 Y.Doc。
 
 自 `0031_chief_silver_sable.sql` 起，文档层级索引由 `(project_id, parent_id, sort_order)` 扩展为 `(project_id, parent_id, sort_order, id)`，与导航 Server Action 的 `(sort_order, id)` 稳定游标和确定排序一致。
+
+自 `0032_clammy_garia.sql` 起，`starred_documents.user_id` 也以 `ON DELETE CASCADE` 外键引用 `user.id`。迁移先删除无法关联现有用户的孤儿收藏，再建立约束；应用收藏写入使用明确目标状态和联合主键冲突处理，使重复收藏或取消收藏请求幂等。
 
 ## 数据库约束与应用层不变量
 

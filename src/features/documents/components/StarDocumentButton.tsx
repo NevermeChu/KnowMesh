@@ -3,7 +3,7 @@
 import { Star } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { useToast } from '@/components/ui/Toast';
-import { toggleStarredDocument } from '../server/StarredDocuments';
+import { setDocumentStarred } from '../server/StarredDocuments';
 
 /**
  * Renders an interactive star/unstar toggle button for a document.
@@ -29,7 +29,10 @@ export function StarDocumentButton(props: {
 
     startTransition(async () => {
       try {
-        const result = await toggleStarredDocument({ documentId: props.documentId });
+        const result = await setDocumentStarred({
+          documentId: props.documentId,
+          isStarred: next,
+        });
         setIsStarred(result.isStarred);
       } catch {
         setIsStarred(previous);

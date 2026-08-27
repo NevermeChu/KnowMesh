@@ -1,0 +1,7 @@
+DELETE FROM "starred_documents"
+WHERE NOT EXISTS (
+	SELECT 1
+	FROM "user"
+	WHERE "user"."id" = "starred_documents"."user_id"
+);--> statement-breakpoint
+ALTER TABLE "starred_documents" ADD CONSTRAINT "starred_documents_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;

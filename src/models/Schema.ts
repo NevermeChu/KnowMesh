@@ -432,7 +432,9 @@ export const documentCollaborationStatesSchema = pgTable('document_collaboration
 export const starredDocumentsSchema = pgTable(
   'starred_documents',
   {
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: varchar('user_id', { length: 255 })
+      .notNull()
+      .references(() => userSchema.id, { onDelete: 'cascade' }),
     documentId: uuid('document_id')
       .notNull()
       .references(() => documentsSchema.id, { onDelete: 'cascade' }),
