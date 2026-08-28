@@ -77,8 +77,9 @@ describe(TeamWhiteboardSaveQueue, () => {
     const merged = { ...EMPTY_WHITEBOARD_SCENE, elements: [...local.elements, ...remote.elements] };
     const save = vi
       .fn<(options: SaveCandidate) => Promise<WhiteboardSaveAcknowledgement>>()
-      .mockImplementation( async (options) =>
-        Promise.resolve(canonical({ revision: 3, scene: options.scene, status: 'saved' })),
+      .mockImplementation(
+        async (options) =>
+          await Promise.resolve(canonical({ revision: 3, scene: options.scene, status: 'saved' })),
       );
     const apply = createApplyMock();
     const queue = new TeamWhiteboardSaveQueue({
@@ -121,9 +122,9 @@ describe(TeamWhiteboardSaveQueue, () => {
         .mockResolvedValue(scene),
       save: vi
         .fn<(options: SaveCandidate) => Promise<WhiteboardSaveAcknowledgement>>()
-        .mockImplementation( async () => {
+        .mockImplementation(async () => {
           revision += 1;
-          return Promise.resolve(
+          return await Promise.resolve(
             canonical({ revision, scene: EMPTY_WHITEBOARD_SCENE, status: 'conflict' }),
           );
         }),

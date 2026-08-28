@@ -35,13 +35,16 @@ export default defineConfig({
       ? 'node scripts/local-runtime.ts playwright-start'
       : 'node scripts/local-runtime.ts playwright-dev',
     url: baseURL,
-    timeout: 60 * 1000,
+    timeout: 180 * 1000,
     reuseExistingServer: !process.env.CI,
     gracefulShutdown: { signal: 'SIGTERM', timeout: 2 * 1000 },
     env: {
+      ...process.env,
       BROWSER_TO_TERMINAL_DISABLED: 'true',
+      COLLABORATION_ADDRESS: '::',
       NEXT_PUBLIC_APP_URL: baseURL,
       PORT,
+      WHITEBOARD_COLLABORATION_ADDRESS: '::',
     },
   },
 
@@ -69,7 +72,11 @@ export default defineConfig({
             name: 'firefox',
             // Homepage/auth markup and collaboration WebSocket are covered on
             // chromium; firefox only re-runs the cross-browser-relevant specs.
-            testIgnore: ['DocumentCollaboration.e2e.ts', 'Sanity.e2e.ts'],
+            testIgnore: [
+              'DocumentCollaboration.e2e.ts',
+              'TeamWhiteboardCollaboration.e2e.ts',
+              'Sanity.e2e.ts',
+            ],
             use: { ...devices['Desktop Firefox'] },
           },
         ]
