@@ -22,7 +22,7 @@ import { parseDocumentCollaborationPersistenceMessage } from '../collaboration/D
 import { getDocumentCollaborationRoom } from '../collaboration/DocumentCollaborationRoom';
 import { parseDocumentCollaborationTitleMessage } from '../collaboration/DocumentCollaborationTitleMessage';
 import { startDocumentCollaborationWebsocket } from '../collaboration/DocumentCollaborationWebsocketLifecycle';
-import type { Document } from '../Document';
+import type { RichTextDocument } from '../Document';
 import { documentExtensions } from '../DocumentExtensions';
 import {
   getDocumentCollaborationCanEdit,
@@ -83,7 +83,7 @@ function CollaborativeDocumentEditorContent(props: {
   canEdit: boolean;
   collaborationMembers: DocumentCollaborationMember[];
   collaborationState: CollaborationState;
-  document: Document;
+  document: RichTextDocument;
   localPersistenceFailed: boolean;
 }) {
   const provider = useHocuspocusProvider();
@@ -159,7 +159,7 @@ function CollaborativeDocumentEditorContent(props: {
 function CollaborativeDocumentSnapshot(props: {
   canEditTitle: boolean;
   collaborationState: CollaborationState;
-  document: Document;
+  document: RichTextDocument;
 }) {
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [wordCount, setWordCount] = useState(0);
@@ -195,7 +195,7 @@ function CollaborativeDocumentSnapshot(props: {
 function DocumentCollaborationRoom(props: {
   canEdit: boolean;
   currentUserId: string;
-  document: Document;
+  document: RichTextDocument;
 }) {
   const provider = useHocuspocusProvider();
   const router = useRouter();
@@ -373,7 +373,7 @@ function DocumentCollaborationRoom(props: {
 export function CollaborativeDocumentEditor(props: {
   canEdit: boolean;
   currentUserId: string;
-  document: Document;
+  document: RichTextDocument;
 }) {
   return (
     <DocumentCollaborationConnection>

@@ -5,7 +5,7 @@ import { EditorContent } from '@tiptap/react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
-import type { Document } from '../Document';
+import type { RichTextDocument } from '../Document';
 import { isDocumentContent } from '../DocumentSchema';
 import { updateDocument } from '../server/UpdateDocument';
 import { DocumentBlockHandle } from './DocumentBlockHandle';
@@ -28,7 +28,7 @@ export function DocumentEditorSurface(props: {
   canEditTitle: boolean;
   collaborationMembers?: DocumentCollaborationMember[];
   collaborationState?: CollaborationState;
-  document: Document;
+  document: RichTextDocument;
   editor: Editor | null;
   localPersistenceFailed?: boolean;
   saveState: SaveState;

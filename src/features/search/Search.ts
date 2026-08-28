@@ -1,8 +1,11 @@
+import type { DocumentKind } from '@/features/documents/Document';
+
 export const searchFilters = ['all', 'personal', 'team'] as const;
 export type SearchFilter = (typeof searchFilters)[number];
 
 export type SearchResultItem = {
   documentId: string;
+  kind: DocumentKind;
   projectId: string;
   projectName: string;
   snippet: string;

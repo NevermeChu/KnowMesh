@@ -13,9 +13,11 @@ import {
   starredDocumentsSchema,
   workspacesSchema,
 } from '@/models/Schema';
+import type { DocumentKind } from '../Document';
 
 export type StarredDocumentItem = {
   documentId: string;
+  kind: DocumentKind;
   projectId: string;
   projectName: string;
   starredAt: Date;
@@ -40,6 +42,7 @@ export async function getStarredDocuments(): Promise<StarredDocumentItem[]> {
   return await db
     .select({
       documentId: documentsSchema.id,
+      kind: documentsSchema.kind,
       projectId: projectsSchema.id,
       projectName: projectsSchema.name,
       starredAt: starredDocumentsSchema.createdAt,

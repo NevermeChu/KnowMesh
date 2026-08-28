@@ -1,5 +1,6 @@
-import { ChevronRight, FileText, Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import Link from 'next/link';
+import { DocumentKindIcon } from '@/features/documents/components/DocumentKindIcon';
 import {
   buildDocumentTree,
   emptyNavigationNodeState,
@@ -64,13 +65,14 @@ function getProjectItemClassName(options: {
 function DocumentTreePrefix(props: {
   hasChildren: boolean;
   isExpanded: boolean;
+  kind: WorkspaceDocument['kind'];
   label: string;
   onToggle: () => void;
 }) {
   if (!props.hasChildren) {
     return (
       <span className="grid size-6 shrink-0 place-items-center text-ink-faint">
-        <FileText aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
+        <DocumentKindIcon className="size-3.5" kind={props.kind} />
       </span>
     );
   }
@@ -202,11 +204,18 @@ function DocumentTreeItem(props: DocumentTreeItemProps) {
         <DocumentTreePrefix
           hasChildren={props.document.hasChildren}
           isExpanded={isExpanded}
+          kind={props.document.kind}
           label={props.document.label}
           onToggle={() => {
             props.onToggleDocument(props.project.id, props.document.id);
           }}
         />
+        {props.document.hasChildren && (
+          <DocumentKindIcon
+            className="size-3.5 shrink-0 text-ink-faint"
+            kind={props.document.kind}
+          />
+        )}
         <Link
           href={props.document.href}
           aria-current={isActive ? 'page' : undefined}

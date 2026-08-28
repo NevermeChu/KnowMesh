@@ -9,9 +9,11 @@ import {
   projectsSchema,
   workspacesSchema,
 } from '@/models/Schema';
+import type { DocumentKind } from '../Document';
 
 export type RecentDocumentItem = {
   documentId: string;
+  kind: DocumentKind;
   projectId: string;
   projectName: string;
   title: string;
@@ -32,6 +34,7 @@ export const getRecentDocuments = cache(async (limit = 8): Promise<RecentDocumen
   return await db
     .select({
       documentId: documentsSchema.id,
+      kind: documentsSchema.kind,
       projectId: projectsSchema.id,
       projectName: projectsSchema.name,
       title: documentsSchema.title,

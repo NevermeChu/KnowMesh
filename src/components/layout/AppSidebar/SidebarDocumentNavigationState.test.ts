@@ -19,6 +19,7 @@ const createDocument = (options: {
 }) => ({
   hasChildren: false,
   id: options.id,
+  kind: 'rich-text' as const,
   parentId: options.parentId ?? null,
   projectId: options.projectId ?? 'project-1',
   sortOrder: options.sortOrder ?? 0,
@@ -33,6 +34,7 @@ const createWorkspaceDocument = (options: {
   hasChildren: false,
   href: `/${options.id}`,
   id: options.id,
+  kind: 'rich-text',
   label: options.id,
   parentId: options.parentId ?? null,
   sortOrder: options.sortOrder ?? 0,

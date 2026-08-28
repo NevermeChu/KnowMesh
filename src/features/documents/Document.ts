@@ -1,3 +1,5 @@
+import type { WhiteboardScene } from '@/features/whiteboards/WhiteboardScene';
+
 export const DOCUMENT_CONTENT_SCHEMA_VERSION = 1;
 
 export const documentKinds = ['rich-text', 'whiteboard'] as const;
@@ -29,9 +31,7 @@ export type DocumentContent = DocumentNode & {
   type: 'doc';
 };
 
-export type Document = {
-  content: DocumentContent;
-  contentSchemaVersion: number;
+type DocumentMetadata = {
   createdAt: Date;
   id: string;
   isStarred?: boolean;
@@ -43,9 +43,25 @@ export type Document = {
   updatedAt: Date;
 };
 
+export type RichTextDocument = DocumentMetadata & {
+  content: DocumentContent;
+  contentSchemaVersion: number;
+  kind: 'rich-text';
+};
+
+export type WhiteboardDocument = DocumentMetadata & {
+  kind: 'whiteboard';
+  revision: number;
+  scene: WhiteboardScene;
+  sceneSchemaVersion: number;
+  sceneUpdatedAt: Date;
+};
+
+export type Document = RichTextDocument | WhiteboardDocument;
+
 export type DocumentNavigationItem = Pick<
   Document,
-  'id' | 'parentId' | 'projectId' | 'sortOrder' | 'title'
+  'id' | 'kind' | 'parentId' | 'projectId' | 'sortOrder' | 'title'
 > & { hasChildren: boolean };
 
 export type DocumentNavigationCursor = Pick<DocumentNavigationItem, 'id' | 'sortOrder'>;

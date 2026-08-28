@@ -91,7 +91,9 @@ Document 已具有 `rich-text` 与 `whiteboard` 两种内容类型。存量文�
 
 白板 scene 独立保存在 `document_whiteboard_states`，不进入 `documents.content`、`search_text` 或 `document_collaboration_states`。创建 whiteboard 时，Document 和空 scene 在同一事务写入；删除继续依赖 Document 外键级联。数据库延迟约束同时保证 whiteboard 必须且只能具有白板状态，并拒绝 whiteboard 建立富文本协作状态。应用的 `updateDocument(content)` 与富文本协作初始化也会读取数据库 kind 并拒绝 whiteboard。
 
-当前仅完成领域模型、迁移和服务端隔离，不代表白板创建 UI、读取、编辑、导出或实时协作已经开放。scene envelope 当前只允许空 `files`；图片与二进制资产仍不可用。
+白板已可从项目根节点或任意文档下创建，并以统一 Document 身份参与导航、移动、收藏、最近访问和标题搜索。读取路径先完成 Project 授权，再按 `kind` 加载 ProseMirror content 或白板 scene；无 `document.read` 权限时只返回可见的导航标题，不读取或解析 scene。
+
+当前白板画布仅只读，Personal 编辑、自动保存、导出和 Team 实时协作尚未开放。scene envelope 当前只允许空 `files`；图片与二进制资产仍不可用。
 
 ## 相关代码
 

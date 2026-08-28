@@ -1,5 +1,10 @@
 import * as z from 'zod';
-import type { JsonObject, JsonValue } from '@/features/documents/Document';
+
+type JsonValue = boolean | number | string | null | JsonValue[] | JsonObject;
+
+type JsonObject = {
+  [key: string]: JsonValue;
+};
 
 export const WHITEBOARD_SCENE_SCHEMA_VERSION = 1;
 

@@ -38,6 +38,7 @@ export async function getRecentPaletteDocuments(
   const rows = await db
     .select({
       documentId: documentsSchema.id,
+      kind: documentsSchema.kind,
       projectId: projectsSchema.id,
       projectName: projectsSchema.name,
       title: documentsSchema.title,
@@ -69,6 +70,7 @@ export async function getRecentPaletteDocuments(
     return [
       {
         documentId: row.documentId,
+        kind: row.kind,
         projectId: row.projectId,
         projectName: row.projectName,
         snippet: '',

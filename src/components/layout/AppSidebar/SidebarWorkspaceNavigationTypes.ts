@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { DocumentKind } from '@/features/documents/Document';
 import type { Permission } from '@/features/permissions/Permission';
 import type { ProjectArea } from '@/features/projects/Project';
 
@@ -7,6 +8,7 @@ export type WorkspaceDocument = {
   hasChildren: boolean;
   href: string;
   id: string;
+  kind: DocumentKind;
   label: string;
   parentId: string | null;
   sortOrder: number;

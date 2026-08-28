@@ -385,6 +385,45 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
+  test('creates and opens a read-only whiteboard from the sidebar', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const whiteboardTitle = `Smoke Whiteboard ${randomUUID()}`;
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${documentId}`);
+    const personalNavigation = page.getByRole('navigation', {
+      exact: true,
+      name: '个人区域',
+    });
+    const projectLink = personalNavigation.getByRole('link', {
+      exact: true,
+      name: 'Smoke Project',
+    });
+
+    await projectLink.click({ button: 'right' });
+    await page
+      .locator('#navigation-context-menu')
+      .getByRole('button', { exact: true, name: '新建文件' })
+      .click();
+    await page.locator('label').filter({ hasText: '白板' }).click();
+    await page.locator('#document-title').fill(whiteboardTitle);
+    await page.getByRole('button', { exact: true, name: '创建' }).click();
+
+    await expect(page.getByRole('heading', { exact: true, name: whiteboardTitle })).toBeVisible();
+    await expect(page.getByText('只读白板', { exact: true })).toBeVisible();
+    await expect(page.locator('.excalidraw')).toBeVisible();
+    await expect(
+      personalNavigation.getByRole('link', { exact: true, name: whiteboardTitle }),
+    ).toBeVisible();
+
+    await close();
+  });
+
   test('renders authenticated destination pages', async ({ baseURL, browser }) => {
     if (!baseURL) {
       throw new Error('Playwright base URL is unavailable');

@@ -10,6 +10,7 @@ const createDocument = (id: string, parentId: string | null): WorkspaceDocument 
   hasChildren: false,
   href: `/${id}`,
   id,
+  kind: 'rich-text',
   label: id,
   parentId,
   sortOrder: 0,

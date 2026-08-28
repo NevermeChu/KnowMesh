@@ -29,6 +29,7 @@ const tieDocumentIds = [
 ];
 const longBodyDocId = '30000000-0000-4000-8000-000000000420';
 const titleOnlyDocId = '30000000-0000-4000-8000-000000000421';
+const whiteboardDocId = '30000000-0000-4000-8000-000000000422';
 
 const longBodyText = `${'a'.repeat(3000)} needlelong ${'b'.repeat(3000)} TAILMARKER99`;
 
@@ -131,6 +132,21 @@ beforeAll(async () => {
           )
           .join(',\n        ')}
     `);
+    await transaction.query(`
+      INSERT INTO documents (id, kind, project_id, title, search_text, created_by_id)
+      VALUES (
+        '${whiteboardDocId}',
+        'whiteboard',
+        '${memberProjectId}',
+        'Canvas Board',
+        'whiteboard-body-must-not-match',
+        'user_owner'
+      )
+    `);
+    await transaction.query(`
+      INSERT INTO document_whiteboard_states (document_id)
+      VALUES ('${whiteboardDocId}')
+    `);
   });
 
   const testDb = drizzle(database, { schema });
@@ -227,6 +243,18 @@ describe('search permission boundary', () => {
 
     expect(hydrated.map((item) => item.documentId)).toStrictEqual([directDocId]);
     expect(hydrated[0]?.projectName).toBe('Member Project');
+  });
+
+  it('searches whiteboards by title without exposing body snippets', async () => {
+    currentUserId = 'user_direct';
+    const titleResults = await searchWorkspaceContent({ query: 'Canvas Board' });
+
+    expect(titleResults.items).toContainEqual(
+      expect.objectContaining({ documentId: whiteboardDocId, kind: 'whiteboard', snippet: '' }),
+    );
+
+    const bodyResults = await searchWorkspaceContent({ query: 'whiteboard-body-must-not-match' });
+    expect(bodyResults.items.map((item) => item.documentId)).not.toContain(whiteboardDocId);
   });
 });
 

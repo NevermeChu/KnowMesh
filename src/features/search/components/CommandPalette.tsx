@@ -3,7 +3,6 @@
 import {
   ArrowRight,
   Bell,
-  Clock,
   FileText,
   Home,
   Keyboard,
@@ -27,6 +26,7 @@ import {
   toggleZenMode,
 } from '@/components/layout/ShellEvents';
 import { Kbd } from '@/components/ui/Kbd';
+import { DocumentKindIcon } from '@/features/documents/components/DocumentKindIcon';
 import { applyThemePreference } from '@/features/preferences/components/ApplyThemePreference';
 import { isUserThemePreference } from '@/features/preferences/Preferences';
 import { updateThemePreference } from '@/features/preferences/server/UpdateThemePreference';
@@ -151,7 +151,7 @@ function PaletteSearchResults(props: {
                   isSelected ? 'bg-accent text-white' : 'bg-surface text-ink-muted'
                 }`}
               >
-                <FileText aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                <DocumentKindIcon className="size-4" kind={result.kind} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-2">
@@ -223,7 +223,7 @@ function PaletteSuggestions(props: {
                         isSelected ? 'bg-accent text-white' : 'bg-surface text-ink-muted'
                       }`}
                     >
-                      <Clock aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                      <DocumentKindIcon className="size-4" kind={item.kind} />
                     </span>
                     <span className="min-w-0 flex-1 truncate">{item.title}</span>
                     <span className="text-xs text-ink-faint">

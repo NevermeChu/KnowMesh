@@ -9,6 +9,7 @@ describe(createContentBreadcrumbs, () => {
         {
           hasChildren: true,
           id: '30000000-0000-4000-8000-000000000001',
+          kind: 'rich-text',
           parentId: null,
           projectId: '20000000-0000-4000-8000-000000000001',
           sortOrder: 0,
@@ -17,6 +18,7 @@ describe(createContentBreadcrumbs, () => {
         {
           hasChildren: true,
           id: '30000000-0000-4000-8000-000000000002',
+          kind: 'whiteboard',
           parentId: '30000000-0000-4000-8000-000000000001',
           projectId: '20000000-0000-4000-8000-000000000001',
           sortOrder: 0,
@@ -25,6 +27,7 @@ describe(createContentBreadcrumbs, () => {
         {
           hasChildren: false,
           id: '30000000-0000-4000-8000-000000000003',
+          kind: 'rich-text',
           parentId: '30000000-0000-4000-8000-000000000002',
           projectId: '20000000-0000-4000-8000-000000000001',
           sortOrder: 0,

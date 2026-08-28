@@ -80,7 +80,7 @@ export function DocumentWorkspace(props: {
   }
 
   if (props.selectedDocument) {
-    if (!props.selectedDocumentEditorMode) {
+    if (props.selectedDocument.kind === 'rich-text' && !props.selectedDocumentEditorMode) {
       throw new Error('Document editor mode is missing');
     }
 

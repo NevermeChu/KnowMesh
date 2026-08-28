@@ -1,11 +1,12 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, FileText, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { DocumentKindIcon } from '@/features/documents/components/DocumentKindIcon';
 import { escapeRegularExpression } from '@/utils/RegularExpression';
 import type { SearchFilter, SearchResults } from '../Search';
 
@@ -114,7 +115,7 @@ function SearchResultsSection(props: {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
-                    <FileText aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                    <DocumentKindIcon className="size-4" kind={result.kind} />
                   </span>
                   <h2 className="truncate text-sm font-semibold text-ink">
                     <HighlightedText query={props.initialQuery} text={result.title} />

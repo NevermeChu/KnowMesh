@@ -2,10 +2,15 @@ import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { getProjectAuthorization } from '@/features/permissions/server/ProjectAuthorization';
+import { whiteboardSceneSchema } from '@/features/whiteboards/WhiteboardScene';
 import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { db } from '@/libs/DB';
 import { Env } from '@/libs/Env';
-import { documentsSchema, starredDocumentsSchema } from '@/models/Schema';
+import {
+  documentWhiteboardStatesSchema,
+  documentsSchema,
+  starredDocumentsSchema,
+} from '@/models/Schema';
 import { getDocumentEditorMode } from '../DocumentEditorMode';
 import { getDocumentNavigationPath } from './GetDocumentNavigation';
 
@@ -63,6 +68,71 @@ export async function getProjectDocuments(options: {
     };
   }
 
+  const starredRecordPromise = db
+    .select({ documentId: starredDocumentsSchema.documentId })
+    .from(starredDocumentsSchema)
+    .where(
+      and(
+        eq(starredDocumentsSchema.userId, userId),
+        eq(starredDocumentsSchema.documentId, selectedNavigationItem.id),
+      ),
+    )
+    .limit(1);
+
+  if (selectedNavigationItem.kind === 'whiteboard') {
+    const [[selectedWhiteboard], [starredRecord]] = await Promise.all([
+      db
+        .select({
+          createdAt: documentsSchema.createdAt,
+          id: documentsSchema.id,
+          parentId: documentsSchema.parentId,
+          projectId: documentsSchema.projectId,
+          revision: documentWhiteboardStatesSchema.revision,
+          scene: documentWhiteboardStatesSchema.scene,
+          sceneSchemaVersion: documentWhiteboardStatesSchema.sceneSchemaVersion,
+          sceneUpdatedAt: documentWhiteboardStatesSchema.updatedAt,
+          sortOrder: documentsSchema.sortOrder,
+          title: documentsSchema.title,
+          titleVersion: documentsSchema.titleVersion,
+          updatedAt: documentsSchema.updatedAt,
+        })
+        .from(documentsSchema)
+        .innerJoin(
+          documentWhiteboardStatesSchema,
+          eq(documentWhiteboardStatesSchema.documentId, documentsSchema.id),
+        )
+        .where(
+          and(
+            eq(documentsSchema.id, selectedNavigationItem.id),
+            eq(documentsSchema.kind, 'whiteboard'),
+            eq(documentsSchema.projectId, options.projectId),
+          ),
+        )
+        .limit(1),
+      starredRecordPromise,
+    ]);
+    const scene = selectedWhiteboard
+      ? whiteboardSceneSchema.parse(selectedWhiteboard.scene)
+      : undefined;
+
+    return {
+      access: authorization.decision,
+      currentUserId: userId,
+      hasDocuments: Boolean(firstDocument),
+      selectedDocumentEditorMode: null,
+      selectedDocument:
+        selectedWhiteboard && scene
+          ? {
+              ...selectedWhiteboard,
+              isStarred: Boolean(starredRecord),
+              kind: 'whiteboard' as const,
+              scene,
+            }
+          : null,
+      selectedDocumentTitle: selectedWhiteboard?.title ?? selectedNavigationItem.title,
+    };
+  }
+
   const [[selectedContent], [starredRecord]] = await Promise.all([
     db
       .select({
@@ -81,20 +151,12 @@ export async function getProjectDocuments(options: {
       .where(
         and(
           eq(documentsSchema.id, selectedNavigationItem.id),
+          eq(documentsSchema.kind, 'rich-text'),
           eq(documentsSchema.projectId, options.projectId),
         ),
       )
       .limit(1),
-    db
-      .select({ documentId: starredDocumentsSchema.documentId })
-      .from(starredDocumentsSchema)
-      .where(
-        and(
-          eq(starredDocumentsSchema.userId, userId),
-          eq(starredDocumentsSchema.documentId, selectedNavigationItem.id),
-        ),
-      )
-      .limit(1),
+    starredRecordPromise,
   ]);
 
   return {
@@ -111,6 +173,7 @@ export async function getProjectDocuments(options: {
       ? {
           ...selectedContent,
           isStarred: Boolean(starredRecord),
+          kind: 'rich-text' as const,
         }
       : null,
     selectedDocumentTitle: selectedContent?.title ?? selectedNavigationItem.title,

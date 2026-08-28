@@ -5,7 +5,7 @@ import type { Editor } from '@tiptap/react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
-import type { Document, DocumentContent } from '../Document';
+import type { DocumentContent, RichTextDocument } from '../Document';
 import { documentExtensions } from '../DocumentExtensions';
 import { isDocumentContent } from '../DocumentSchema';
 import { updateDocument } from '../server/UpdateDocument';
@@ -53,7 +53,7 @@ function countCharacters(content: DocumentContent | null | undefined): number {
 export function DocumentEditor(props: {
   canEditContent: boolean;
   canEditTitle: boolean;
-  document: Document;
+  document: RichTextDocument;
 }) {
   const toolbarRegistration = useDocumentEditorToolbarRegistration();
   const editorCommands = useDocumentEditorCommands();

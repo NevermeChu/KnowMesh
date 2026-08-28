@@ -123,6 +123,19 @@ beforeAll(async () => {
     `);
 
     await transaction.query(`
+      UPDATE documents
+      SET kind = 'whiteboard'
+      WHERE id = '${movedChildOneId}'
+    `);
+    await transaction.query(`
+      INSERT INTO document_whiteboard_states (document_id, scene)
+      VALUES (
+        '${movedChildOneId}',
+        '{"type":"excalidraw","version":1,"source":"knowmesh","elements":[],"appState":{"viewBackgroundColor":"#ffffff"},"files":{}}'::jsonb
+      )
+    `);
+
+    await transaction.query(`
       INSERT INTO documents (id, project_id, parent_id, title, sort_order, created_by_id)
       VALUES
         ('${reorderParentId}', '${reorderProjectId}', NULL, '重排父节点', 1000, '${userId}'),
@@ -288,10 +301,19 @@ describe('cross-project document moves', () => {
     });
     expect(moved.projectId).toBe(targetProjectId);
 
-    const movedRows = await database.query<{ id: string; project_id: string; sort_order: number }>(`
-      SELECT id, project_id::text, sort_order
+    const movedRows = await database.query<{
+      id: string;
+      kind: 'rich-text' | 'whiteboard';
+      project_id: string;
+      scene: unknown;
+      sort_order: number;
+    }>(`
+      SELECT documents.id, documents.kind, documents.project_id::text, documents.sort_order,
+        document_whiteboard_states.scene
       FROM documents
-      WHERE id IN (
+      LEFT JOIN document_whiteboard_states
+        ON document_whiteboard_states.document_id = documents.id
+      WHERE documents.id IN (
         '${movedDocumentId}',
         '${movedChildOneId}',
         '${movedChildTwoId}',
@@ -303,8 +325,13 @@ describe('cross-project document moves', () => {
     const projectById = new Map(movedRows.rows.map((row) => [row.id, row]));
     expect(projectById.get(movedDocumentId)?.project_id).toBe(targetProjectId);
     expect(projectById.get(movedChildOneId)?.project_id).toBe(targetProjectId);
+    expect(projectById.get(movedChildOneId)).toMatchObject({
+      kind: 'whiteboard',
+      scene: { source: 'knowmesh', type: 'excalidraw', version: 1 },
+    });
     expect(projectById.get(movedChildTwoId)?.project_id).toBe(targetProjectId);
     expect(projectById.get(movedGrandchildId)?.project_id).toBe(targetProjectId);
+    expect(projectById.get(movedGrandchildId)?.kind).toBe('rich-text');
     expect(projectById.get(movedGrandchildId)?.sort_order).toBe(3000);
     expect(projectById.get(untouchedSiblingId)?.project_id).toBe(sourceProjectId);
     expect(projectById.get(crossLinkedOutsiderId)?.project_id).toBe(navProjectId);

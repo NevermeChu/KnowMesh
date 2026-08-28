@@ -69,7 +69,7 @@ export async function searchWorkspaceContent(
     eq(projectMembersSchema.userId, userId),
     or(
       ilike(documentsSchema.title, searchPattern),
-      ilike(documentsSchema.searchText, searchPattern),
+      and(eq(documentsSchema.kind, 'rich-text'), ilike(documentsSchema.searchText, searchPattern)),
     ),
   ];
 
@@ -94,6 +94,7 @@ export async function searchWorkspaceContent(
 
   const snippetSql = sql<string>`
     CASE
+      WHEN ${documentsSchema.kind} = 'whiteboard' THEN ''
       WHEN ${documentsSchema.searchText} = '' THEN ''
       WHEN ${matchPositionSql} = 0 THEN
         CASE
@@ -144,6 +145,7 @@ export async function searchWorkspaceContent(
   const rows = await db
     .select({
       documentId: documentsSchema.id,
+      kind: documentsSchema.kind,
       projectId: projectsSchema.id,
       projectName: projectsSchema.name,
       snippet: snippetSql,
@@ -170,6 +172,7 @@ export async function searchWorkspaceContent(
 
   const items = rows.map((row) => ({
     documentId: row.documentId,
+    kind: row.kind,
     projectId: row.projectId,
     projectName: row.projectName,
     snippet: row.snippet,

@@ -1,9 +1,10 @@
-import { FileText, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { DocumentKindIcon } from '@/features/documents/components/DocumentKindIcon';
 import { StarDocumentButton } from '@/features/documents/components/StarDocumentButton';
 import { getStarredDocuments } from '@/features/documents/server/StarredDocuments';
 import { AppConfig } from '@/utils/AppConfig';
@@ -55,7 +56,7 @@ async function StarredDocumentsSection() {
               className="flex min-w-0 flex-1 items-center gap-3.5"
             >
               <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-amber-500/10 text-amber-500 dark:bg-amber-400/10 dark:text-amber-400">
-                <FileText aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                <DocumentKindIcon className="size-4" kind={document.kind} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-ink">

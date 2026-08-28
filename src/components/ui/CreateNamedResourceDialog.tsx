@@ -19,6 +19,7 @@ import {
  * @returns The shared resource creation dialog.
  */
 export function CreateNamedResourceDialog(props: {
+  additionalFields?: (isPending: boolean) => React.ReactNode;
   closeAriaLabel: string;
   description: string;
   failureMessage: string;
@@ -92,6 +93,7 @@ export function CreateNamedResourceDialog(props: {
               value={name}
             />
           </FormField>
+          {props.additionalFields?.(isPending)}
         </ModalDialogBody>
         <ModalDialogFooter>
           <Button disabled={isPending} onClick={props.onClose} type="button">

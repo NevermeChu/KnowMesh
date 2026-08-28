@@ -17,6 +17,7 @@ const MAX_DOCUMENT_NAVIGATION_DEPTH = 100;
 type DocumentPathRow = {
   depth: number;
   id: string;
+  kind: 'rich-text' | 'whiteboard';
   parentId: string | null;
   projectId: string;
   sortOrder: number;
@@ -84,6 +85,7 @@ export async function getDocumentNavigationChildren(
   const rows = await db
     .select({
       id: documentsSchema.id,
+      kind: documentsSchema.kind,
       parentId: documentsSchema.parentId,
       projectId: documentsSchema.projectId,
       sortOrder: documentsSchema.sortOrder,
@@ -138,6 +140,7 @@ export async function getDocumentNavigationPath(
     with recursive navigation_path as (
       select
         documents.id,
+        documents.kind,
         documents.parent_id as "parentId",
         documents.project_id as "projectId",
         documents.sort_order as "sortOrder",
@@ -152,6 +155,7 @@ export async function getDocumentNavigationPath(
 
       select
         ancestor.id,
+        ancestor.kind,
         ancestor.parent_id as "parentId",
         ancestor.project_id as "projectId",
         ancestor.sort_order as "sortOrder",
@@ -165,7 +169,7 @@ export async function getDocumentNavigationPath(
         and ancestor.id <> all(navigation_path.visited_ids)
         and navigation_path.depth <= ${MAX_DOCUMENT_NAVIGATION_DEPTH}
     )
-    select id, "parentId", "projectId", "sortOrder", title, depth
+    select id, kind, "parentId", "projectId", "sortOrder", title, depth
     from navigation_path
     order by depth desc
   `);
@@ -187,6 +191,7 @@ export async function getDocumentNavigationPath(
 
   const path = result.rows.map((row) => ({
     id: row.id,
+    kind: row.kind,
     parentId: row.parentId,
     projectId: row.projectId,
     sortOrder: row.sortOrder,

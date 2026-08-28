@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { DocumentKindIcon } from '@/features/documents/components/DocumentKindIcon';
 import { getRecentDocuments } from '@/features/documents/server/GetRecentDocuments';
 import {
   getNotifications,
@@ -131,7 +132,7 @@ async function RecentDocumentsSection() {
                 className="group flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-overlay"
               >
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent transition-transform group-hover:scale-105">
-                  <FileText aria-hidden="true" className="size-4" strokeWidth={1.8} />
+                  <DocumentKindIcon className="size-4" kind={document.kind} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-ink transition-colors group-hover:text-accent">
