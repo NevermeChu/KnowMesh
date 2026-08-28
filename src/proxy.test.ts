@@ -14,7 +14,11 @@ vi.mock(
       DATABASE_URL: 'postgresql://localhost:5432/unit-test',
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
       NEXT_PUBLIC_COLLABORATION_URL: 'ws://localhost:1234',
+      NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: 'http://localhost:1244',
       NODE_ENV: 'test',
+      WHITEBOARD_COLLABORATION_ADDRESS: '127.0.0.1',
+      WHITEBOARD_COLLABORATION_HEALTH_PORT: 1245,
+      WHITEBOARD_COLLABORATION_PORT: 1244,
     },
   }),
 );
@@ -38,5 +42,15 @@ describe(proxy, () => {
     expect(policy).toContain("font-src 'self' data:");
     expect(policy).not.toContain('fonts.googleapis.com');
     expect(policy).not.toContain('fonts.gstatic.com');
+  });
+
+  it('allows same-origin and collaboration websocket origins', () => {
+    const response = proxy(new NextRequest('http://localhost:3000/'));
+    const policy = response.headers.get('Content-Security-Policy');
+
+    expect(policy).toContain("connect-src 'self'");
+    expect(policy).toContain('ws://localhost:1234');
+    expect(policy).toContain('http://localhost:1244');
+    expect(policy).toContain('ws://localhost:1244');
   });
 });

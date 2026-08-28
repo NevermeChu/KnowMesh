@@ -19,8 +19,23 @@ function isProtectedRoute(pathname: string) {
   return protectedRoutePrefixes.some((prefix) => pathname.startsWith(prefix));
 }
 
+function connectSrcOrigins(urlString: string) {
+  const url = new URL(urlString);
+  const isSecure = url.protocol === 'https:' || url.protocol === 'wss:';
+  return [
+    `${isSecure ? 'https:' : 'http:'}//${url.host}`,
+    `${isSecure ? 'wss:' : 'ws:'}//${url.host}`,
+  ];
+}
+
 function createContentSecurityPolicy(nonce: string) {
-  const collaborationOrigin = new URL(Env.NEXT_PUBLIC_COLLABORATION_URL).origin;
+  const connectSources = [
+    ...new Set([
+      "'self'",
+      ...connectSrcOrigins(Env.NEXT_PUBLIC_COLLABORATION_URL),
+      ...connectSrcOrigins(Env.NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL),
+    ]),
+  ];
   const scriptSources = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
   if (Env.NODE_ENV === 'development') {
     scriptSources.push("'unsafe-eval'");
@@ -32,7 +47,7 @@ function createContentSecurityPolicy(nonce: string) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data: https:",
     "font-src 'self' data:",
-    `connect-src 'self' ${collaborationOrigin}`,
+    `connect-src ${connectSources.join(' ')}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
