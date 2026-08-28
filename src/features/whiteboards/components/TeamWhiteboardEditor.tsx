@@ -197,14 +197,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
     socket.on('baseline', (baseline) => {
       applyPresence(baseline.members);
       setCanWrite(baseline.canWrite && props.canEdit);
-      const existingQueue = queueRef.current;
-      if (existingQueue) {
-        void (async () => {
-          await existingQueue.receiveCanonical(baseline);
-          setCollaborationState('synced');
-        })();
-        return;
-      }
+      queueRef.current?.dispose();
       void (async () => {
         await applyScene(baseline.scene);
         queueRef.current = new TeamWhiteboardSaveQueue({

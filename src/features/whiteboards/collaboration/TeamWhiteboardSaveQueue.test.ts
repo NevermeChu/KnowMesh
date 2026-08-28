@@ -135,4 +135,29 @@ describe(TeamWhiteboardSaveQueue, () => {
 
     expect(onFrozen).toHaveBeenCalledWith('service-unavailable');
   });
+
+  it('ignores later canonical scenes after freeze', async () => {
+    const apply = createApplyMock();
+    const remote = createScene('remote');
+    const queue = new TeamWhiteboardSaveQueue({
+      apply,
+      initialRevision: 1,
+      initialScene: EMPTY_WHITEBOARD_SCENE,
+      onFrozen: createFrozenMock(),
+      onStateChange: createStateMock(),
+      reconcile: vi
+        .fn<(local: WhiteboardScene, remote: WhiteboardScene) => Promise<WhiteboardScene>>()
+        .mockResolvedValue(remote),
+      save: vi.fn<(options: SaveCandidate) => Promise<WhiteboardSaveAcknowledgement>>(),
+    });
+
+    queue.freeze('service-unavailable');
+    await queue.receiveCanonical({
+      revision: 2,
+      scene: remote,
+      updatedAt: new Date().toISOString(),
+    });
+
+    expect(apply).not.toHaveBeenCalled();
+  });
 });
