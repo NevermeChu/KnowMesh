@@ -48,4 +48,20 @@ describe(getOrInitializeDocumentCollaborationState, () => {
     ).rejects.toThrow('个人空间文档不支持协作状态');
     expect(state.insert).not.toHaveBeenCalled();
   });
+
+  it('rejects whiteboard documents', async () => {
+    state.forUpdate.mockResolvedValueOnce([
+      {
+        content: { content: [{ type: 'paragraph' }], type: 'doc' },
+        contentSchemaVersion: 1,
+        kind: 'whiteboard',
+        workspaceKind: 'team',
+      },
+    ]);
+
+    await expect(
+      getOrInitializeDocumentCollaborationState('30000000-0000-4000-8000-000000000001'),
+    ).rejects.toThrow('白板文档不支持富文本协作状态');
+    expect(state.insert).not.toHaveBeenCalled();
+  });
 });

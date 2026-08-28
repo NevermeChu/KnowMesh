@@ -18,10 +18,12 @@ const projectId = '82000000-0000-4000-8000-000000000001';
 const documentId = '83000000-0000-4000-8000-000000000001';
 
 let currentUserId = idempotentUserId;
+const starredUserForeignKeyMigration = '0032_clammy_garia.sql';
+const starredUserForeignKeyMigrationIndex = migrationFiles.indexOf(starredUserForeignKeyMigration);
 
 beforeAll(async () => {
   database = createTestPGlite();
-  await executeMigrations(database, migrationFiles.slice(0, -1));
+  await executeMigrations(database, migrationFiles.slice(0, starredUserForeignKeyMigrationIndex));
 
   await database.exec(`
     INSERT INTO "user" (id, name, email)
@@ -61,7 +63,8 @@ beforeAll(async () => {
       ('${orphanUserId}', '${documentId}');
   `);
 
-  await executeMigrations(database, migrationFiles.slice(-1));
+  await executeMigrations(database, [starredUserForeignKeyMigration]);
+  await executeMigrations(database, migrationFiles.slice(starredUserForeignKeyMigrationIndex + 1));
 
   const testDb = drizzle(database, { schema });
   vi.doMock('server-only', () => ({}));

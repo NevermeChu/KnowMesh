@@ -21,12 +21,18 @@ import { auditActions, auditTargetKinds } from '@/features/audit-logs/AuditLog';
 import type { AuditLogMetadata } from '@/features/audit-logs/AuditLog';
 import {
   DOCUMENT_CONTENT_SCHEMA_VERSION,
+  documentKinds,
   EMPTY_DOCUMENT_CONTENT,
 } from '@/features/documents/Document';
 import type { DocumentContent } from '@/features/documents/Document';
 import { notificationTargetKinds, notificationTypes } from '@/features/notifications/Notification';
 import { memberRoles } from '@/features/permissions/Permission';
 import { userThemePreferences } from '@/features/preferences/Preferences';
+import {
+  EMPTY_WHITEBOARD_SCENE,
+  WHITEBOARD_SCENE_SCHEMA_VERSION,
+} from '@/features/whiteboards/WhiteboardScene';
+import type { WhiteboardScene } from '@/features/whiteboards/WhiteboardScene';
 import { workspaceKinds } from '@/features/workspaces/Workspace';
 
 // This file defines the structure of your database tables using the Drizzle ORM.
@@ -53,6 +59,7 @@ export const notificationTargetKindEnum = pgEnum(
 export const auditActionEnum = pgEnum('audit_action', auditActions);
 export const auditTargetKindEnum = pgEnum('audit_target_kind', auditTargetKinds);
 export const workspaceKindEnum = pgEnum('workspace_kind', workspaceKinds);
+export const documentKindEnum = pgEnum('document_kind', documentKinds);
 export const userThemePreferenceEnum = pgEnum('user_theme_preference', userThemePreferences);
 
 export const userSchema = pgTable(
@@ -377,6 +384,7 @@ export const documentsSchema = pgTable(
   'documents',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    kind: documentKindEnum('kind').default('rich-text').notNull(),
     projectId: uuid('project_id')
       .notNull()
       .references(() => projectsSchema.id, { onDelete: 'cascade' }),
@@ -413,6 +421,22 @@ export const documentsSchema = pgTable(
     index('documents_title_trgm_idx').using('gin', table.title.op('gin_trgm_ops')),
   ],
 );
+
+export const documentWhiteboardStatesSchema = pgTable('document_whiteboard_states', {
+  documentId: uuid('document_id')
+    .primaryKey()
+    .references(() => documentsSchema.id, { onDelete: 'cascade' }),
+  scene: jsonb('scene').$type<WhiteboardScene>().default(EMPTY_WHITEBOARD_SCENE).notNull(),
+  sceneSchemaVersion: integer('scene_schema_version')
+    .default(WHITEBOARD_SCENE_SCHEMA_VERSION)
+    .notNull(),
+  revision: integer('revision').default(1).notNull(),
+  createdAt: timestamp('created_at', { mode: 'date', withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
 
 export const documentCollaborationStatesSchema = pgTable('document_collaboration_states', {
   documentId: uuid('document_id')

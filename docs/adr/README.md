@@ -28,6 +28,7 @@ ADR 记录具有真实替代方案和长期影响的架构决定。它回答“�
 | [0013](0013-use-request-nonces-for-content-security-policy.md) | Accepted | 页面使用请求级 nonce 执行严格脚本 CSP |
 | [0014](0014-use-browser-yjs-replicas-for-crash-recovery.md) | Accepted | 使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口 |
 | [0015](0015-lazy-load-document-navigation.md) | Accepted | 按节点加载文档导航树 |
+| [0016](0016-use-document-kind-and-excalidraw-scene-protocol.md) | Accepted | 使用统一 Document 类型与独立 Excalidraw scene 协议承载白板 |
 
 ## 新 ADR 模板
 

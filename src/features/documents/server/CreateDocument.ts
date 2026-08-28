@@ -5,8 +5,9 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { requireProjectPermissionInTransaction } from '@/features/permissions/server/RevalidateProjectPermission';
+import { EMPTY_WHITEBOARD_SCENE } from '@/features/whiteboards/WhiteboardScene';
 import { db } from '@/libs/DB';
-import { documentsSchema } from '@/models/Schema';
+import { documentWhiteboardStatesSchema, documentsSchema } from '@/models/Schema';
 import { createDocumentSchema } from '../DocumentSchema';
 import type { CreateDocumentInput } from '../DocumentSchema';
 
@@ -64,6 +65,7 @@ export async function createDocument(input: CreateDocumentInput) {
       .insert(documentsSchema)
       .values({
         createdById: userId,
+        kind: documentInput.kind,
         parentId: documentInput.parentId ?? null,
         projectId: authorization.project.id,
         sortOrder,
@@ -71,11 +73,19 @@ export async function createDocument(input: CreateDocumentInput) {
       })
       .returning({
         id: documentsSchema.id,
+        kind: documentsSchema.kind,
         parentId: documentsSchema.parentId,
         projectId: documentsSchema.projectId,
         sortOrder: documentsSchema.sortOrder,
         title: documentsSchema.title,
       });
+
+    if (createdDocument?.kind === 'whiteboard') {
+      await transaction.insert(documentWhiteboardStatesSchema).values({
+        documentId: createdDocument.id,
+        scene: EMPTY_WHITEBOARD_SCENE,
+      });
+    }
 
     return createdDocument;
   });

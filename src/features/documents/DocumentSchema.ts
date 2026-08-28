@@ -8,6 +8,7 @@ import type {
   JsonObject,
   JsonValue,
 } from './Document';
+import { documentKinds } from './Document';
 import { documentExtensions } from './DocumentExtensions';
 
 const prosemirrorSchema = getSchema(documentExtensions);
@@ -89,6 +90,7 @@ export const isDocumentContent = (value: unknown): value is DocumentContent => {
 };
 
 export const createDocumentSchema = z.object({
+  kind: z.enum(documentKinds).default('rich-text'),
   parentId: z.uuid().optional(),
   projectId: z.uuid(),
   title: z.string().trim().min(1, '文件名不能为空').max(200, '文件名不能超过 200 个字符'),
@@ -152,7 +154,7 @@ export const updateDocumentSchema = z
     message: '保存文档标题时缺少版本信息',
   });
 
-export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
+export type CreateDocumentInput = z.input<typeof createDocumentSchema>;
 export type DeleteDocumentInput = z.infer<typeof deleteDocumentSchema>;
 export type DocumentNavigationChildrenInput = z.input<typeof documentNavigationChildrenSchema>;
 export type DocumentNavigationPathInput = z.infer<typeof documentNavigationPathSchema>;

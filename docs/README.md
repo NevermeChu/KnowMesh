@@ -15,6 +15,7 @@
 | 修改系统偏好、外观主题或全站颜色 token | [`features/preferences.md`](features/preferences.md) |
 | 修改文档模型、编辑器或文档权限 | [`features/documents.md`](features/documents.md) 和 [`adr/0002-use-versioned-prosemirror-json.md`](adr/0002-use-versioned-prosemirror-json.md) |
 | 修改文档实时协作 | [`features/documents.md`](features/documents.md)、[`architecture/rendering-and-data-flow.md`](architecture/rendering-and-data-flow.md)、[`adr/0012-use-yjs-for-team-document-collaboration.md`](adr/0012-use-yjs-for-team-document-collaboration.md) 和 [`adr/0014-use-browser-yjs-replicas-for-crash-recovery.md`](adr/0014-use-browser-yjs-replicas-for-crash-recovery.md) |
+| 规划或实施 Excalidraw 白板文档 | [`excalidraw-integration-plan.md`](excalidraw-integration-plan.md)、[`features/documents.md`](features/documents.md) 和相关 Accepted ADR |
 | 修改全文搜索、命令面板或搜索结果排序 | [`features/search.md`](features/search.md) 和 [`adr/0006-separate-workspace-discovery-from-project-content-access.md`](adr/0006-separate-workspace-discovery-from-project-content-access.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
 | 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |

@@ -19,6 +19,7 @@ export async function getOrInitializeDocumentCollaborationState(documentId: stri
       .select({
         content: documentsSchema.content,
         contentSchemaVersion: documentsSchema.contentSchemaVersion,
+        kind: documentsSchema.kind,
         workspaceKind: workspacesSchema.kind,
       })
       .from(documentsSchema)
@@ -34,6 +35,10 @@ export async function getOrInitializeDocumentCollaborationState(documentId: stri
 
     if (document.workspaceKind !== 'team') {
       throw new Error('个人空间文档不支持协作状态');
+    }
+
+    if (document.kind !== 'rich-text') {
+      throw new Error('白板文档不支持富文本协作状态');
     }
 
     const [existingState] = await transaction

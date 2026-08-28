@@ -39,6 +39,7 @@ export const migrationFiles = [
   '0030_flowery_domino.sql',
   '0031_chief_silver_sable.sql',
   '0032_clammy_garia.sql',
+  '0033_flippant_warlock.sql',
 ] as const;
 
 export function createTestPGlite(options?: ConstructorParameters<typeof PGlite>[0]) {

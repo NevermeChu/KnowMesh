@@ -1,5 +1,9 @@
 export const DOCUMENT_CONTENT_SCHEMA_VERSION = 1;
 
+export const documentKinds = ['rich-text', 'whiteboard'] as const;
+
+export type DocumentKind = (typeof documentKinds)[number];
+
 export type DocumentEditorMode = 'collaborative' | 'collaborative-readonly' | 'single-user';
 
 export type JsonValue = boolean | number | string | null | JsonValue[] | JsonObject;

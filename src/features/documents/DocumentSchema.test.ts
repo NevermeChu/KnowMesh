@@ -81,6 +81,7 @@ describe('document schemas', () => {
         title: '根文档',
       }),
     ).toStrictEqual({
+      kind: 'rich-text',
       projectId,
       title: '根文档',
     });
@@ -92,6 +93,7 @@ describe('document schemas', () => {
         title: '子文档',
       }),
     ).toStrictEqual({
+      kind: 'rich-text',
       parentId,
       projectId,
       title: '子文档',

@@ -75,6 +75,7 @@
 ### `documents`
 
 - UUID 主键，每篇文档通过 `project_id` 属于一个项目；删除项目时级联删除文档。
+- `kind` 为 `rich-text` 或 `whiteboard`，默认 `rich-text`；它只区分内容载荷，不改变项目归属、层级、权限、收藏或审计语义。
 - `parent_id` 可空自引用外键指向 `documents.id`，实现项目内无限层级父子文档嵌套；删除父文档时级联删除其所有子孙文档。
 - `sort_order` 双精度浮点数（`double precision`），用于兄弟节点间的排序（基于 Fractional Indexing）。文档移动在项目行锁保护的事务中锁定目标兄弟节点；相邻间隙小于安全阈值或数值接近安全精度边界时，服务端按 1000 步长重新编号同级节点，重排以单条 `UPDATE ... FROM (VALUES ...)` 批量写入应用，不再逐条更新。文档创建复用同一项目行锁串行计算尾部顺序，避免并发创建得到相同值。
 - 标题最长 200 字符。
@@ -95,6 +96,15 @@
 - 数据库保证每篇文档至多一条状态；只有 Team 文档允许初始化的跨表规则由应用入口执行。功能开关启用时，普通 Team 文档页面通过 Provider 和协作服务初始化或更新该表；Personal 文档和功能开关关闭时的 Team 只读页面不会写入协作状态。
 - 与项目相同，`updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
 - `project_members` 角色变化或删除、Better Auth Session 到期字段变化或删除，以及文档移动或删除会在事务提交后向 `knowmesh_document_collaboration` 发布不含正文、Cookie 或 Token 的失效信号。协作进程收到信号后重新查询 Session 与权限，再决定是否关闭连接；15 秒周期复查用于覆盖监听器短暂断线。
+
+### `document_whiteboard_states`
+
+- `document_id` 是指向 `documents.id` 的主键外键；删除 Document 时数据库级联删除白板状态。
+- `scene` 保存经过应用层校验的版本化 Excalidraw scene envelope；第一阶段 `files` 必须为空，scene 不进入富文本正文或搜索投影。
+- `scene_schema_version` 记录 KnowMesh envelope 版本，当前为 `1`；它不等于 Excalidraw npm 版本。
+- `revision` 从 `1` 开始，供后续 Personal 与 Team 白板保存使用 compare-and-swap；`created_at` 与 `updated_at` 记录初始化和最近保存时间。
+- 延迟约束触发器在事务提交时保证：whiteboard Document 恰有一条白板状态且不能具有富文本协作状态，rich-text Document 不能具有白板状态。这样创建可以先插入 Document、再在同一事务插入空 scene，同时不允许半成品提交。
+- 数据库不理解 scene JSON 的元素语义、大小和字段白名单；这些由 `WhiteboardScene.ts` 的 Zod 边界执行，绕过应用直接写入仍可能产生无效 scene。
 
 ### `notifications`
 
@@ -135,6 +145,8 @@
 
 自 `0032_clammy_garia.sql` 起，`starred_documents.user_id` 也以 `ON DELETE CASCADE` 外键引用 `user.id`。迁移先删除无法关联现有用户的孤儿收藏，再建立约束；应用收藏写入使用明确目标状态和联合主键冲突处理，使重复收藏或取消收藏请求幂等。
 
+自 `0033_flippant_warlock.sql` 起，Document 增加默认回填为 `rich-text` 的 `kind`，并新增一对一 `document_whiteboard_states`。迁移使用延迟约束触发器维护 Document kind、白板状态和富文本协作状态之间的互斥关系。
+
 ## 数据库约束与应用层不变量
 
 数据库当前直接保证：主键和外键有效、成员关系唯一、关键字段非空、Project 成员一定属于同一 Workspace、资源 owner 与唯一 owner 成员一致，以及删除上级资源或 Workspace 成员时按外键级联清理下级关系。
@@ -145,6 +157,7 @@
 - Personal Workspace 没有额外成员，且其中项目没有 `editor` 或 `viewer`。
 - `documents.content` 中的 JSON 符合 ProseMirror Schema。
 - `content_schema_version` 与实际 JSON 结构语义一致。
+- `document_whiteboard_states.scene` 符合当前 scene envelope、元素数量、嵌套深度和大小限制。
 
 Owner 完整语义由部分唯一索引和 PostgreSQL `DEFERRABLE INITIALLY DEFERRED` 约束触发器共同维护。触发器在事务结束时检查，因此创建或转让可以在同一事务中依次写资源表与成员表；如果最终 `owner_id`、owner 成员身份或 owner 角色不一致，事务提交会失败。Drizzle Schema 能声明索引和外键，但不能表达这些跨表延迟触发器，其权威实现位于 `0010_silly_nomad.sql`。
 

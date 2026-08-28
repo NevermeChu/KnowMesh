@@ -78,6 +78,7 @@ describe(updateDocument, () => {
     state.returning.mockResolvedValue([
       {
         id: '10000000-0000-4000-8000-000000000001',
+        kind: 'rich-text',
         titleVersion: 2,
         updatedAt: savedUpdatedAt,
       },
@@ -85,6 +86,7 @@ describe(updateDocument, () => {
     state.forUpdate.mockResolvedValue([
       {
         id: '10000000-0000-4000-8000-000000000001',
+        kind: 'rich-text',
         titleVersion: 1,
         updatedAt: initialUpdatedAt,
       },
@@ -123,6 +125,26 @@ describe(updateDocument, () => {
         expectedUpdatedAt: initialUpdatedAt,
       }),
     ).rejects.toThrow('团队文档正文必须通过协作服务保存');
+    expect(state.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects whiteboard content writes through rich-text entry', async () => {
+    state.forUpdate.mockResolvedValueOnce([
+      {
+        id: '10000000-0000-4000-8000-000000000001',
+        kind: 'whiteboard',
+        titleVersion: 1,
+        updatedAt: initialUpdatedAt,
+      },
+    ]);
+
+    await expect(
+      updateDocument({
+        content: { content: [{ type: 'paragraph' }], type: 'doc' },
+        documentId: '10000000-0000-4000-8000-000000000001',
+        expectedUpdatedAt: initialUpdatedAt,
+      }),
+    ).rejects.toThrow('白板内容必须通过白板保存入口保存');
     expect(state.update).not.toHaveBeenCalled();
   });
 

@@ -85,9 +85,18 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 
 数据库版本字段不等于 Tiptap 包版本，不应因为普通依赖升级自动递增。
 
+## 白板领域基础
+
+Document 已具有 `rich-text` 与 `whiteboard` 两种内容类型。存量文档和未显式传入类型的旧创建调用保持 `rich-text`，因此现有 Personal ProseMirror 与 Team Yjs 行为不变。
+
+白板 scene 独立保存在 `document_whiteboard_states`，不进入 `documents.content`、`search_text` 或 `document_collaboration_states`。创建 whiteboard 时，Document 和空 scene 在同一事务写入；删除继续依赖 Document 外键级联。数据库延迟约束同时保证 whiteboard 必须且只能具有白板状态，并拒绝 whiteboard 建立富文本协作状态。应用的 `updateDocument(content)` 与富文本协作初始化也会读取数据库 kind 并拒绝 whiteboard。
+
+当前仅完成领域模型、迁移和服务端隔离，不代表白板创建 UI、读取、编辑、导出或实时协作已经开放。scene envelope 当前只允许空 `files`；图片与二进制资产仍不可用。
+
 ## 相关代码
 
 - `src/features/documents/Document.ts`
+- `src/features/whiteboards/WhiteboardScene.ts`
 - `src/features/documents/DocumentSchema.ts`
 - `src/features/documents/DocumentExtensions.ts`
 - `src/features/documents/extensions/BlockDragDropExtension.ts`
@@ -133,6 +142,7 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - [ADR 0012：Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照](../adr/0012-use-yjs-for-team-document-collaboration.md)
 - [ADR 0014：使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口](../adr/0014-use-browser-yjs-replicas-for-crash-recovery.md)
 - [ADR 0015：按节点加载文档导航树](../adr/0015-lazy-load-document-navigation.md)
+- [ADR 0016：使用 Document 类型与 Excalidraw scene 协议承载白板](../adr/0016-use-document-kind-and-excalidraw-scene-protocol.md)
 - [ADR 0003：引入 Workspace 资源边界](../adr/0003-introduce-workspace-resource-boundary.md)
 - [ADR 0004：使用能力授权并继承协作项目权限](../adr/0004-use-capability-authorization-and-collaboration-inheritance.md)
 - [ADR 0006：分离 Workspace 结构发现与 Project 内容访问](../adr/0006-separate-workspace-discovery-from-project-content-access.md)

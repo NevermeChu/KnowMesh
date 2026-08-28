@@ -30,6 +30,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
     const [lockedDocument] = await transaction
       .select({
         id: documentsSchema.id,
+        kind: documentsSchema.kind,
         titleVersion: documentsSchema.titleVersion,
         updatedAt: documentsSchema.updatedAt,
       })
@@ -45,6 +46,10 @@ export async function updateDocument(input: UpdateDocumentInput) {
 
     if (!lockedDocument) {
       throw new Error('文档保存失败');
+    }
+
+    if (documentInput.content !== undefined && lockedDocument.kind !== 'rich-text') {
+      throw new Error('白板内容必须通过白板保存入口保存');
     }
 
     if (documentInput.content !== undefined && project.kind === 'team') {

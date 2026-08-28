@@ -232,6 +232,13 @@
       "when": 1787801711495,
       "tag": "0032_clammy_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1787883933449,
+      "tag": "0033_flippant_warlock",
+      "breakpoints": true
     }
   ]
 }
