@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 <release-id> <release-root> <current-link> <service-name> <collaboration-service-name> <collaboration-deploy-enabled>" >&2
+  echo "Usage: $0 <release-id> <release-root> <current-link> <service-name> <collaboration-service-name> <collaboration-deploy-enabled> [whiteboard-collaboration-service-name] [whiteboard-collaboration-deploy-enabled]" >&2
 }
 
 release_id=${1:-}
@@ -11,6 +11,8 @@ current_link=${3:-}
 service_name=${4:-}
 collaboration_service_name=${5:-}
 collaboration_deploy_enabled=${6:-}
+whiteboard_collaboration_service_name=${7:-knowmesh-whiteboard-collaboration.service}
+whiteboard_collaboration_deploy_enabled=${8:-false}
 
 [[ -n "${release_id}" && -n "${release_root}" && -n "${current_link}" ]] || { usage; exit 1; }
 [[ -n "${service_name}" && -n "${collaboration_service_name}" && -n "${collaboration_deploy_enabled}" ]] || { usage; exit 1; }
@@ -32,6 +34,9 @@ ln -s "${old_release}" "${rollback_link}"
 mv -Tf -- "${rollback_link}" "${current_link}"
 if [[ "${collaboration_deploy_enabled}" == true ]]; then
   systemctl restart "${collaboration_service_name}" || true
+fi
+if [[ "${whiteboard_collaboration_deploy_enabled}" == true ]]; then
+  systemctl restart "${whiteboard_collaboration_service_name}" || true
 fi
 systemctl restart "${service_name}" || true
 rm -f -- "${rollback_marker}"

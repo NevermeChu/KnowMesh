@@ -12,11 +12,14 @@ required_artifact_paths=(
   server.js
   migrate-production.cjs
   collaboration-server.cjs
+  whiteboard-collaboration-server.cjs
   REVISION
   migrations/meta/_journal.json
   deploy/systemd/knowmesh-collaboration.service
+  deploy/systemd/knowmesh-whiteboard-collaboration.service
   deploy/nginx/knowmesh-websocket-map.conf
   deploy/nginx/knowmesh-collaboration-location.conf
+  deploy/nginx/knowmesh-whiteboard-collaboration-location.conf
   deploy/scripts/activate-release.sh
   deploy/scripts/rollback-release.sh
 )

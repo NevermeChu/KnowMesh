@@ -26,6 +26,7 @@ export type RuntimeOperations = {
   assertRuntimePortsAvailable?: (options: {
     collaborationEnabled: boolean;
     manageDatabase: boolean;
+    whiteboardCollaborationEnabled: boolean;
   }) => Promise<void>;
   spawnProcess: (command: Command) => ChildProcess;
   terminateProcess: (child: ChildProcess, timeoutMs?: number) => Promise<void>;
@@ -33,9 +34,11 @@ export type RuntimeOperations = {
     application?: ChildProcess;
     collaboration?: ChildProcess;
     database?: ChildProcess;
+    whiteboardCollaboration?: ChildProcess;
   }) => Promise<void>;
   waitForCollaborationReady: (child: ChildProcess) => Promise<void>;
   waitForPort: (child: ChildProcess) => Promise<void>;
+  waitForWhiteboardCollaborationReady: (child: ChildProcess) => Promise<void>;
 };
 
 type RuntimeSignal = {
@@ -85,6 +88,13 @@ export const createCommands = (options: {
     collaborationArgs.push('--env-file=.env');
   }
   collaborationArgs.push(resolve(options.cwd, 'scripts/collaboration-server.ts'));
+  const whiteboardCollaborationArgs = ['--import=tsx'];
+  if (existsSync(resolve(options.cwd, '.env'))) {
+    whiteboardCollaborationArgs.push('--env-file=.env');
+  }
+  whiteboardCollaborationArgs.push(
+    resolve(options.cwd, 'scripts/whiteboard-collaboration-server.ts'),
+  );
 
   return {
     application: {
@@ -101,6 +111,12 @@ export const createCommands = (options: {
       command: options.nodePath,
       ipc: true,
       name: 'Hocuspocus',
+    },
+    whiteboardCollaboration: {
+      args: whiteboardCollaborationArgs,
+      command: options.nodePath,
+      ipc: true,
+      name: 'Whiteboard collaboration',
     },
     database: {
       args: databaseArgs,
@@ -163,6 +179,7 @@ export const runRuntime = async (options: {
   mode: RuntimeMode;
   operations: RuntimeOperations;
   signal?: Promise<RuntimeSignal>;
+  whiteboardCollaborationEnabled: boolean;
 }) => {
   const commands = createCommands({
     cwd: process.cwd(),
@@ -173,6 +190,7 @@ export const runRuntime = async (options: {
   const children = new Set<ChildProcess>();
   let applicationChild: ChildProcess | undefined;
   let collaborationChild: ChildProcess | undefined;
+  let whiteboardCollaborationChild: ChildProcess | undefined;
   let databaseChild: ChildProcess | undefined;
   let databaseExit: Promise<ProcessResult> | undefined;
   let cleanupPromise: Promise<void> | undefined;
@@ -187,15 +205,24 @@ export const runRuntime = async (options: {
   const cleanup = async () => {
     cleanupPromise ??= (async () => {
       if (options.operations.terminateRuntimeProcesses) {
-        if (!(applicationChild || collaborationChild || databaseChild)) {
+        if (
+          !(applicationChild || collaborationChild || whiteboardCollaborationChild || databaseChild)
+        ) {
           return;
         }
         await options.operations.terminateRuntimeProcesses({
           application: applicationChild,
           collaboration: collaborationChild,
           database: databaseChild,
+          whiteboardCollaboration: whiteboardCollaborationChild,
         });
         return;
+      }
+      if (whiteboardCollaborationChild && children.has(whiteboardCollaborationChild)) {
+        await options.operations.terminateProcess(
+          whiteboardCollaborationChild,
+          COLLABORATION_SHUTDOWN_TIMEOUT_MS,
+        );
       }
       if (collaborationChild && children.has(collaborationChild)) {
         await options.operations.terminateProcess(
@@ -205,7 +232,7 @@ export const runRuntime = async (options: {
       }
       await Promise.all(
         [...children]
-          .filter((child) => child !== collaborationChild)
+          .filter((child) => child !== collaborationChild && child !== whiteboardCollaborationChild)
           .map(async (child) => {
             await options.operations.terminateProcess(child);
           }),
@@ -233,6 +260,7 @@ export const runRuntime = async (options: {
     await options.operations.assertRuntimePortsAvailable?.({
       collaborationEnabled: options.collaborationEnabled,
       manageDatabase: options.manageDatabase,
+      whiteboardCollaborationEnabled: options.whiteboardCollaborationEnabled,
     });
 
     if (options.manageDatabase) {
@@ -262,6 +290,7 @@ export const runRuntime = async (options: {
     }
 
     let collaborationExit: Promise<ProcessResult> | undefined;
+    let whiteboardCollaborationExit: Promise<ProcessResult> | undefined;
     if (options.collaborationEnabled) {
       const collaboration = start(commands.collaboration);
       collaborationChild = collaboration.child;
@@ -273,6 +302,17 @@ export const runRuntime = async (options: {
         return collaborationReadiness.exitCode;
       }
     }
+    if (options.whiteboardCollaborationEnabled) {
+      const whiteboardCollaboration = start(commands.whiteboardCollaboration);
+      whiteboardCollaborationChild = whiteboardCollaboration.child;
+      whiteboardCollaborationExit = whiteboardCollaboration.exit;
+      const whiteboardReadiness = await waitOrSignal(
+        options.operations.waitForWhiteboardCollaborationReady(whiteboardCollaboration.child),
+      );
+      if (isRuntimeSignal(whiteboardReadiness)) {
+        return whiteboardReadiness.exitCode;
+      }
+    }
 
     const application = start(commands.application);
     applicationChild = application.child;
@@ -282,6 +322,9 @@ export const runRuntime = async (options: {
     }
     if (collaborationExit) {
       runtimeExits.push(collaborationExit);
+    }
+    if (whiteboardCollaborationExit) {
+      runtimeExits.push(whiteboardCollaborationExit);
     }
     const result = await waitOrSignal(Promise.race(runtimeExits));
     if (isRuntimeSignal(result)) {
@@ -340,6 +383,7 @@ export const createSystemOperations = (options: {
   const assertRuntimePortsAvailable = async (runtimeOptions: {
     collaborationEnabled: boolean;
     manageDatabase: boolean;
+    whiteboardCollaborationEnabled: boolean;
   }) => {
     const ports = [
       { name: 'Next.js', port: Number(process.env.PORT ?? '3000') },
@@ -349,6 +393,18 @@ export const createSystemOperations = (options: {
             {
               name: 'Hocuspocus health',
               port: Number(process.env.COLLABORATION_HEALTH_PORT ?? '1235'),
+            },
+          ]
+        : []),
+      ...(runtimeOptions.whiteboardCollaborationEnabled
+        ? [
+            {
+              name: 'Whiteboard collaboration',
+              port: Number(process.env.WHITEBOARD_COLLABORATION_PORT ?? '1244'),
+            },
+            {
+              name: 'Whiteboard collaboration health',
+              port: Number(process.env.WHITEBOARD_COLLABORATION_HEALTH_PORT ?? '1245'),
             },
           ]
         : []),
@@ -486,16 +542,26 @@ export const createSystemOperations = (options: {
     await promise;
   };
 
-  const waitForCollaborationReady = async (child: ChildProcess) => {
-    const address = process.env.COLLABORATION_ADDRESS ?? '127.0.0.1';
+  const waitForHealthReady = async (
+    child: ChildProcess,
+    health: {
+      addressEnv: string;
+      defaultPort: string;
+      portEnv: string;
+      serviceName: string;
+    },
+  ) => {
+    const address = process.env[health.addressEnv] ?? '127.0.0.1';
     const host = address.includes(':') && !address.startsWith('[') ? `[${address}]` : address;
-    const port = process.env.COLLABORATION_HEALTH_PORT ?? '1235';
+    const port = process.env[health.portEnv] ?? health.defaultPort;
     const readinessUrl = `http://${host}:${port}/ready`;
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < STARTUP_TIMEOUT_MS) {
       if (child.exitCode !== null || child.signalCode !== null) {
-        throw new Error(`Hocuspocus exited before becoming ready with code ${child.exitCode ?? 1}`);
+        throw new Error(
+          `${health.serviceName} exited before becoming ready with code ${child.exitCode ?? 1}`,
+        );
       }
 
       try {
@@ -520,13 +586,32 @@ export const createSystemOperations = (options: {
       await delay(100);
     }
 
-    throw new Error(`Hocuspocus did not become ready within ${STARTUP_TIMEOUT_MS}ms`);
+    throw new Error(`${health.serviceName} did not become ready within ${STARTUP_TIMEOUT_MS}ms`);
+  };
+
+  const waitForCollaborationReady = async (child: ChildProcess) => {
+    await waitForHealthReady(child, {
+      addressEnv: 'COLLABORATION_ADDRESS',
+      defaultPort: '1235',
+      portEnv: 'COLLABORATION_HEALTH_PORT',
+      serviceName: 'Hocuspocus',
+    });
+  };
+
+  const waitForWhiteboardCollaborationReady = async (child: ChildProcess) => {
+    await waitForHealthReady(child, {
+      addressEnv: 'WHITEBOARD_COLLABORATION_ADDRESS',
+      defaultPort: '1245',
+      portEnv: 'WHITEBOARD_COLLABORATION_HEALTH_PORT',
+      serviceName: 'Whiteboard collaboration',
+    });
   };
 
   const terminateRuntimeProcesses = async (children: {
     application?: ChildProcess;
     collaboration?: ChildProcess;
     database?: ChildProcess;
+    whiteboardCollaboration?: ChildProcess;
   }) => {
     if (options.platform !== 'win32') {
       throw new Error('Detached runtime cleanup is only available on Windows');
@@ -540,6 +625,9 @@ export const createSystemOperations = (options: {
     if (children.collaboration?.pid) {
       args.push(`--collaboration=${children.collaboration.pid}`);
     }
+    if (children.whiteboardCollaboration?.pid) {
+      args.push(`--whiteboard-collaboration=${children.whiteboardCollaboration.pid}`);
+    }
     if (children.database?.pid) {
       args.push(`--database=${children.database.pid}`);
     }
@@ -547,6 +635,8 @@ export const createSystemOperations = (options: {
       `--application-port=${process.env.PORT ?? '3000'}`,
       `--collaboration-port=${process.env.COLLABORATION_PORT ?? '1234'}`,
       `--collaboration-health-port=${process.env.COLLABORATION_HEALTH_PORT ?? '1235'}`,
+      `--whiteboard-collaboration-port=${process.env.WHITEBOARD_COLLABORATION_PORT ?? '1244'}`,
+      `--whiteboard-collaboration-health-port=${process.env.WHITEBOARD_COLLABORATION_HEALTH_PORT ?? '1245'}`,
     );
     const cleanup = spawn(process.execPath, args, {
       cwd: options.cwd,
@@ -558,6 +648,9 @@ export const createSystemOperations = (options: {
     });
     if (children.collaboration?.connected) {
       children.collaboration.send({ type: 'shutdown' });
+    }
+    if (children.whiteboardCollaboration?.connected) {
+      children.whiteboardCollaboration.send({ type: 'shutdown' });
     }
     const result = await waitForExit(cleanup);
     if (result.code !== 0) {
@@ -572,6 +665,7 @@ export const createSystemOperations = (options: {
     ...(options.platform === 'win32' ? { terminateRuntimeProcesses } : {}),
     waitForCollaborationReady,
     waitForPort,
+    waitForWhiteboardCollaborationReady,
   };
 };
 
@@ -606,6 +700,7 @@ const main = async () => {
     mode,
     operations,
     signal: signalResolver.promise,
+    whiteboardCollaborationEnabled: process.env.WHITEBOARD_COLLABORATION_ENABLED === 'true',
   });
   process.exitCode = exitCode;
 };

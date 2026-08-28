@@ -61,6 +61,15 @@ describe('local runtime collaboration orchestration', () => {
       name: 'Next.js',
     });
     expect(commands.collaboration.args).not.toContain('--env-file=.env');
+    expect(commands.whiteboardCollaboration).toMatchObject({
+      args: [
+        '--import=tsx',
+        expect.stringMatching(/scripts[\\/]whiteboard-collaboration-server\.ts$/u),
+      ],
+      command: 'node',
+      ipc: true,
+      name: 'Whiteboard collaboration',
+    });
   });
 
   it('isolates Windows children from console shutdown signals', () => {
@@ -103,6 +112,9 @@ describe('local runtime collaboration orchestration', () => {
       waitForPort: async () => {
         await Promise.resolve();
       },
+      waitForWhiteboardCollaborationReady: async () => {
+        await Promise.resolve();
+      },
     };
 
     await expect(
@@ -111,6 +123,7 @@ describe('local runtime collaboration orchestration', () => {
         manageDatabase: true,
         mode: 'dev',
         operations,
+        whiteboardCollaborationEnabled: false,
       }),
     ).rejects.toThrow('Next.js port 3000 is already in use');
 
@@ -150,6 +163,9 @@ describe('local runtime collaboration orchestration', () => {
       waitForPort: async () => {
         await Promise.resolve();
       },
+      waitForWhiteboardCollaborationReady: async () => {
+        await Promise.resolve();
+      },
     };
 
     await expect(
@@ -159,6 +175,7 @@ describe('local runtime collaboration orchestration', () => {
         mode: 'dev',
         operations,
         signal: signal.promise,
+        whiteboardCollaborationEnabled: false,
       }),
     ).resolves.toBe(130);
 
@@ -197,6 +214,9 @@ describe('local runtime collaboration orchestration', () => {
       waitForPort: async () => {
         await Promise.resolve();
       },
+      waitForWhiteboardCollaborationReady: async () => {
+        await Promise.reject(new Error('Whiteboard collaboration readiness must not run'));
+      },
     };
 
     await runRuntime({
@@ -205,9 +225,11 @@ describe('local runtime collaboration orchestration', () => {
       mode: 'dev',
       operations,
       signal: signal.promise,
+      whiteboardCollaborationEnabled: false,
     });
 
     expect(started).not.toContain('Hocuspocus');
+    expect(started).not.toContain('Whiteboard collaboration');
   });
 
   it('uses an external database for real PostgreSQL E2E', async () => {
@@ -238,6 +260,9 @@ describe('local runtime collaboration orchestration', () => {
       waitForPort: async () => {
         await Promise.reject(new Error('Managed database readiness must not run'));
       },
+      waitForWhiteboardCollaborationReady: async () => {
+        await Promise.resolve();
+      },
     };
 
     await expect(
@@ -247,6 +272,7 @@ describe('local runtime collaboration orchestration', () => {
         mode: 'playwright-start',
         operations,
         signal: signal.promise,
+        whiteboardCollaborationEnabled: false,
       }),
     ).resolves.toBe(130);
 
@@ -263,6 +289,20 @@ describe('local runtime collaboration orchestration', () => {
     await operations.waitForCollaborationReady(createChild());
 
     expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:1235/ready', {
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('waits for the whiteboard collaboration readiness response', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ status: 'ready' }, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const operations = createSystemOperations({ cwd: process.cwd(), platform: 'linux' });
+
+    await operations.waitForWhiteboardCollaborationReady(createChild());
+
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:1245/ready', {
       signal: expect.any(AbortSignal),
     });
   });

@@ -117,11 +117,14 @@ const releaseRuntimePorts = async (
 const main = async () => {
   const applicationPid = parsePid('application');
   const collaborationPid = parsePid('collaboration');
+  const whiteboardCollaborationPid = parsePid('whiteboard-collaboration');
   const databasePid = parsePid('database');
   const runtimePorts = new Set([
     parsePort('application-port'),
     parsePort('collaboration-port'),
     parsePort('collaboration-health-port'),
+    parsePort('whiteboard-collaboration-port'),
+    parsePort('whiteboard-collaboration-health-port'),
     5432,
   ]);
   const expectedPortOwners = getRuntimePortOwners(runtimePorts);
@@ -132,6 +135,10 @@ const main = async () => {
   if (collaborationPid) {
     await waitForExitUntil(collaborationPid, COLLABORATION_SHUTDOWN_TIMEOUT_MS);
     terminateTree(collaborationPid);
+  }
+  if (whiteboardCollaborationPid) {
+    await waitForExitUntil(whiteboardCollaborationPid, COLLABORATION_SHUTDOWN_TIMEOUT_MS);
+    terminateTree(whiteboardCollaborationPid);
   }
   if (databasePid) {
     terminateTree(databasePid);

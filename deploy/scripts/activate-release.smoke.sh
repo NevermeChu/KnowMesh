@@ -95,10 +95,13 @@ build_archive() {
   printf 'server\n' > "${payload}/server.js"
   printf 'migrate\n' > "${payload}/migrate-production.cjs"
   printf 'collaboration\n' > "${payload}/collaboration-server.cjs"
+  printf 'whiteboard-collaboration\n' > "${payload}/whiteboard-collaboration-server.cjs"
   printf '{}\n' > "${payload}/migrations/meta/_journal.json"
   printf 'unit\n' > "${payload}/deploy/systemd/knowmesh-collaboration.service"
+  printf 'whiteboard-unit\n' > "${payload}/deploy/systemd/knowmesh-whiteboard-collaboration.service"
   printf 'map\n' > "${payload}/deploy/nginx/knowmesh-websocket-map.conf"
   printf 'location\n' > "${payload}/deploy/nginx/knowmesh-collaboration-location.conf"
+  printf 'whiteboard-location\n' > "${payload}/deploy/nginx/knowmesh-whiteboard-collaboration-location.conf"
   if [[ "${correct_revision}" == yes ]]; then
     printf '%s\n' "${release_id}" > "${payload}/REVISION"
   else

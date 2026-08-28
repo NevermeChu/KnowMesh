@@ -106,6 +106,14 @@ fi
     --define:import.meta.url=import_meta_url \
     --banner:js="const import_meta_url = require('node:url').pathToFileURL(__filename).href;" \
     --outfile="${standalone_dir}/collaboration-server.cjs"
+  npx --no-install esbuild scripts/whiteboard-collaboration-server.ts \
+    --bundle \
+    --platform=node \
+    --target=node24 \
+    --format=cjs \
+    --define:import.meta.url=import_meta_url \
+    --banner:js="const import_meta_url = require('node:url').pathToFileURL(__filename).href;" \
+    --outfile="${standalone_dir}/whiteboard-collaboration-server.cjs"
 )
 
 mkdir -p "${standalone_dir}/public" "${standalone_dir}/.next/static" "${standalone_dir}/migrations" "${standalone_dir}/deploy"
@@ -119,12 +127,15 @@ find "${standalone_dir}" -type f -name '.env*' -delete
 require_file "${standalone_dir}/server.js"
 require_file "${standalone_dir}/migrate-production.cjs"
 require_file "${standalone_dir}/collaboration-server.cjs"
+require_file "${standalone_dir}/whiteboard-collaboration-server.cjs"
 require_directory "${standalone_dir}/.next/static"
 require_directory "${standalone_dir}/public"
 require_file "${standalone_dir}/migrations/meta/_journal.json"
 require_file "${standalone_dir}/deploy/systemd/knowmesh-collaboration.service"
+require_file "${standalone_dir}/deploy/systemd/knowmesh-whiteboard-collaboration.service"
 require_file "${standalone_dir}/deploy/nginx/knowmesh-websocket-map.conf"
 require_file "${standalone_dir}/deploy/nginx/knowmesh-collaboration-location.conf"
+require_file "${standalone_dir}/deploy/nginx/knowmesh-whiteboard-collaboration-location.conf"
 require_file "${standalone_dir}/deploy/scripts/activate-release.sh"
 require_file "${standalone_dir}/deploy/scripts/rollback-release.sh"
 
