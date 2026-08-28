@@ -39,12 +39,14 @@
         ├─ /etc/knowmesh.env                     生产密钥和运行配置
         ├─ knowmesh.service                      Next.js，127.0.0.1:3000
         ├─ knowmesh-collaboration.service        Hocuspocus，127.0.0.1:1234
-        └─ collaboration readiness               127.0.0.1:1235
+        ├─ knowmesh-whiteboard-collaboration.service  白板协作，127.0.0.1:1244
+        └─ collaboration readiness               127.0.0.1:1235 / 1245
                 ▲
                 │ 本机反向代理
         Nginx + Let's Encrypt TLS
         ├─ https://thisme.icu/*                  → 127.0.0.1:3000
-        └─ wss://thisme.icu/collaboration-ws    → 127.0.0.1:1234
+        ├─ wss://thisme.icu/collaboration-ws    → 127.0.0.1:1234
+        └─ wss://thisme.icu/whiteboard-collaboration/socket.io → 127.0.0.1:1244
                 ▲
                 │
              浏览器用户
@@ -53,7 +55,7 @@ Next.js 与 Hocuspocus ───────────────→ 本机 P
 认证和邀请邮件 ─────────────────────→ Resend（配置后）
 ```
 
-用户不能直接访问 3000、1234、1235 或 5432；这些端口当前都只绑定到 `127.0.0.1`。主机对外监听 22、80 和 443，但 UFW 当前未启用且 iptables INPUT 默认允许，是否只由 Azure NSG 放行预期流量尚未确认。
+用户不能直接访问 3000、1234、1235、1244、1245 或 5432；这些端口当前都只绑定到 `127.0.0.1`。主机对外监听 22、80 和 443，但 UFW 当前未启用且 iptables INPUT 默认允许，是否只由 Azure NSG 放行预期流量尚未确认。
 
 ## 哪些事实能够从仓库确认
 
@@ -87,7 +89,8 @@ Next.js 与 Hocuspocus ───────────────→ 本机 P
 | Node.js | v24.19.0；`/home/thisme/.nvm/versions/node/v24.19.0/bin/node` | GitHub Actions + 服务器 NVM |
 | Next.js 服务 | `knowmesh.service`，本机 `127.0.0.1:3000` | systemd |
 | 协作服务 | `knowmesh-collaboration.service`，本机 `127.0.0.1:1234` | systemd |
-| 协作健康检查 | `http://127.0.0.1:1235/ready` | Hocuspocus |
+| 白板协作服务 | `knowmesh-whiteboard-collaboration.service`，本机 `127.0.0.1:1244` | systemd |
+| 协作健康检查 | `http://127.0.0.1:1235/ready` 与 `http://127.0.0.1:1245/ready` | Hocuspocus / 白板 Adapter |
 | release 根目录 | `/srv/knowmesh-app/releases/<GITHUB_SHA>` | deploy job |
 | 当前版本 | `/srv/knowmesh-app/current` 软链接 | deploy job |
 | 生产环境变量 | `/etc/knowmesh.env`，`root:thisme 0640` | 服务器管理员 |
@@ -137,7 +140,9 @@ deploy job 使用 `production-deployment` 并发组且不取消进行中的部�
 
 - `E2E_REAL_POSTGRES=true`，禁止本地运行器再启动 PGlite。
 - `COLLABORATION_ENABLED=true`，启动真实 Hocuspocus。
+- `WHITEBOARD_COLLABORATION_ENABLED=true` 与 `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED=true`，启动真实白板协作服务。
 - `NEXT_PUBLIC_COLLABORATION_URL=ws://localhost:1234`。
+- `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL=http://localhost:1244`。
 - Playwright 通过真实页面和数据库验证关键用户路径。
 
 这里的 PostgreSQL 是本次 GitHub job 的临时测试数据库，不是生产数据库。job 结束后容器和数据都会销毁。
@@ -155,7 +160,7 @@ deploy 只有在 `build`、`static`、`unit`、`e2e` 和 `packaging` 全部成�
 Next.js 在 `next.config.ts` 中启用了 `output: 'standalone'`。CI deploy job 和 Release workflow 都调用同一个版本化入口 [`scripts/package-production-artifact.sh`](../../scripts/package-production-artifact.sh) 完成打包，该脚本：
 
 - 接收显式参数：仓库根目录、standalone 目录、Next 静态目录、输出归档和 Git revision；不读取任何生产 Secret。
-- 用 esbuild 从同一仓库生成自包含的 `migrate-production.cjs` 和 `collaboration-server.cjs`。
+- 用 esbuild 从同一仓库生成自包含的 `migrate-production.cjs`、`collaboration-server.cjs` 和 `whiteboard-collaboration-server.cjs`。
 - 把 `public/`、`.next/static/`、`migrations/` 和 `deploy/` 复制进 standalone 目录，并写入 `REVISION`。
 - 打包前递归删除 standalone 中的 `.env*` 文件，并在整个目录树上复查没有同名文件、链接或目录进入制品。
 - 逐项校验必需文件与目录；若 standalone 目录中已有属于其他 SHA 的 `REVISION`，直接失败，防止 `.next` 缓存把不同提交的产物混进同一制品。
@@ -168,9 +173,9 @@ artifact 内容包括：
 - `server.js` 和 Next.js 运行依赖。
 - `public/` 与 `.next/static/` 静态文件。
 - `migrations/` 及 Drizzle journal。
-- 自包含的 `migrate-production.cjs` 和 `collaboration-server.cjs`。
-- `deploy/systemd/knowmesh-collaboration.service`。
-- `deploy/nginx/` 下的两个协作代理片段。
+- 自包含的 `migrate-production.cjs`、`collaboration-server.cjs` 和 `whiteboard-collaboration-server.cjs`。
+- `deploy/systemd/knowmesh-collaboration.service` 与 `deploy/systemd/knowmesh-whiteboard-collaboration.service`。
+- `deploy/nginx/` 下的 WebSocket 映射与协作/白板代理片段。
 - `deploy/scripts/activate-release.sh` 与 `deploy/scripts/rollback-release.sh`，即随制品交付的生产激活与回滚脚本。
 - `REVISION`，保存构建该 artifact 的完整 Git SHA。
 
@@ -191,7 +196,7 @@ artifact 内容包括：
 7. 解析并验证 `current` 指向 release 根目录内仍然存在的旧版本；没有有效回滚目标时在数据库迁移前停止。
 8. 新 release 中的迁移程序读取 `/etc/knowmesh.env`，对生产 PostgreSQL 执行尚未执行的迁移。
 9. 记录旧 release，用临时链接加 `mv -Tf` 原子切换 `/srv/knowmesh-app/current`。
-10. 先重启 Hocuspocus 并等待 `/ready`，再重启 Next.js 并检查 `http://127.0.0.1:3000/`。
+10. 先重启已启用的协作 sidecar 并等待 `/ready`，再重启 Next.js 并检查 `http://127.0.0.1:3000/`。
 11. GitHub runner 从公网检查 `https://thisme.icu/`；协作启用时还要求 WSS 路径返回 `101 Switching Protocols`。
 12. 全部成功后删除本次回滚标记；失败则把 `current` 指回旧 release，并重启两个服务。
 
@@ -246,6 +251,8 @@ NEXT_TELEMETRY_DISABLED=1
 # Public URLs. NEXT_PUBLIC_* values are also baked into browser code at build time.
 NEXT_PUBLIC_APP_URL=https://thisme.icu
 NEXT_PUBLIC_COLLABORATION_URL=wss://thisme.icu/collaboration-ws
+NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL=https://thisme.icu
+# NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED=true
 
 # PostgreSQL and Better Auth secrets.
 DATABASE_URL=<production-postgresql-url>
@@ -261,6 +268,12 @@ COLLABORATION_ENABLED=true
 COLLABORATION_ADDRESS=127.0.0.1
 COLLABORATION_PORT=1234
 COLLABORATION_HEALTH_PORT=1235
+
+# Team whiteboard collaboration. Keep disabled until the adapter is accepted.
+# WHITEBOARD_COLLABORATION_ENABLED=true
+WHITEBOARD_COLLABORATION_ADDRESS=127.0.0.1
+WHITEBOARD_COLLABORATION_PORT=1244
+WHITEBOARD_COLLABORATION_HEALTH_PORT=1245
 ```
 
 变量的关键区别：
@@ -340,6 +353,10 @@ sudo systemctl restart knowmesh-collaboration.service
 
 普通代码发布不需要重新复制 unit；部署只会让 `current` 指向包含新 bundle 的 release。如果仓库模板本身改变，服务器管理员必须明确重新安装模板并执行 `daemon-reload`，当前 CI 不会自动覆盖 `/etc/systemd/system`。
 
+### 白板协作 Adapter
+
+`knowmesh-whiteboard-collaboration.service` 的权威模板在 `deploy/systemd/knowmesh-whiteboard-collaboration.service`。它与 Hocuspocus 独立：独立端口、独立 advisory lock、独立功能开关。`WHITEBOARD_COLLABORATION_ENABLED` 与 `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 必须分别打开服务端进程和浏览器连接；任一关闭时 Team 白板只读最近成功 scene。启用前必须把 Nginx 片段 `deploy/nginx/knowmesh-whiteboard-collaboration-location.conf` include 进 HTTPS `server {}`，并把服务器环境变量与 GitHub Variable 对齐。
+
 ## Nginx 如何把域名转给两个服务
 
 当前完整站点位于服务器 `/etc/nginx/sites-available/knowmesh`，但不在仓库中。已确认的结构是：
@@ -348,6 +365,7 @@ sudo systemctl restart knowmesh-collaboration.service
 - `www.thisme.icu` HTTPS 重定向到 `https://thisme.icu`。
 - `thisme.icu` HTTPS 使用 Let's Encrypt 证书，并把普通请求代理到 `127.0.0.1:3000`。
 - HTTPS `server {}` include `/etc/nginx/snippets/knowmesh-collaboration-location.conf`，把精确路径 `/collaboration-ws` 转到 `127.0.0.1:1234`。
+- 启用白板协作时，同一 `server {}` 还需 include `knowmesh-whiteboard-collaboration-location.conf`，把 `/whiteboard-collaboration/socket.io/` 转到 `127.0.0.1:1244`。
 - Nginx `http` 上下文加载 WebSocket connection map，保证普通请求与 Upgrade 使用正确的 `Connection` header。
 
 现场还保留 `/etc/nginx/conf.d/knowmesh-websocket.conf`，定义旧变量 `$connection_upgrade`；主站 `location /` 使用它。新文件 `/etc/nginx/conf.d/knowmesh-websocket-map.conf` 定义 `$knowmesh_connection_upgrade`，仅协作 location 使用。两个 map 变量不同，目前不冲突，但新服务器模板应明确保留两者用途或合并成一个统一变量，避免误删普通代理所需的 map。

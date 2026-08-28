@@ -47,10 +47,10 @@
 └─ server-only 查询
 
 文档业务
-├─ documents + Personal ProseMirror JSON / Team Yjs 协作状态
+├─ documents + Personal ProseMirror JSON / Team Yjs 协作状态 / 白板 scene
 ├─ 项目成员资源授权
-├─ 按 Workspace 类型由服务端选择 Tiptap 单人或协作编辑器
-└─ Personal Server Action 自动保存 / Team（功能开关启用时）Hocuspocus 同步
+├─ 按 Workspace 类型由服务端选择 Tiptap 或 Excalidraw 编辑器
+└─ Personal Server Action 自动保存 / Team 富文本 Hocuspocus / Team 白板 Socket.IO Adapter
 
 搜索业务
 ├─ /search + CommandPalette

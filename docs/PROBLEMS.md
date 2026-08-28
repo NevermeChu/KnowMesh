@@ -794,3 +794,36 @@ Excalidraw 包在模块初始化时访问 `window`，且未配置资产路径时
 ### 解决方法
 
 白板编辑器使用 `ssr: false` 动态加载，并在导入 Excalidraw 前设置同源资产路径；依赖安装后从锁定包复制字体到被 Git 忽略的公共资产目录，部署继续保持原 CSP。
+
+## 68. 同一数据库上的两个协作写进程不能共用一条咨询锁
+
+### 问题
+Team 富文本和 Team 白板都需要“每个数据库只有一个写实例”，如果复用同一对 `pg_try_advisory_lock` 键，后启动的服务会拿不到租约并失败关闭。
+
+### 根因
+单写租约最初只为 Hocuspocus 进程设计，锁命名空间和锁 ID 写死在文档协作模块内，没有把“租约机制”和“某个写服务的身份”分开。
+
+### 解决方法
+抽出共用的 `acquireCollaborationLease`，按服务传入不同的 `lockNamespace`/`lockId` 和丢失回调；文档协作与白板协作继续各自持有独立连接上的 session advisory lock。
+
+## 69. CSP 只放行协作 URL 的 HTTP origin 会拦住 Socket.IO WebSocket
+
+### 问题
+Team 白板客户端使用 `http://`/`https://` 作为 Socket.IO 入口，浏览器实际发起 `ws://`/`wss://` 连接；`connect-src` 若只写入 `URL.origin`，页面会显示同步失败，而协作服务的鉴权失败计数仍为 0。
+
+### 根因
+CSP `connect-src` 按 scheme 匹配。Hocuspocus 的公开地址本身是 `ws://`，因此旧策略碰巧够用；Socket.IO 的公开地址是 `http://`，升级传输后 scheme 变化，浏览器在握手到达服务端之前就拦截连接。
+
+### 解决方法
+对每个协作 URL 同时加入对应的 HTTP(S) 与 WS(S) 源；生产 WSS 终端同样成对放行。
+
+## 70. Playwright `webServer.env` 覆盖后丢失真实 PostgreSQL 验收环境
+
+### 问题
+只声明 `PORT` 和 `NEXT_PUBLIC_APP_URL` 时，子进程拿不到调用方设置的 `E2E_REAL_POSTGRES` 等变量，本地运行器会再拉起 PGlite 并与已占用的 5432 冲突，LISTEN/NOTIFY 与权限失效也无法按真实 PostgreSQL 验收。
+
+### 根因
+Playwright 在配置了 `webServer.env` 后不再默认传入完整 `process.env`；白板验收还要求协作服务监听 Windows 上 `localhost` 可能解析到的 IPv6 环回，仅绑定 `127.0.0.1` 时 Socket 对不上。
+
+### 解决方法
+`webServer.env` 先展开 `process.env` 再覆盖端口与应用 URL；E2E 将协作服务绑到 `::`。真实 PostgreSQL 验收必须显式设置 `E2E_REAL_POSTGRES=true`，禁止本地运行器再启动 PGlite。

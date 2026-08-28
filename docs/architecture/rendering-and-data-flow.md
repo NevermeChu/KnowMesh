@@ -15,6 +15,7 @@
 权限通知：权限 Server Action → 同一数据库事务写业务状态与用户通知
 Personal 正文：Client Component → 防抖/失焦保存 → Server Action → JSONB
 Team 正文：Client Component → 浏览器 Yjs 副本 + Hocuspocus Provider → Yjs 状态 + JSONB 派生快照
+Team 白板：Client Component → Socket.IO Adapter + 官方 reconcileElements → PostgreSQL scene revision
 ```
 
 `async` 不决定函数是否为 Server Action。决定因素是调用发生在哪个运行边界，以及导出函数是否使用 `'use server'` 暴露为 Action。

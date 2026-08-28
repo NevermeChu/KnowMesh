@@ -64,7 +64,7 @@ PostgreSQL / 本地 PGlite
 
 左上角切换器选择真实 Workspace。个人区域始终读取当前有效用户的 Personal Workspace；协作区域只在活动 Workspace 为 Team 时显示。两个区域复用同一项目与文档实现，但不是 Project 数据字段。
 
-个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端只读取项目导航元数据；项目或文档节点首次展开时，侧边栏通过重新鉴权的 Server Action 分页读取直接子节点，直接访问深层文档时只注入有界祖先路径。页面 Server Component 按当前成员关系读取所选文档正文。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。Personal 文档正文以 ProseMirror JSON 通过 Server Action 自动保存，Team 文档在启用协作时通过 Hocuspocus/Yjs 实时协同并持久化二进制状态与 JSONB 派生快照。
+个人区域和协作区域页面也复用同一个文档功能。Workspace Layout 在服务端只读取项目导航元数据；项目或文档节点首次展开时，侧边栏通过重新鉴权的 Server Action 分页读取直接子节点，直接访问深层文档时只注入有界祖先路径。页面 Server Component 按当前成员关系读取所选文档正文。创建交互和 Tiptap 编辑器位于 Client Component，格式命令显示在共享内容工具栏。Personal 文档正文以 ProseMirror JSON 通过 Server Action 自动保存，Team 富文本文档在启用协作时通过 Hocuspocus/Yjs 实时协同并持久化二进制状态与 JSONB 派生快照。Team 白板在独立开关启用时通过 Socket.IO Adapter 同步 PostgreSQL scene；浏览器负责 Excalidraw 元素合并。
 
 ## 当前页面状态
 

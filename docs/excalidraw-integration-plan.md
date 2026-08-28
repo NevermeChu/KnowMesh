@@ -1,6 +1,6 @@
 # KnowMesh Excalidraw 白板集成计划
 
-状态：In progress（阶段 1 代码完成，阶段 0 与真实 PostgreSQL 验收仍在进行）
+状态：In progress（阶段 1–4 代码完成；阶段 0 浏览器 spike、生产灰度，以及重连/进程重启类验收仍待完成）
 
 本文规划把 Excalidraw 白板纳入现有 Document 领域模型的实施路径。计划中的表、字段、组件、服务和环境变量均为建议名称，不代表当前仓库已经存在；实施时必须以当时的代码、已安装包和 Accepted ADR 为准。
 
@@ -385,15 +385,15 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 
 验收：已通过保存队列单元测试、真实迁移数据库 CAS 集成测试和 Chromium 端到端测试，覆盖编辑、刷新恢复、失败重试、冲突停写和三种导出。Personal 白板不建立实时连接；集成测试验证 scene 保存不改写 `documents.content` 或 `search_text`。
 
-### 阶段 4：Team 协作服务与客户端
+### 阶段 4：Team 协作服务与客户端（代码完成；真实 PostgreSQL 双上下文验收已通过；生产灰度待开启开关后完成）
 
-- 按阶段 0 ADR 实现 Whiteboard Collaboration Adapter。
-- 接入 Better Auth、Project 权限、只读 scope、失效订阅、限流、readiness 和单写实例租约。
-- 服务端实现基线同步、scene 校验、revision compare-and-swap、提交后 canonical 广播、PostgreSQL 保存确认和 Presence；不执行 Excalidraw reconciliation。
-- Team 客户端使用官方 `reconcileElements` 实现远端合并、冲突重试及连接/同步/保存失败/只读/权限撤回状态，不回退 Personal 保存。
-- 增加独立功能开关、Env.ts 校验、本地运行、Nginx、systemd 和发布回滚配置。
-
-验收：真实 PostgreSQL 与两个真实浏览器上下文覆盖并发、重连、重启、viewer、角色降级、成员移除、Session 撤销和服务关闭只读。
+- [x] 按阶段 0 ADR 实现独立 Whiteboard Collaboration Adapter（Socket.IO、CAS、Presence、失效订阅与单写租约）。
+- [x] 接入 Better Auth、Project 权限、只读 scope、限流、readiness 和独立功能开关。
+- [x] 服务端实现基线同步、scene 校验、revision compare-and-swap、提交后 canonical 广播和 PostgreSQL 保存确认；不执行 Excalidraw reconciliation。
+- [x] Team 客户端使用官方 `reconcileElements` 实现远端合并、冲突重试及连接/同步/保存失败/只读/权限撤回状态，不回退 Personal 保存。
+- [x] 增加 Env.ts 校验、本地运行编排、Nginx、systemd 和发布回滚配置。
+- [x] 真实 PostgreSQL 与两个 Playwright Chromium 上下文覆盖 canonical 同步、viewer、角色降级、成员移除和 Session 撤销。
+- [ ] 重连、协作进程重启和服务关闭只读仍待补验收。
 
 ### 阶段 5：资产能力
 
