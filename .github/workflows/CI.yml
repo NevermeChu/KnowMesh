@@ -147,6 +147,12 @@ jobs:
           E2E_REAL_POSTGRES: 'true'
           NEXT_PUBLIC_APP_URL: http://localhost:3008
           NEXT_PUBLIC_COLLABORATION_URL: ws://localhost:1234
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: 'true'
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: http://localhost:1244
+          WHITEBOARD_COLLABORATION_ADDRESS: 127.0.0.1
+          WHITEBOARD_COLLABORATION_ENABLED: 'true'
+          WHITEBOARD_COLLABORATION_HEALTH_PORT: '1245'
+          WHITEBOARD_COLLABORATION_PORT: '1244'
 
       - name: Upload test results
         uses: actions/upload-artifact@v7
@@ -202,8 +208,12 @@ jobs:
       COLLABORATION_SERVICE_NAME: ${{ vars.PRODUCTION_COLLABORATION_SERVICE_NAME || 'knowmesh-collaboration.service' }}
       COLLABORATION_HEALTH_URL: ${{ vars.PRODUCTION_COLLABORATION_HEALTH_URL || 'http://127.0.0.1:1235/ready' }}
       COLLABORATION_DEPLOY_ENABLED: ${{ vars.PRODUCTION_COLLABORATION_ENABLED || 'false' }}
+      WHITEBOARD_COLLABORATION_SERVICE_NAME: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_SERVICE_NAME || 'knowmesh-whiteboard-collaboration.service' }}
+      WHITEBOARD_COLLABORATION_HEALTH_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_HEALTH_URL || 'http://127.0.0.1:1245/ready' }}
+      WHITEBOARD_COLLABORATION_DEPLOY_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED || 'false' }}
       PUBLIC_HEALTH_URL: https://thisme.icu/
       PUBLIC_COLLABORATION_URL: ${{ vars.PRODUCTION_COLLABORATION_URL }}
+      PUBLIC_WHITEBOARD_COLLABORATION_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_URL }}
       PUBLIC_APP_ORIGIN: ${{ vars.PRODUCTION_APP_URL }}
 
     steps:
@@ -220,6 +230,8 @@ jobs:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
           NEXT_PUBLIC_COLLABORATION_URL: ${{ vars.PRODUCTION_COLLABORATION_URL }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED || 'false' }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_URL || vars.PRODUCTION_APP_URL }}
 
       - name: Prepare production release
         run: |
@@ -292,6 +304,10 @@ jobs:
             "${COLLABORATION_SERVICE_NAME}" \
             "${COLLABORATION_HEALTH_URL}" \
             "${COLLABORATION_DEPLOY_ENABLED}" \
+            "${DEPLOY_USER}" \
+            "${WHITEBOARD_COLLABORATION_SERVICE_NAME}" \
+            "${WHITEBOARD_COLLABORATION_HEALTH_URL}" \
+            "${WHITEBOARD_COLLABORATION_DEPLOY_ENABLED}" \
             < deploy/scripts/activate-release.sh
 
       - name: Verify public production and finalize
@@ -340,7 +356,31 @@ jobs:
             fi
           fi
 
-          if [[ "${public_application_healthy}" == true && "${public_collaboration_healthy}" == true ]]; then
+          public_whiteboard_collaboration_healthy=true
+          if [[ "${WHITEBOARD_COLLABORATION_DEPLOY_ENABLED}" == true ]]; then
+            public_whiteboard_collaboration_healthy=false
+            whiteboard_ws_url="${PUBLIC_APP_ORIGIN%/}/whiteboard-collaboration/socket.io/?EIO=4&transport=websocket"
+            set +e
+            whiteboard_websocket_status=$(curl \
+              --http1.1 \
+              --max-time 5 \
+              --output /dev/null \
+              --silent \
+              --write-out '%{http_code}' \
+              --header "Origin: ${PUBLIC_APP_ORIGIN}" \
+              --header 'Connection: Upgrade' \
+              --header 'Upgrade: websocket' \
+              --header 'Sec-WebSocket-Version: 13' \
+              --header 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+              "${whiteboard_ws_url}")
+            whiteboard_websocket_exit=$?
+            set -e
+            if [[ "${whiteboard_websocket_status}" == 101 && ( "${whiteboard_websocket_exit}" -eq 0 || "${whiteboard_websocket_exit}" -eq 28 ) ]]; then
+              public_whiteboard_collaboration_healthy=true
+            fi
+          fi
+
+          if [[ "${public_application_healthy}" == true && "${public_collaboration_healthy}" == true && "${public_whiteboard_collaboration_healthy}" == true ]]; then
             ssh \
               -i "${HOME}/.ssh/knowmesh-deploy" \
               -p "${DEPLOY_PORT}" \
@@ -366,6 +406,8 @@ jobs:
             "${SERVICE_NAME}" \
             "${COLLABORATION_SERVICE_NAME}" \
             "${COLLABORATION_DEPLOY_ENABLED}" \
+            "${WHITEBOARD_COLLABORATION_SERVICE_NAME}" \
+            "${WHITEBOARD_COLLABORATION_DEPLOY_ENABLED}" \
             < deploy/scripts/rollback-release.sh
           echo 'Public production health check failed; application and collaboration releases were rolled back' >&2
           exit 1
