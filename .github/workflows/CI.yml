@@ -43,6 +43,9 @@ jobs:
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           NEXT_PUBLIC_APP_URL: http://localhost:3008
+          NEXT_PUBLIC_COLLABORATION_URL: ws://localhost:1234
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: 'true'
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: http://localhost:1244
 
       - if: matrix.node-version == '24.x' && success()
         name: Cache Next.js build output

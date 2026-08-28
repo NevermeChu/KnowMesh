@@ -128,7 +128,7 @@ deploy job 使用 `production-deployment` 并发组且不取消进行中的部�
 
 它在 GitHub 的 Ubuntu runner 上使用 Node.js 24 和 `npm ci` 安装锁定依赖，然后运行 `npm run build-local`。这个脚本启动一次临时 PGlite、执行迁移并构建 Next.js；临时数据库不包含生产数据。
 
-成功后的 `.next` 被按当前 Git SHA 缓存，供 E2E job 使用。这个缓存是 CI 加速手段，不是生产 release。
+成功后的 `.next` 被按当前 Git SHA 缓存，供 E2E job 使用。这个缓存是 CI 加速手段，不是生产 release。`NEXT_PUBLIC_*` 会打进该构建；E2E 使用 `playwright-start` 时不会重编译客户端，因此 `build` 必须带上与 E2E 相同的 `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED=true` 和协作 URL，否则 Team 白板会渲染「协作已关闭」。
 
 ### 3. `unit`：单元和集成测试
 
