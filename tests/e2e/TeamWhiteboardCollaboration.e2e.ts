@@ -1,5 +1,8 @@
 import 'dotenv/config';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { createHmac, randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { Pool } from 'pg';
@@ -80,10 +83,91 @@ async function readSceneElementCount() {
   return result.rows[0]?.element_count ?? 0;
 }
 
-async function readInvalidatedConnections() {
-  const response = await fetch(
-    `http://${Env.WHITEBOARD_COLLABORATION_ADDRESS}:${Env.WHITEBOARD_COLLABORATION_HEALTH_PORT}/metrics`,
+function whiteboardHealthOrigin() {
+  const address = Env.WHITEBOARD_COLLABORATION_ADDRESS;
+  if (address === '::' || address === '0.0.0.0') {
+    return `http://127.0.0.1:${Env.WHITEBOARD_COLLABORATION_HEALTH_PORT}`;
+  }
+  const host = address.includes(':') && !address.startsWith('[') ? `[${address}]` : address;
+  return `http://${host}:${Env.WHITEBOARD_COLLABORATION_HEALTH_PORT}`;
+}
+
+function findListeningPid(port: number) {
+  if (process.platform === 'win32') {
+    const output = execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)`,
+      ],
+      { encoding: 'utf-8' },
+    ).trim();
+    const pid = Number(output);
+    if (!Number.isInteger(pid) || pid <= 0) {
+      throw new Error(`No process is listening on port ${port}`);
+    }
+    return pid;
+  }
+
+  const output = execFileSync('ss', ['-H', '-lptn', `sport = :${port}`], { encoding: 'utf-8' });
+  const match = /pid=(\d+)/u.exec(output);
+  if (!match?.[1]) {
+    throw new Error(`No process is listening on port ${port}`);
+  }
+  return Number(match[1]);
+}
+
+function startWhiteboardCollaborationServer() {
+  const child = spawn(
+    process.execPath,
+    ['--import=tsx', resolve(process.cwd(), 'scripts/whiteboard-collaboration-server.ts')],
+    {
+      cwd: process.cwd(),
+      detached: true,
+      env: process.env,
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      windowsHide: true,
+    },
   );
+  child.stdout?.pipe(process.stdout);
+  child.stderr?.pipe(process.stderr);
+  return child;
+}
+
+function hardKillProcess(pid: number) {
+  if (process.platform === 'win32') {
+    const result = spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    if (result.status !== 0) {
+      throw new Error(`Failed to stop process ${pid}`);
+    }
+    return;
+  }
+  process.kill(pid, 'SIGKILL');
+}
+
+async function waitForWhiteboardReady(ready: boolean) {
+  await expect
+    .poll(
+      async () => {
+        try {
+          const response = await fetch(`${whiteboardHealthOrigin()}/ready`);
+          return response.ok;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(ready);
+}
+
+async function readInvalidatedConnections() {
+  const response = await fetch(`${whiteboardHealthOrigin()}/metrics`);
   const payload: unknown = await response.json();
   if (
     !payload ||
@@ -368,4 +452,75 @@ test.describe('team whiteboard collaboration', () => {
   for (const scenario of revocationScenarios) {
     registerRevocationScenario(scenario);
   }
+
+  test('reconnects after a page reload', async ({ baseURL, browser }) => {
+    test.setTimeout(60_000);
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const context = await createAuthenticatedContext({
+      baseURL,
+      browser,
+      sessionToken: ownerSessionToken,
+    });
+
+    try {
+      const page = await context.newPage();
+      await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
+      await expect(page.getByText('已同步', { exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.getByText('已同步', { exact: true })).toBeVisible();
+      await expect(page.getByText('团队白板', { exact: true })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('keeps the canvas read-only after the collaboration process restarts', async ({
+    baseURL,
+    browser,
+  }) => {
+    test.setTimeout(90_000);
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const context = await createAuthenticatedContext({
+      baseURL,
+      browser,
+      sessionToken: ownerSessionToken,
+    });
+    let replacement: ChildProcess | null = null;
+
+    try {
+      const page = await context.newPage();
+      await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
+      await expect(page.getByText('已同步', { exact: true })).toBeVisible();
+      const pid = findListeningPid(Env.WHITEBOARD_COLLABORATION_PORT);
+      hardKillProcess(pid);
+      await waitForWhiteboardReady(false);
+      await expect(page.getByText('团队白板', { exact: true })).toBeVisible();
+      await expect(page.getByText('个人白板', { exact: true })).toHaveCount(0);
+      await expect(
+        page
+          .getByText('同步失败，需要重试', { exact: true })
+          .or(page.getByText('已离线，等待重连', { exact: true })),
+      ).toBeVisible();
+      replacement = startWhiteboardCollaborationServer();
+      await waitForWhiteboardReady(true);
+      await expect(page.getByText('已同步', { exact: true })).toBeVisible({ timeout: 30_000 });
+      await drawRectangle(page);
+      await expect.poll(readSceneElementCount).toBeGreaterThan(0);
+    } finally {
+      await context.close();
+      if (replacement?.pid) {
+        try {
+          hardKillProcess(replacement.pid);
+        } catch {
+          // The replacement process may already have exited during teardown.
+        }
+      }
+    }
+  });
 });
