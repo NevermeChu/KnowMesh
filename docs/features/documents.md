@@ -93,12 +93,17 @@ Document 已具有 `rich-text` 与 `whiteboard` 两种内容类型。存量文�
 
 白板已可从项目根节点或任意文档下创建，并以统一 Document 身份参与导航、移动、收藏、最近访问和标题搜索。读取路径先完成 Project 授权，再按 `kind` 加载 ProseMirror content 或白板 scene；无 `document.read` 权限时只返回可见的导航标题，不读取或解析 scene。
 
-当前白板画布仅只读，Personal 编辑、自动保存、导出和 Team 实时协作尚未开放。scene envelope 当前只允许空 `files`；图片与二进制资产仍不可用。
+Personal 白板已支持编辑和串行自动保存。客户端将 Excalidraw 状态规范为只含持久化字段的 scene，服务端在事务内重新验证 `document.update`、`kind = whiteboard`、Personal Workspace 和 `expectedRevision`，仅更新 `document_whiteboard_states`及 Document 活动时间。并发冲突会停止自动覆盖并保留本地可导出 scene；普通失败可手动重试。页面隐藏、离开和组件卸载会立即发起待保存 scene 冲刷，仍有未完成写入时会启用离页提示。
+
+Personal 白板可导出 `.excalidraw`、PNG 和 SVG。Team 白板在独立协作阶段完成前继续只读，不回退到 Personal 保存入口。scene envelope 当前只允许空 `files`；图片、二进制资产和元素链接不会进入持久化 scene。Excalidraw 仅在浏览器动态加载，`postinstall` 将锁定版本字体复制到同源静态资产目录，不放宽现有 CSP。
 
 ## 相关代码
 
 - `src/features/documents/Document.ts`
 - `src/features/whiteboards/WhiteboardScene.ts`
+- `src/features/whiteboards/WhiteboardSaveQueue.ts`
+- `src/features/whiteboards/server/UpdatePersonalWhiteboard.ts`
+- `src/features/whiteboards/components/WhiteboardEditor.tsx`
 - `src/features/documents/DocumentSchema.ts`
 - `src/features/documents/DocumentExtensions.ts`
 - `src/features/documents/extensions/BlockDragDropExtension.ts`

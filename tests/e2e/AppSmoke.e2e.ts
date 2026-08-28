@@ -385,10 +385,11 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
-  test('creates and opens a read-only whiteboard from the sidebar', async ({
+  test('edits, restores, exports, and protects a personal whiteboard conflict', async ({
     baseURL,
     browser,
   }) => {
+    test.setTimeout(60_000);
     if (!baseURL) {
       throw new Error('Playwright base URL is unavailable');
     }
@@ -415,11 +416,88 @@ test.describe('application smoke coverage', () => {
     await page.getByRole('button', { exact: true, name: '创建' }).click();
 
     await expect(page.getByRole('heading', { exact: true, name: whiteboardTitle })).toBeVisible();
-    await expect(page.getByText('只读白板', { exact: true })).toBeVisible();
-    await expect(page.locator('.excalidraw')).toBeVisible();
+    await expect(page.getByText('个人白板', { exact: true })).toBeVisible();
+    const whiteboard = page.locator('.excalidraw');
+    await expect(whiteboard).toBeVisible();
     await expect(
       personalNavigation.getByRole('link', { exact: true, name: whiteboardTitle }),
     ).toBeVisible();
+
+    const whiteboardId = new URL(page.url()).searchParams.get('document');
+    if (!whiteboardId) {
+      throw new Error('Created whiteboard ID is unavailable');
+    }
+
+    const bounds = await whiteboard.boundingBox();
+    if (!bounds) {
+      throw new Error('Whiteboard bounds are unavailable');
+    }
+    await whiteboard.click({
+      position: { x: bounds.width * 0.6, y: bounds.height * 0.5 },
+    });
+    await page.keyboard.press('2');
+    await page.mouse.move(bounds.x + bounds.width * 0.55, bounds.y + bounds.height * 0.42);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + bounds.width * 0.7, bounds.y + bounds.height * 0.58, {
+      steps: 6,
+    });
+    await page.mouse.up();
+    await expect(page.getByText('已保存', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(async () => {
+        const result = await pool.query<{ element_count: number }>(`
+          SELECT jsonb_array_length(scene->'elements')::int AS element_count
+          FROM document_whiteboard_states
+          WHERE document_id = '${whiteboardId}'
+        `);
+        return result.rows[0]?.element_count ?? 0;
+      })
+      .toBeGreaterThan(0);
+
+    await page.reload();
+    await expect(page.getByText('个人白板', { exact: true })).toBeVisible();
+    await expect(page.locator('.excalidraw')).toBeVisible();
+
+    for (const exportOption of [
+      { extension: '.excalidraw', label: '导出 .excalidraw' },
+      { extension: '.png', label: '导出 PNG' },
+      { extension: '.svg', label: '导出 SVG' },
+    ]) {
+      await page.getByRole('button', { exact: true, name: '导出白板' }).click();
+      const downloadPromise = page.waitForEvent('download');
+      await page.getByRole('button', { exact: true, name: exportOption.label }).click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toBe(`${whiteboardTitle}${exportOption.extension}`);
+    }
+
+    await pool.query(`
+      UPDATE document_whiteboard_states
+      SET revision = revision + 1
+      WHERE document_id = '${whiteboardId}'
+    `);
+    const refreshedBounds = await page.locator('.excalidraw').boundingBox();
+    if (!refreshedBounds) {
+      throw new Error('Reloaded whiteboard bounds are unavailable');
+    }
+    await page.locator('.excalidraw').click({
+      position: { x: refreshedBounds.width * 0.6, y: refreshedBounds.height * 0.5 },
+    });
+    await page.keyboard.press('2');
+    await page.mouse.move(
+      refreshedBounds.x + refreshedBounds.width * 0.62,
+      refreshedBounds.y + refreshedBounds.height * 0.32,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      refreshedBounds.x + refreshedBounds.width * 0.74,
+      refreshedBounds.y + refreshedBounds.height * 0.43,
+      { steps: 4 },
+    );
+    await page.mouse.up();
+    await expect(page.getByText('其他页面已更新', { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/已停止自动覆盖/u)).toBeVisible();
 
     await close();
   });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_WHITEBOARD_SCENE, whiteboardSceneSchema } from './WhiteboardScene';
+import {
+  createWhiteboardScene,
+  EMPTY_WHITEBOARD_SCENE,
+  whiteboardSceneSchema,
+} from './WhiteboardScene';
 
 const rectangle = {
   height: 80,
@@ -54,5 +58,21 @@ describe('whiteboard scene validation', () => {
         appState: { selectedElementIds: { 'rectangle-1': true } },
       }).success,
     ).toBeFalsy();
+  });
+
+  it('removes unsupported image elements and links before persistence', () => {
+    expect(
+      createWhiteboardScene({
+        appState: { name: null, viewBackgroundColor: '#ffffff' },
+        elements: [
+          { ...rectangle, boundElements: undefined, link: 'https://example.com' },
+          { ...rectangle, id: 'image-1', type: 'image' },
+        ],
+      }),
+    ).toMatchObject({
+      appState: { viewBackgroundColor: '#ffffff' },
+      elements: [rectangle],
+      files: {},
+    });
   });
 });

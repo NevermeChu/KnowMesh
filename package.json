@@ -2,6 +2,7 @@
   "name": "knowmesh",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/prepare-excalidraw-assets.ts",
     "dev:next": "next dev",
     "dev": "node scripts/local-runtime.ts dev",
     "build:next": "next build",

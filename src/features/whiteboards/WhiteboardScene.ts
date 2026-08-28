@@ -33,6 +33,31 @@ export type WhiteboardScene = {
 const isJsonObject = (value: JsonValue): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const normalizeJsonValue = (value: unknown): JsonValue | undefined => {
+  if (
+    value === null ||
+    typeof value === 'boolean' ||
+    typeof value === 'number' ||
+    typeof value === 'string'
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeJsonValue(item) ?? null);
+  }
+  if (typeof value === 'object') {
+    const result: JsonObject = {};
+    for (const [key, item] of Object.entries(value)) {
+      const normalizedItem = normalizeJsonValue(item);
+      if (normalizedItem !== undefined) {
+        result[key] = normalizedItem;
+      }
+    }
+    return result;
+  }
+  return undefined;
+};
+
 const isSafeSceneValue = (value: unknown, depth = 0): value is JsonValue => {
   if (depth > MAX_SCENE_DEPTH) {
     return false;
@@ -116,6 +141,51 @@ export const whiteboardSceneSchema = whiteboardSceneStructureSchema.superRefine(
     }
   },
 );
+
+export const updatePersonalWhiteboardSchema = z.object({
+  documentId: z.uuid(),
+  expectedRevision: z.number().int().positive(),
+  scene: whiteboardSceneSchema,
+});
+
+export type UpdatePersonalWhiteboardInput = z.infer<typeof updatePersonalWhiteboardSchema>;
+
+export function createWhiteboardScene(options: {
+  appState: {
+    gridModeEnabled?: boolean;
+    gridSize?: number | null;
+    gridStep?: number;
+    name?: string | null;
+    viewBackgroundColor?: string;
+  };
+  elements: readonly unknown[];
+}) {
+  const elements = options.elements.map(normalizeJsonValue).filter((element) => {
+    if (typeof element !== 'object' || element === null || Array.isArray(element)) {
+      return true;
+    }
+    if (Reflect.get(element, 'type') === 'image') {
+      return false;
+    }
+    Reflect.deleteProperty(element, 'link');
+    return true;
+  });
+
+  return whiteboardSceneSchema.parse({
+    appState: {
+      gridModeEnabled: options.appState.gridModeEnabled,
+      gridSize: options.appState.gridSize,
+      gridStep: options.appState.gridStep,
+      name: options.appState.name ?? undefined,
+      viewBackgroundColor: options.appState.viewBackgroundColor,
+    },
+    elements,
+    files: {},
+    source: 'knowmesh',
+    type: 'excalidraw',
+    version: WHITEBOARD_SCENE_SCHEMA_VERSION,
+  });
+}
 
 export const EMPTY_WHITEBOARD_SCENE: WhiteboardScene = {
   appState: {},

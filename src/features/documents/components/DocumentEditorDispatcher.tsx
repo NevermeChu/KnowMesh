@@ -5,12 +5,16 @@ import type { Document, DocumentEditorMode } from '../Document';
 import { CollaborativeDocumentEditor } from './CollaborativeDocumentEditor';
 import { DocumentEditor } from './DocumentEditor';
 
-const DynamicReadonlyWhiteboard = dynamic(
+const DynamicWhiteboardEditor = dynamic(
   async () => {
-    const mod = await import('@/features/whiteboards/components/ReadonlyWhiteboard');
-    return { default: mod.ReadonlyWhiteboard };
+    Reflect.set(window, 'EXCALIDRAW_ASSET_PATH', '/excalidraw-assets/');
+    const mod = await import('@/features/whiteboards/components/WhiteboardEditor');
+    return { default: mod.WhiteboardEditor };
   },
-  { loading: () => <div className="min-h-[32rem] animate-pulse rounded-xl bg-card" /> },
+  {
+    loading: () => <div className="min-h-[32rem] animate-pulse rounded-xl bg-card" />,
+    ssr: false,
+  },
 );
 
 export function DocumentEditorDispatcher(props: {
@@ -18,9 +22,16 @@ export function DocumentEditorDispatcher(props: {
   currentUserId: string;
   document: Document;
   editorMode: DocumentEditorMode | null;
+  workspaceKind: 'personal' | 'team';
 }) {
   if (props.document.kind === 'whiteboard') {
-    return <DynamicReadonlyWhiteboard document={props.document} />;
+    return (
+      <DynamicWhiteboardEditor
+        canEdit={props.canEdit}
+        document={props.document}
+        workspaceKind={props.workspaceKind}
+      />
+    );
   }
 
   if (!props.editorMode) {

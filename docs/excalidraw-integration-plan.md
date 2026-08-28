@@ -375,15 +375,15 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 
 验收：已通过真实迁移数据库集成测试验证混合子树跨项目移动、viewer 读取与非成员隔离；已通过 Chromium 验证从侧边栏创建白板、跳转和只读画布加载。
 
-### 阶段 3：Personal 编辑与导出
+### 阶段 3：Personal 编辑与导出（已完成）
 
-- 动态加载 Excalidraw 客户端和样式。
-- 接入受控的 `initialData`、`onChange`、主题和语言。
-- 实现 scene 过滤、串行自动保存、revision 冲突、离页冲刷和状态 UI。
-- 接入 `.excalidraw`、PNG、SVG 导出。
-- 隐藏富文本格式与 Markdown 命令，禁用未支持的图片/导入/链接入口。
+- [x] 动态加载 Excalidraw 客户端和样式，关闭 SSR 并使用同源自托管字体资产。
+- [x] 接入受控的 `initialData`、`onChange`、主题和语言。
+- [x] 实现 scene 过滤、串行自动保存、revision 冲突、离页冲刷和状态 UI。
+- [x] 接入 `.excalidraw`、PNG、SVG 导出。
+- [x] 隐藏富文本格式与 Markdown 命令，禁用未支持的图片/导入/链接入口。
 
-验收：编辑、刷新、冲突、失败重试和导出均通过；Personal 白板不建立实时连接；白板 scene 不进入 `documents.content` 或 `search_text`。
+验收：已通过保存队列单元测试、真实迁移数据库 CAS 集成测试和 Chromium 端到端测试，覆盖编辑、刷新恢复、失败重试、冲突停写和三种导出。Personal 白板不建立实时连接；集成测试验证 scene 保存不改写 `documents.content` 或 `search_text`。
 
 ### 阶段 4：Team 协作服务与客户端
 

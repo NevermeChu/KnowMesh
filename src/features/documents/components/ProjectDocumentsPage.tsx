@@ -76,6 +76,7 @@ export async function ProjectDocumentsPage(props: {
       selectedDocument={result.selectedDocument}
       selectedDocumentEditorMode={result.selectedDocumentEditorMode}
       selectedDocumentTitle={result.selectedDocumentTitle}
+      workspaceKind={targetWorkspace.kind}
     />
   );
 }

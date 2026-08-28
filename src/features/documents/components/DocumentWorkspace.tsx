@@ -57,6 +57,7 @@ export function DocumentWorkspace(props: {
   selectedDocument: Document | null;
   selectedDocumentEditorMode: DocumentEditorMode | null;
   selectedDocumentTitle: string | null;
+  workspaceKind: 'personal' | 'team';
 }) {
   let content = (
     <DocumentPlaceholder
@@ -91,6 +92,7 @@ export function DocumentWorkspace(props: {
         currentUserId={props.currentUserId}
         document={props.selectedDocument}
         editorMode={props.selectedDocumentEditorMode}
+        workspaceKind={props.workspaceKind}
       />
     );
   }
