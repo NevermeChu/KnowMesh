@@ -15,6 +15,7 @@ import type { WorkspaceKind } from '@/features/workspaces/Workspace';
 import { updatePersonalWhiteboard } from '../server/UpdatePersonalWhiteboard';
 import { WhiteboardSaveQueue } from '../WhiteboardSaveQueue';
 import { createWhiteboardScene } from '../WhiteboardScene';
+import { TeamWhiteboardEditor } from './TeamWhiteboardEditor';
 import { WhiteboardExportMenu } from './WhiteboardExportMenu';
 
 const readonlyCanvasActions = {
@@ -46,7 +47,7 @@ const getThemeSnapshot = () =>
 
 const getServerThemeSnapshot = () => 'light' as const;
 
-export function WhiteboardEditor(props: {
+function PersonalWhiteboardEditor(props: {
   canEdit: boolean;
   document: WhiteboardDocument;
   workspaceKind: WorkspaceKind;
@@ -225,4 +226,15 @@ export function WhiteboardEditor(props: {
       </div>
     </WorkspaceContent>
   );
+}
+
+export function WhiteboardEditor(props: {
+  canEdit: boolean;
+  document: WhiteboardDocument;
+  workspaceKind: WorkspaceKind;
+}) {
+  if (props.workspaceKind === 'team') {
+    return <TeamWhiteboardEditor canEdit={props.canEdit} document={props.document} />;
+  }
+  return <PersonalWhiteboardEditor {...props} />;
 }

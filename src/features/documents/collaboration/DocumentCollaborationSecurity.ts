@@ -9,6 +9,7 @@ export type DocumentCollaborationContext = {
   accessValidatedAt?: number;
   canWrite: boolean;
   documentId: string;
+  documentKind: 'rich-text';
   image: string | null;
   name: string;
   projectId: string;
@@ -39,12 +40,17 @@ export async function authenticateDocumentCollaborationConnection(options: {
   if (!access) {
     throw new Error('permission-denied');
   }
+  if (access.documentKind !== 'rich-text') {
+    throw new Error('permission-denied');
+  }
 
   return {
     ...identity,
-    ...access,
     accessValidatedAt: Date.now(),
+    canWrite: access.canWrite,
     documentId,
+    documentKind: 'rich-text',
+    projectId: access.projectId,
   };
 }
 
@@ -64,7 +70,11 @@ export async function revalidateDocumentCollaborationConnection(
     userId: context.userId,
   });
 
-  return access?.canWrite === context.canWrite && access.projectId === context.projectId;
+  return (
+    access?.documentKind === 'rich-text' &&
+    access.canWrite === context.canWrite &&
+    access.projectId === context.projectId
+  );
 }
 
 export function sanitizeDocumentCollaborationAwareness(options: {

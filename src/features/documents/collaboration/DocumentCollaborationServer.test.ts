@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
 const createCollaborationContext = (userId: string) => ({
   canWrite: true,
   documentId: '30000000-0000-4000-8000-000000000009',
+  documentKind: 'rich-text' as const,
   image: null,
   name: 'User',
   projectId: '20000000-0000-4000-8000-000000000009',
@@ -41,6 +42,10 @@ vi.mock(import('@/libs/Env'), () => ({
     DATABASE_URL: 'postgresql://localhost/knowmesh-test',
     NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
     NEXT_PUBLIC_COLLABORATION_URL: 'ws://localhost:1234',
+    NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: 'http://localhost:1244',
+    WHITEBOARD_COLLABORATION_ADDRESS: '127.0.0.1',
+    WHITEBOARD_COLLABORATION_HEALTH_PORT: 1245,
+    WHITEBOARD_COLLABORATION_PORT: 1244,
   },
 }));
 vi.mock(import('./DocumentCollaborationSecurity'), () => ({
@@ -49,6 +54,7 @@ vi.mock(import('./DocumentCollaborationSecurity'), () => ({
   authenticateDocumentCollaborationConnection: async () => ({
     canWrite: state.authCanWrite,
     documentId: '30000000-0000-4000-8000-000000000003',
+    documentKind: 'rich-text' as const,
     image: null,
     name: 'User',
     projectId: '20000000-0000-4000-8000-000000000003',

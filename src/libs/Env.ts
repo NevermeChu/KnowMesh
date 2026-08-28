@@ -12,10 +12,16 @@ export const Env = createEnv({
     E2E_REAL_POSTGRES: z.enum(['true']).optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_FROM_EMAIL: z.string().min(1).optional(),
+    WHITEBOARD_COLLABORATION_ADDRESS: z.string().min(1).default('127.0.0.1'),
+    WHITEBOARD_COLLABORATION_ENABLED: z.enum(['false', 'true']).optional(),
+    WHITEBOARD_COLLABORATION_HEALTH_PORT: z.coerce.number().int().min(1).max(65_535).default(1245),
+    WHITEBOARD_COLLABORATION_PORT: z.coerce.number().int().min(1).max(65_535).default(1244),
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.url(),
     NEXT_PUBLIC_COLLABORATION_URL: z.url().default('ws://localhost:1234'),
+    NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: z.enum(['false', 'true']).optional(),
+    NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: z.url().default('http://localhost:1244'),
   },
   shared: {
     NODE_ENV: z.enum(['test', 'development', 'production']).optional(),
@@ -34,5 +40,12 @@ export const Env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
+    WHITEBOARD_COLLABORATION_ADDRESS: process.env.WHITEBOARD_COLLABORATION_ADDRESS,
+    WHITEBOARD_COLLABORATION_ENABLED: process.env.WHITEBOARD_COLLABORATION_ENABLED,
+    WHITEBOARD_COLLABORATION_HEALTH_PORT: process.env.WHITEBOARD_COLLABORATION_HEALTH_PORT,
+    WHITEBOARD_COLLABORATION_PORT: process.env.WHITEBOARD_COLLABORATION_PORT,
+    NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED:
+      process.env.NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED,
+    NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: process.env.NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL,
   },
 });

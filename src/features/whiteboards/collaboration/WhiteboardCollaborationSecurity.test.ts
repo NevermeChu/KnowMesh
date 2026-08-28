@@ -1,11 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WhiteboardSocketData } from './WhiteboardCollaborationProtocol';
 import {
-  assertDocumentCollaborationOrigin,
-  authenticateDocumentCollaborationConnection,
-  revalidateDocumentCollaborationConnection,
-  sanitizeDocumentCollaborationAwareness,
-} from './DocumentCollaborationSecurity';
-import type { DocumentCollaborationContext } from './DocumentCollaborationSecurity';
+  authenticateWhiteboardCollaborationConnection,
+  revalidateWhiteboardCollaborationConnection,
+} from './WhiteboardCollaborationSecurity';
 
 const state = vi.hoisted(() => ({
   getAccess: vi.fn<
@@ -24,49 +22,61 @@ const state = vi.hoisted(() => ({
   isSessionActive: vi.fn<(options: { sessionId: string; userId: string }) => Promise<boolean>>(),
 }));
 
-vi.mock(import('./DocumentCollaborationAuthentication'), () => ({
+vi.mock(import('@/features/documents/collaboration/DocumentCollaborationAuthentication'), () => ({
   getDocumentCollaborationIdentity: state.getIdentity,
 }));
-vi.mock(import('./DocumentCollaborationAuthorization'), () => ({
+vi.mock(import('@/features/documents/collaboration/DocumentCollaborationAuthorization'), () => ({
   getDocumentCollaborationAccess: state.getAccess,
   isDocumentCollaborationSessionActive: state.isSessionActive,
 }));
 
-const context: DocumentCollaborationContext = {
+const context: WhiteboardSocketData = {
+  accessValidatedAt: Date.now(),
   canWrite: false,
-  documentId: '30000000-0000-4000-8000-000000000001',
-  documentKind: 'rich-text',
+  documentId: '30000000-0000-4000-8000-000000000061',
   image: null,
   name: 'Viewer',
-  projectId: '20000000-0000-4000-8000-000000000001',
+  projectId: '20000000-0000-4000-8000-000000000061',
   sessionId: 'session-1',
   userId: 'user-1',
 };
 
-describe('document collaboration security', () => {
+describe('whiteboard collaboration security', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('rejects cross-origin connections', () => {
-    expect(() => {
-      assertDocumentCollaborationOrigin({
-        allowedOrigin: 'https://knowmesh.example',
-        requestHeaders: new Headers({ origin: 'https://attacker.example' }),
-      });
-    }).toThrow('permission-denied');
   });
 
   it('rejects connections without a verified session', async () => {
     state.getIdentity.mockResolvedValue(null);
 
     await expect(
-      authenticateDocumentCollaborationConnection({
-        documentName: `document:${context.documentId}`,
+      authenticateWhiteboardCollaborationConnection({
+        auth: { documentId: context.documentId },
         requestHeaders: new Headers(),
       }),
     ).rejects.toThrow('permission-denied');
     expect(state.getAccess).not.toHaveBeenCalled();
+  });
+
+  it('rejects rich-text documents from the whiteboard protocol', async () => {
+    state.getIdentity.mockResolvedValue({
+      image: null,
+      name: context.name,
+      sessionId: context.sessionId,
+      userId: context.userId,
+    });
+    state.getAccess.mockResolvedValue({
+      canWrite: true,
+      documentKind: 'rich-text',
+      projectId: context.projectId,
+    });
+
+    await expect(
+      authenticateWhiteboardCollaborationConnection({
+        auth: { documentId: context.documentId },
+        requestHeaders: new Headers(),
+      }),
+    ).rejects.toThrow('permission-denied');
   });
 
   it('derives read-only access from server authorization', async () => {
@@ -78,56 +88,27 @@ describe('document collaboration security', () => {
     });
     state.getAccess.mockResolvedValue({
       canWrite: false,
-      documentKind: 'rich-text',
-      projectId: context.projectId,
-    });
-
-    await expect(
-      authenticateDocumentCollaborationConnection({
-        documentName: `document:${context.documentId}`,
-        requestHeaders: new Headers(),
-      }),
-    ).resolves.toStrictEqual({ ...context, accessValidatedAt: expect.any(Number) });
-  });
-
-  it('rejects whiteboards from the rich-text protocol', async () => {
-    state.getIdentity.mockResolvedValue({
-      image: null,
-      name: context.name,
-      sessionId: context.sessionId,
-      userId: context.userId,
-    });
-    state.getAccess.mockResolvedValue({
-      canWrite: true,
       documentKind: 'whiteboard',
       projectId: context.projectId,
     });
 
     await expect(
-      authenticateDocumentCollaborationConnection({
-        documentName: `document:${context.documentId}`,
+      authenticateWhiteboardCollaborationConnection({
+        auth: { documentId: context.documentId },
         requestHeaders: new Headers(),
       }),
-    ).rejects.toThrow('permission-denied');
+    ).resolves.toMatchObject({
+      canWrite: false,
+      documentId: context.documentId,
+      projectId: context.projectId,
+      userId: context.userId,
+    });
   });
 
   it('invalidates revoked sessions before permission lookup', async () => {
     state.isSessionActive.mockResolvedValue(false);
 
-    await expect(revalidateDocumentCollaborationConnection(context)).resolves.toBeFalsy();
+    await expect(revalidateWhiteboardCollaborationConnection(context)).resolves.toBeFalsy();
     expect(state.getAccess).not.toHaveBeenCalled();
-  });
-
-  it('replaces forged presence identity', () => {
-    const states = new Map([
-      [1, { cursor: { anchor: 1 }, user: { id: 'forged', name: 'Forged' } }],
-    ]);
-
-    sanitizeDocumentCollaborationAwareness({ context, states });
-
-    expect(states.get(1)).toStrictEqual({
-      cursor: { anchor: 1 },
-      user: { id: context.userId, image: null, name: context.name },
-    });
   });
 });

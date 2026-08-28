@@ -16,6 +16,7 @@ export async function getDocumentCollaborationAccess(options: {
 }) {
   const [access] = await db
     .select({
+      documentKind: documentsSchema.kind,
       projectId: projectsSchema.id,
       projectOwnerId: projectsSchema.ownerId,
       projectRole: projectMembersSchema.role,
@@ -59,6 +60,7 @@ export async function getDocumentCollaborationAccess(options: {
 
   return {
     canWrite: decision.permissions.includes('document.update'),
+    documentKind: access.documentKind,
     projectId: access.projectId,
   };
 }
