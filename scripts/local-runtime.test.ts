@@ -279,30 +279,25 @@ describe('local runtime collaboration orchestration', () => {
     expect(started).toStrictEqual(['Database migration', 'Hocuspocus', 'Next.js']);
   });
 
-  it('waits for the collaboration readiness response', async () => {
+  it.each([
+    {
+      method: 'waitForCollaborationReady' as const,
+      url: 'http://127.0.0.1:1235/ready',
+    },
+    {
+      method: 'waitForWhiteboardCollaborationReady' as const,
+      url: 'http://127.0.0.1:1245/ready',
+    },
+  ])('waits for $method', async (options) => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(Response.json({ status: 'ready' }, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const operations = createSystemOperations({ cwd: process.cwd(), platform: 'linux' });
 
-    await operations.waitForCollaborationReady(createChild());
+    await operations[options.method](createChild());
 
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:1235/ready', {
-      signal: expect.any(AbortSignal),
-    });
-  });
-
-  it('waits for the whiteboard collaboration readiness response', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(Response.json({ status: 'ready' }, { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-    const operations = createSystemOperations({ cwd: process.cwd(), platform: 'linux' });
-
-    await operations.waitForWhiteboardCollaborationReady(createChild());
-
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:1245/ready', {
+    expect(fetchMock).toHaveBeenCalledWith(options.url, {
       signal: expect.any(AbortSignal),
     });
   });

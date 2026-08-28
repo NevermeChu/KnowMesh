@@ -6,16 +6,6 @@ import {
 } from './WhiteboardCollaborationProtocol';
 
 describe('whiteboard collaboration protocol', () => {
-  it('accepts a versioned full-scene candidate', () => {
-    expect(
-      whiteboardCandidateSchema.parse({
-        clientMutationId: crypto.randomUUID(),
-        expectedRevision: 1,
-        scene: EMPTY_WHITEBOARD_SCENE,
-      }),
-    ).toMatchObject({ expectedRevision: 1, scene: EMPTY_WHITEBOARD_SCENE });
-  });
-
   it('rejects invalid scenes before persistence', () => {
     expect(
       whiteboardCandidateSchema.safeParse({

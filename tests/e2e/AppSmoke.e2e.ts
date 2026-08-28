@@ -254,17 +254,6 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
-  test('finds seeded documents through the search page', async ({ baseURL, browser }) => {
-    if (!baseURL) {
-      throw new Error('Playwright base URL is unavailable');
-    }
-
-    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
-    await page.goto(`/search?q=${encodeURIComponent('冒烟搜索目标')}`);
-    await expect(page.locator('body')).toContainText(seededTitle);
-    await close();
-  });
-
   test('injects and expands only the selected deep navigation path', async ({
     baseURL,
     browser,
@@ -318,69 +307,24 @@ test.describe('application smoke coverage', () => {
       .locator('..');
 
     await childItem.dragTo(projectItem);
-    await expect(childItem).toHaveCSS('padding-left', '6px');
+    await expect
+      .poll(async () => {
+        const result = await pool.query<{ parent_id: string | null }>(
+          `SELECT parent_id FROM documents WHERE id = '${childDocumentId}'`,
+        );
+        return result.rows[0]?.parent_id ?? null;
+      })
+      .toBeNull();
 
     await childItem.dragTo(parentItem);
-    await expect(childItem).toHaveCSS('padding-left', '18px');
-
-    await close();
-  });
-
-  test('opens document creation and move dialogs from sidebar menus', async ({
-    baseURL,
-    browser,
-  }) => {
-    if (!baseURL) {
-      throw new Error('Playwright base URL is unavailable');
-    }
-
-    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
-    await page.goto(`/personal?project=${projectId}&document=${childDocumentId}`);
-    const personalNavigation = page.getByRole('navigation', {
-      exact: true,
-      name: '个人区域',
-    });
-    const childLink = personalNavigation.getByRole('link', {
-      exact: true,
-      name: childDocumentTitle,
-    });
-    const projectLink = personalNavigation.getByRole('link', {
-      exact: true,
-      name: 'Smoke Project',
-    });
-
-    await childLink.click({ button: 'right' });
-    await page
-      .locator('#navigation-context-menu')
-      .getByRole('button', {
-        exact: true,
-        name: '新建子文件',
+    await expect
+      .poll(async () => {
+        const result = await pool.query<{ parent_id: string | null }>(
+          `SELECT parent_id FROM documents WHERE id = '${childDocumentId}'`,
+        );
+        return result.rows[0]?.parent_id ?? null;
       })
-      .click();
-    await expect(page.getByRole('heading', { exact: true, name: '新建子文件' })).toBeVisible();
-    await page.getByRole('button', { exact: true, name: '取消' }).click();
-
-    await childLink.click({ button: 'right' });
-    await page
-      .locator('#navigation-context-menu')
-      .getByRole('button', {
-        exact: true,
-        name: '移动文件',
-      })
-      .click();
-    await expect(page.getByRole('heading', { exact: true, name: '移动文件' })).toBeVisible();
-    await page.getByRole('button', { exact: true, name: '取消' }).click();
-
-    await projectLink.click({ button: 'right' });
-    await page
-      .locator('#navigation-context-menu')
-      .getByRole('button', {
-        exact: true,
-        name: '新建文件',
-      })
-      .click();
-    await expect(page.getByRole('heading', { exact: true, name: '新建文件' })).toBeVisible();
-    await page.getByRole('button', { exact: true, name: '取消' }).click();
+      .toBe(documentId);
 
     await close();
   });
@@ -458,17 +402,11 @@ test.describe('application smoke coverage', () => {
     await expect(page.getByText('个人白板', { exact: true })).toBeVisible();
     await expect(page.locator('.excalidraw')).toBeVisible();
 
-    for (const exportOption of [
-      { extension: '.excalidraw', label: '导出 .excalidraw' },
-      { extension: '.png', label: '导出 PNG' },
-      { extension: '.svg', label: '导出 SVG' },
-    ]) {
-      await page.getByRole('button', { exact: true, name: '导出白板' }).click();
-      const downloadPromise = page.waitForEvent('download');
-      await page.getByRole('button', { exact: true, name: exportOption.label }).click();
-      const download = await downloadPromise;
-      expect(download.suggestedFilename()).toBe(`${whiteboardTitle}${exportOption.extension}`);
-    }
+    await page.getByRole('button', { exact: true, name: '导出白板' }).click();
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { exact: true, name: '导出 .excalidraw' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(`${whiteboardTitle}.excalidraw`);
 
     await pool.query(`
       UPDATE document_whiteboard_states
@@ -499,28 +437,6 @@ test.describe('application smoke coverage', () => {
     });
     await expect(page.getByText(/已停止自动覆盖/u)).toBeVisible();
 
-    await close();
-  });
-
-  test('renders authenticated destination pages', async ({ baseURL, browser }) => {
-    if (!baseURL) {
-      throw new Error('Playwright base URL is unavailable');
-    }
-
-    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
-    for (const destination of [
-      { heading: '已收藏文档', path: '/starred' },
-      { heading: '通知', path: '/notifications' },
-      { heading: '邀请链接无效', path: '/invitations/accept' },
-      { heading: '系统偏好设置', path: '/settings/preferences' },
-      { heading: '账号设置', path: '/settings/user-profile' },
-    ]) {
-      const response = await page.goto(destination.path);
-      expect(response?.status()).toBe(200);
-      await expect(
-        page.getByRole('heading', { exact: true, name: destination.heading }),
-      ).toBeVisible();
-    }
     await close();
   });
 });

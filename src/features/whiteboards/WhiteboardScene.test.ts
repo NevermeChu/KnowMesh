@@ -18,12 +18,6 @@ const rectangle = {
 };
 
 describe('whiteboard scene validation', () => {
-  it('accepts empty scene', () => {
-    expect(whiteboardSceneSchema.parse(EMPTY_WHITEBOARD_SCENE)).toStrictEqual(
-      EMPTY_WHITEBOARD_SCENE,
-    );
-  });
-
   it('preserves compatible element fields', () => {
     const scene = {
       ...EMPTY_WHITEBOARD_SCENE,

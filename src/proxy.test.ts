@@ -24,33 +24,36 @@ vi.mock(
 );
 
 describe(proxy, () => {
-  it('adds strict script policy with a request nonce', () => {
-    const response = proxy(new NextRequest('http://localhost:3000/'));
-    const policy = response.headers.get('Content-Security-Policy');
+  it('locks scripts, fonts, and collaboration sockets to approved origins', () => {
+    const policy = proxy(new NextRequest('http://localhost:3000/')).headers.get(
+      'Content-Security-Policy',
+    );
 
-    expect(policy).toMatch(/script-src 'self' 'nonce-[a-f0-9]{32}' 'strict-dynamic'/u);
-    expect(policy).not.toMatch(/script-src[^;]*'unsafe-inline'/u);
-    expect(policy).toContain("object-src 'none'");
-    expect(policy).toContain("frame-ancestors 'none'");
-  });
-
-  it('keeps font and style assets same-origin', () => {
-    const response = proxy(new NextRequest('http://localhost:3000/'));
-    const policy = response.headers.get('Content-Security-Policy');
-
-    expect(policy).toContain("style-src 'self' 'unsafe-inline'");
-    expect(policy).toContain("font-src 'self' data:");
-    expect(policy).not.toContain('fonts.googleapis.com');
-    expect(policy).not.toContain('fonts.gstatic.com');
-  });
-
-  it('allows same-origin and collaboration websocket origins', () => {
-    const response = proxy(new NextRequest('http://localhost:3000/'));
-    const policy = response.headers.get('Content-Security-Policy');
-
-    expect(policy).toContain("connect-src 'self'");
-    expect(policy).toContain('ws://localhost:1234');
-    expect(policy).toContain('http://localhost:1244');
-    expect(policy).toContain('ws://localhost:1244');
+    expect({
+      connectSrc: policy?.includes("connect-src 'self'"),
+      fontSrc: policy?.includes("font-src 'self' data:"),
+      frameAncestors: policy?.includes("frame-ancestors 'none'"),
+      hocuspocus: policy?.includes('ws://localhost:1234'),
+      noGoogleFonts:
+        !policy?.includes('fonts.googleapis.com') && !policy?.includes('fonts.gstatic.com'),
+      nonceScript: /script-src 'self' 'nonce-[a-f0-9]{32}' 'strict-dynamic'/u.test(policy ?? ''),
+      noUnsafeInline: !/script-src[^;]*'unsafe-inline'/u.test(policy ?? ''),
+      objectSrc: policy?.includes("object-src 'none'"),
+      styleSrc: policy?.includes("style-src 'self' 'unsafe-inline'"),
+      whiteboardHttp: policy?.includes('http://localhost:1244'),
+      whiteboardWs: policy?.includes('ws://localhost:1244'),
+    }).toStrictEqual({
+      connectSrc: true,
+      fontSrc: true,
+      frameAncestors: true,
+      hocuspocus: true,
+      noGoogleFonts: true,
+      nonceScript: true,
+      noUnsafeInline: true,
+      objectSrc: true,
+      styleSrc: true,
+      whiteboardHttp: true,
+      whiteboardWs: true,
+    });
   });
 });

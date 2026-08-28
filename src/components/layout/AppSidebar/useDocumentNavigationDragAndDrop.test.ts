@@ -17,16 +17,14 @@ const createDocument = (id: string, parentId: string | null): WorkspaceDocument 
 });
 
 describe(getDocumentDropPosition, () => {
-  it('maps the upper quarter to before', () => {
-    expect(getDocumentDropPosition({ clientY: 124, height: 100, top: 100 })).toBe('before');
-  });
-
-  it('maps the middle half to inside', () => {
-    expect(getDocumentDropPosition({ clientY: 150, height: 100, top: 100 })).toBe('inside');
-  });
-
-  it('maps the lower quarter to after', () => {
-    expect(getDocumentDropPosition({ clientY: 176, height: 100, top: 100 })).toBe('after');
+  it.each([
+    { clientY: 124, position: 'before' },
+    { clientY: 150, position: 'inside' },
+    { clientY: 176, position: 'after' },
+  ] as const)('maps clientY $clientY to $position', (options) => {
+    expect(getDocumentDropPosition({ clientY: options.clientY, height: 100, top: 100 })).toBe(
+      options.position,
+    );
   });
 });
 

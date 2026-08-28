@@ -16,19 +16,11 @@ describe(getMemberInvitationExpiration, () => {
 });
 
 describe(isMemberInvitationExpired, () => {
-  it('expires invitations at the boundary', () => {
+  it('expires invitations at or before the current time', () => {
     const now = new Date('2026-08-26T00:00:00.000Z');
 
     expect(isMemberInvitationExpired(now, now)).toBeTruthy();
-  });
-
-  it('keeps future invitations active', () => {
-    expect(
-      isMemberInvitationExpired(
-        new Date('2026-08-26T00:00:00.001Z'),
-        new Date('2026-08-26T00:00:00.000Z'),
-      ),
-    ).toBeFalsy();
+    expect(isMemberInvitationExpired(new Date('2026-08-26T00:00:00.001Z'), now)).toBeFalsy();
   });
 });
 

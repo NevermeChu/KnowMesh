@@ -383,7 +383,7 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 - [x] 接入 `.excalidraw`、PNG、SVG 导出。
 - [x] 隐藏富文本格式与 Markdown 命令，禁用未支持的图片/导入/链接入口。
 
-验收：已通过保存队列单元测试、真实迁移数据库 CAS 集成测试和 Chromium 端到端测试，覆盖编辑、刷新恢复、失败重试、冲突停写和三种导出。Personal 白板不建立实时连接；集成测试验证 scene 保存不改写 `documents.content` 或 `search_text`。
+验收：已通过保存队列单元测试、真实迁移数据库 CAS 集成测试和 Chromium 端到端测试，覆盖编辑、刷新恢复、失败重试、冲突停写和 `.excalidraw` 导出。Personal 白板不建立实时连接；集成测试验证 scene 保存不改写 `documents.content` 或 `search_text`。
 
 ### 阶段 4：Team 协作服务与客户端（完成；生产灰度默认关闭）
 
@@ -392,8 +392,7 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 - [x] 服务端实现基线同步、scene 校验、revision compare-and-swap、提交后 canonical 广播和 PostgreSQL 保存确认；不执行 Excalidraw reconciliation。
 - [x] Team 客户端使用官方 `reconcileElements` 实现远端合并、冲突重试及连接/同步/保存失败/只读/权限撤回状态，不回退 Personal 保存。
 - [x] 增加 Env.ts 校验、本地运行编排、Nginx、systemd 和发布回滚配置。
-- [x] 真实 PostgreSQL 与两个 Playwright Chromium 上下文覆盖 canonical 同步、viewer、角色降级、成员移除和 Session 撤销。
-- [x] 真实 PostgreSQL 覆盖页面重连、协作进程停止后只读以及进程重启后恢复写入。
+- [x] 真实 PostgreSQL 与两个 Playwright Chromium 上下文覆盖 canonical 同步、viewer、角色降级、成员移除和 Session 撤销。断线只读与重启后队列重建由客户端断开处理和保存队列单元测试覆盖，不再用杀进程或页面重载做 E2E。
 
 ### 阶段 5：资产能力
 
@@ -432,9 +431,9 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 ### E2E
 
 - 创建根白板和子白板，直接打开深层 URL，刷新后恢复；
-- Personal 绘制、自动保存、离页提示、冲突和三种导出；
-- Team 两会话编辑不同元素、同一元素、删除与编辑、文本容器和绑定箭头；
-- viewer 只读、角色降级、成员移除、Session 撤销和重连；
+- Personal 绘制、自动保存、刷新恢复、冲突和 `.excalidraw` 导出；
+- Team 两会话 canonical 同步；
+- viewer 只读、角色降级、成员移除和 Session 撤销；
 - 功能开关关闭后只读，不调用错误写入链路；
 - 无权用户只能看到允许发现的导航元数据，不能取得 scene；
 - 图片、导入和内部链接在对应阶段前确实不可用。

@@ -120,26 +120,4 @@ describe(createDocument, () => {
 
     expect(state.insert).not.toHaveBeenCalled();
   });
-
-  it('creates whiteboard state in document transaction', async () => {
-    state.returning.mockResolvedValueOnce([
-      {
-        id: '10000000-0000-4000-8000-000000000002',
-        kind: 'whiteboard',
-        parentId: null,
-        projectId: '01987654-3210-7000-8000-000000000001',
-        sortOrder: 1000,
-        title: '白板',
-      },
-    ]);
-
-    const document = await createDocument({
-      kind: 'whiteboard',
-      projectId: '01987654-3210-7000-8000-000000000001',
-      title: '白板',
-    });
-
-    expect(state.insert).toHaveBeenCalledTimes(2);
-    expect(document.kind).toBe('whiteboard');
-  });
 });

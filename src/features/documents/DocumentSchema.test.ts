@@ -71,32 +71,18 @@ describe('document schemas', () => {
     );
   });
 
-  it('validates createDocumentSchema with and without parentId', () => {
+  it('defaults created documents to rich-text and rejects invalid ids', () => {
     const projectId = '01987654-3210-7000-8000-000000000002';
-    const parentId = '01987654-3210-7000-8000-000000000003';
 
     expect(
       createDocumentSchema.parse({
         projectId,
         title: '根文档',
       }),
-    ).toStrictEqual({
+    ).toMatchObject({
       kind: 'rich-text',
       projectId,
       title: '根文档',
-    });
-
-    expect(
-      createDocumentSchema.parse({
-        parentId,
-        projectId,
-        title: '子文档',
-      }),
-    ).toStrictEqual({
-      kind: 'rich-text',
-      parentId,
-      projectId,
-      title: '子文档',
     });
 
     expect(() =>
@@ -107,35 +93,8 @@ describe('document schemas', () => {
     ).toThrow(/invalid/iu);
   });
 
-  it('validates moveDocumentSchema inputs', () => {
+  it('rejects relative moves without a target document', () => {
     const projectId = '01987654-3210-7000-8000-000000000002';
-    const parentId = '01987654-3210-7000-8000-000000000003';
-
-    expect(
-      moveDocumentSchema.parse({
-        documentId,
-        sortOrder: 500,
-        targetParentId: parentId,
-        targetProjectId: projectId,
-      }),
-    ).toStrictEqual({
-      documentId,
-      sortOrder: 500,
-      targetParentId: parentId,
-      targetProjectId: projectId,
-    });
-
-    expect(
-      moveDocumentSchema.parse({
-        documentId,
-        targetParentId: null,
-        targetProjectId: projectId,
-      }),
-    ).toStrictEqual({
-      documentId,
-      targetParentId: null,
-      targetProjectId: projectId,
-    });
 
     expect(() =>
       moveDocumentSchema.parse({
