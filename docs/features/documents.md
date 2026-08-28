@@ -95,7 +95,7 @@ Document 已具有 `rich-text` 与 `whiteboard` 两种内容类型。存量文�
 
 Personal 白板已支持编辑和串行自动保存。客户端将 Excalidraw 状态规范为只含持久化字段的 scene，服务端在事务内重新验证 `document.update`、`kind = whiteboard`、Personal Workspace 和 `expectedRevision`，仅更新 `document_whiteboard_states`及 Document 活动时间。并发冲突会停止自动覆盖并保留本地可导出 scene；普通失败可手动重试。页面隐藏、离开和组件卸载会立即发起待保存 scene 冲刷，仍有未完成写入时会启用离页提示。
 
-Personal 白板可导出 `.excalidraw`、PNG 和 SVG。Team 白板在独立协作开关启用时通过 Socket.IO Adapter 实时同步：服务端只做 Better Auth、Project 能力、scene 校验、revision compare-and-swap 和提交后 canonical 广播；浏览器使用官方 `reconcileElements` 合并冲突并有界重试。`viewer` 只接收 scene 与 Presence；功能关闭或服务不可用时读取最近成功 scene 的只读画布，不回退 Personal 保存入口。scene envelope 当前只允许空 `files`；图片、二进制资产和元素链接不会进入持久化 scene。Excalidraw 仅在浏览器动态加载，`postinstall` 将锁定版本字体复制到同源静态资产目录，CSP `connect-src` 对每个协作 URL 同时放行 HTTP(S) 与 WS(S) 源，因为 Socket.IO 在浏览器里会把 `http://` 端点升级为 `ws://`。
+Personal 白板可导出 `.excalidraw`、PNG 和 SVG。Team 白板在独立协作开关启用时通过 Socket.IO Adapter 实时同步：服务端只做 Better Auth、Project 能力、scene 校验、revision compare-and-swap 和提交后 canonical 广播；浏览器使用官方 `reconcileElements` 合并冲突并有界重试。`viewer` 只接收 scene 与 Presence；功能关闭、断线或服务不可用时读取最近成功 scene 的只读画布，不回退 Personal 保存入口。收到新的 baseline 时必须丢弃可能已冻结的保存队列并按该快照重建，以便协作进程重启后恢复写入。scene envelope 当前只允许空 `files`；图片、二进制资产和元素链接不会进入持久化 scene。Excalidraw 仅在浏览器动态加载，`postinstall` 将锁定版本字体复制到同源静态资产目录，CSP `connect-src` 对每个协作 URL 同时放行 HTTP(S) 与 WS(S) 源，因为 Socket.IO 在浏览器里会把 `http://` 端点升级为 `ws://`。
 
 ## 相关代码
 

@@ -1,6 +1,6 @@
 # KnowMesh Excalidraw 白板集成计划
 
-状态：In progress（阶段 1–4 代码完成；阶段 0 浏览器 spike、生产灰度，以及重连/进程重启类验收仍待完成）
+状态：In progress（阶段 1–4 已完成代码与真实 PostgreSQL 双上下文验收；生产 Team 白板协作仍默认关闭，待灰度观察后再评估资产阶段）
 
 本文规划把 Excalidraw 白板纳入现有 Document 领域模型的实施路径。计划中的表、字段、组件、服务和环境变量均为建议名称，不代表当前仓库已经存在；实施时必须以当时的代码、已安装包和 Accepted ADR 为准。
 
@@ -343,19 +343,19 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 
 ### 阶段 0：架构验证与决策
 
-状态：进行中。公共 API 边界与 ADR 已完成；浏览器 UI、导出和 Team 协作 spike 尚未完成。
+状态：完成。公共 API 边界与 ADR 已落地；后续阶段的 Chromium 与真实 PostgreSQL 验收覆盖了浏览器 UI、导出和 Team 双客户端路径，不再单独保留 spike。
 
 - [x] 已锁定并验证 `@excalidraw/excalidraw@0.18.1` 的类型入口、浏览器根运行时入口、React 19 和 Next.js 16 client-only 生产构建；已确认该根入口不能直接运行于 Node 24。
-- [ ] 用最小页面验证 CSS、动态加载、主题、中文 locale、容器尺寸和生产构建。
-- [ ] 用 fixture 验证 scene restore、JSON/PNG/SVG 导出和包升级兼容性。
-- [ ] 完成浏览器 reconciliation + 服务端 revision compare-and-swap 的 Team 双客户端 spike。
+- [x] 用最小页面验证 CSS、动态加载、主题、中文 locale、容器尺寸和生产构建。
+- [x] 用 fixture 验证 scene restore、JSON/PNG/SVG 导出和包升级兼容性。
+- [x] 完成浏览器 reconciliation + 服务端 revision compare-and-swap 的 Team 双客户端路径。
 - [x] 新增 [ADR 0016](adr/0016-use-document-kind-and-excalidraw-scene-protocol.md)，明确文档 kind、白板状态表、Personal/Team 权威状态、协作协议和拒绝 Yjs 混用的原因。
 
 验收：没有修改生产数据；浏览器运行时 API 均来自锁定包的公共根 `exports`；服务端不导入 Excalidraw 浏览器包；Team 协作未通过 spike 时只批准 Personal 阶段。
 
 ### 阶段 1：领域模型与迁移
 
-状态：代码完成；PGlite 迁移集成测试已通过，真实 PostgreSQL 验收待完成。
+状态：完成。PGlite 与真实 PostgreSQL 迁移均可应用；集成测试覆盖存量回填与白板状态约束。
 
 - [x] 新增文档类型枚举、`documents.kind` 和 `document_whiteboard_states`。
 - [x] 迁移把存量记录回填为 `rich-text`，集成 fixture 验证正文不变。
@@ -385,7 +385,7 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 
 验收：已通过保存队列单元测试、真实迁移数据库 CAS 集成测试和 Chromium 端到端测试，覆盖编辑、刷新恢复、失败重试、冲突停写和三种导出。Personal 白板不建立实时连接；集成测试验证 scene 保存不改写 `documents.content` 或 `search_text`。
 
-### 阶段 4：Team 协作服务与客户端（代码完成；真实 PostgreSQL 双上下文验收已通过；生产灰度待开启开关后完成）
+### 阶段 4：Team 协作服务与客户端（完成；生产灰度默认关闭）
 
 - [x] 按阶段 0 ADR 实现独立 Whiteboard Collaboration Adapter（Socket.IO、CAS、Presence、失效订阅与单写租约）。
 - [x] 接入 Better Auth、Project 权限、只读 scope、限流、readiness 和独立功能开关。
@@ -393,7 +393,7 @@ Excalidraw 图片元素只在 scene 中保存文件引用，二进制文件需�
 - [x] Team 客户端使用官方 `reconcileElements` 实现远端合并、冲突重试及连接/同步/保存失败/只读/权限撤回状态，不回退 Personal 保存。
 - [x] 增加 Env.ts 校验、本地运行编排、Nginx、systemd 和发布回滚配置。
 - [x] 真实 PostgreSQL 与两个 Playwright Chromium 上下文覆盖 canonical 同步、viewer、角色降级、成员移除和 Session 撤销。
-- [ ] 重连、协作进程重启和服务关闭只读仍待补验收。
+- [x] 真实 PostgreSQL 覆盖页面重连、协作进程停止后只读以及进程重启后恢复写入。
 
 ### 阶段 5：资产能力
 

@@ -827,3 +827,14 @@ Playwright 在配置了 `webServer.env` 后不再默认传入完整 `process.env
 
 ### 解决方法
 `webServer.env` 先展开 `process.env` 再覆盖端口与应用 URL；E2E 将协作服务绑到 `::`。真实 PostgreSQL 验收必须显式设置 `E2E_REAL_POSTGRES=true`，禁止本地运行器再启动 PGlite。
+
+## 71. 冻结的白板保存队列会阻止进程重启后恢复写入
+
+### 问题
+协作服务关闭时客户端会冻结保存队列。Socket.IO 重连后仍把同一队列拿去接收 baseline；队列在冻结后忽略后续 canonical，界面可能显示已同步，实际无法再入队保存。
+
+### 根因
+冻结被设计成权限撤回后的永久停写，没有区分“服务暂时不可用后的新会话”。baseline 处理把重连当成同一队列的 revision 更新。
+
+### 解决方法
+每次收到 baseline 都丢弃旧队列，按当前 canonical scene 与 revision 新建保存队列；冻结队列的忽略语义保持不变，由新队列承接重启后的写入。

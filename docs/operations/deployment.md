@@ -357,6 +357,8 @@ sudo systemctl restart knowmesh-collaboration.service
 
 `knowmesh-whiteboard-collaboration.service` 的权威模板在 `deploy/systemd/knowmesh-whiteboard-collaboration.service`。它与 Hocuspocus 独立：独立端口、独立 advisory lock、独立功能开关。`WHITEBOARD_COLLABORATION_ENABLED` 与 `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 必须分别打开服务端进程和浏览器连接；任一关闭时 Team 白板只读最近成功 scene。启用前必须把 Nginx 片段 `deploy/nginx/knowmesh-whiteboard-collaboration-location.conf` include 进 HTTPS `server {}`，并把服务器环境变量与 GitHub Variable 对齐。
 
+灰度默认关闭：CI deploy 在未设置 `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 时传 `false`，不会启动白板 sidecar。开启前必须同时满足：Nginx 已 include 白板 location；`/etc/knowmesh.env` 与 GitHub Variables 中的 `WHITEBOARD_COLLABORATION_ENABLED`、`NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 均为 `true`；`NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL` 指向公网同源 WSS 路径。部署后检查 `http://127.0.0.1:1245/ready` 与 `/metrics` 的 `failedDocuments`、`persistenceFailures`、`conflicts`、`activeConnections`、`activeRooms`、`invalidatedConnections`、`readOnlyWriteRejections`、`authenticationFailures` 和 `saves`。关闭灰度时把上述开关改回 `false` 并重新部署；不得删除 `documents.kind` 或白板状态。资产阶段只能在该灰度窗口观察无异常后评估。
+
 ## Nginx 如何把域名转给两个服务
 
 当前完整站点位于服务器 `/etc/nginx/sites-available/knowmesh`，但不在仓库中。已确认的结构是：
