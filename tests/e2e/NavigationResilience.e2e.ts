@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { createHmac, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { expect, test } from '@playwright/test';
-import type { Browser, Route } from '@playwright/test';
+import type { Browser, Page, Route } from '@playwright/test';
 import { Pool } from 'pg';
 import { Env } from '@/libs/Env';
 
@@ -42,6 +42,22 @@ const abortNextPostRequest = (abortsLeft: number) => {
     await route.continue();
   };
 };
+
+/**
+ * Opens the palette from the sidebar so tests do not race Ctrl+K before hydration.
+ *
+ * @param page - Authenticated Playwright page already on a workspace route.
+ * @returns Locator for the open command palette dialog.
+ */
+async function openCommandPalette(page: Page) {
+  const paletteDialog = page.getByRole('dialog', { exact: true, name: '快捷指令面板' });
+  await page
+    .getByRole('navigation', { exact: true, name: '主要导航' })
+    .getByRole('link', { name: '搜索' })
+    .click();
+  await expect(paletteDialog).toBeVisible();
+  return paletteDialog;
+}
 
 test.describe('sidebar navigation and command palette resilience', () => {
   test.skip(
@@ -242,10 +258,7 @@ test.describe('sidebar navigation and command palette resilience', () => {
 
     const { page, close } = await newAuthenticatedPage({ baseURL, browser });
     await page.goto(`/personal?project=${projectId}`);
-
-    await page.keyboard.press('Control+k');
-    const paletteDialog = page.getByRole('dialog', { exact: true, name: '快捷指令面板' });
-    await expect(paletteDialog).toBeVisible();
+    const paletteDialog = await openCommandPalette(page);
 
     await page.keyboard.type(sharedSearchTerm);
     const midResult = paletteDialog.getByRole('button', {
@@ -282,6 +295,7 @@ test.describe('sidebar navigation and command palette resilience', () => {
 
     const { page, close } = await newAuthenticatedPage({ baseURL, browser });
     await page.goto(`/personal?project=${projectId}`);
+    const paletteDialog = await openCommandPalette(page);
 
     const requestIncludesSharedTerm = (method: string, postData: string | null) =>
       method === 'POST' && (postData ?? '').includes(`"query":"${sharedSearchTerm}"`);
@@ -293,10 +307,6 @@ test.describe('sidebar navigation and command palette resilience', () => {
       }
       await route.continue();
     });
-
-    await page.keyboard.press('Control+k');
-    const paletteDialog = page.getByRole('dialog', { exact: true, name: '快捷指令面板' });
-    await expect(paletteDialog).toBeVisible();
 
     // Put the shared-term request in flight, then replace it before it resolves.
     const inFlightSharedRequest = page.waitForRequest((request) =>
