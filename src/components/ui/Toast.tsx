@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 export type ToastType = 'error' | 'info' | 'success';
 
@@ -24,6 +24,13 @@ const defaultNoop = (_message?: string, _type?: ToastType): void => {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+const defaultToastContextValue: ToastContextValue = {
+  error: defaultNoop,
+  info: defaultNoop,
+  showToast: defaultNoop,
+  success: defaultNoop,
+};
+
 /**
  * Hook to access the global toast micro-feedback dispatcher.
  *
@@ -33,12 +40,7 @@ export function useToast(): ToastContextValue {
   const context = useContext(ToastContext);
 
   if (!context) {
-    return {
-      error: defaultNoop,
-      info: defaultNoop,
-      showToast: defaultNoop,
-      success: defaultNoop,
-    };
+    return defaultToastContextValue;
   }
 
   return context;
@@ -76,37 +78,59 @@ const toastTypeStyles: Record<
  */
 export function ToastProvider(props: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const removalTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [dispatcher] = useState(() => {
+    const removeToast = (id: string) => {
+      const timer = removalTimers.current.get(id);
+      if (timer) {
+        clearTimeout(timer);
+        removalTimers.current.delete(id);
+      }
+      setToasts((current) => current.filter((item) => item.id !== id));
+    };
+    const showToast = (message: string, type: ToastType = 'info') => {
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newToast: ToastItem = { id, message, type };
 
-  function removeToast(id: string) {
-    setToasts((current) => current.filter((item) => item.id !== id));
-  }
+      setToasts((current) => [...current.slice(-4), newToast]);
+      removalTimers.current.set(
+        id,
+        setTimeout(() => {
+          removalTimers.current.delete(id);
+          setToasts((current) => current.filter((item) => item.id !== id));
+        }, 2800),
+      );
+    };
 
-  function showToast(message: string, type: ToastType = 'info') {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const newToast: ToastItem = { id, message, type };
+    return {
+      contextValue: {
+        error: (message: string) => {
+          showToast(message, 'error');
+        },
+        info: (message: string) => {
+          showToast(message, 'info');
+        },
+        showToast,
+        success: (message: string) => {
+          showToast(message, 'success');
+        },
+      } satisfies ToastContextValue,
+      removeToast,
+    };
+  });
 
-    setToasts((current) => [...current.slice(-4), newToast]);
-
-    setTimeout(() => {
-      removeToast(id);
-    }, 2800);
-  }
-
-  const contextValue: ToastContextValue = {
-    error: (message) => {
-      showToast(message, 'error');
+  useEffect(
+    () => () => {
+      for (const timer of removalTimers.current.values()) {
+        clearTimeout(timer);
+      }
+      removalTimers.current.clear();
     },
-    info: (message) => {
-      showToast(message, 'info');
-    },
-    showToast,
-    success: (message) => {
-      showToast(message, 'success');
-    },
-  };
+    [],
+  );
 
   return (
-    <ToastContext value={contextValue}>
+    <ToastContext value={dispatcher.contextValue}>
       {props.children}
       <aside
         aria-label="通知提示"
@@ -133,7 +157,7 @@ export function ToastProvider(props: { children: React.ReactNode }) {
                 aria-label="关闭提示"
                 className="grid size-5 place-items-center rounded text-ink-faint transition-colors hover:text-ink"
                 onClick={() => {
-                  removeToast(toast.id);
+                  dispatcher.removeToast(toast.id);
                 }}
               >
                 <X aria-hidden="true" className="size-3.5" strokeWidth={2} />

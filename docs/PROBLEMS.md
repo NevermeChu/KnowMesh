@@ -863,3 +863,17 @@ Better Auth 在 `requireEmailVerification` 开启时对重复邮箱返回合成�
 
 ### 解决方法
 先点击侧栏「主要导航」里的「搜索」（走 `openCommandPalette`），再断言对话框。模拟过期搜索的 route 必须在面板打开之后安装，且只延迟带共享检索词的 POST。
+
+## 74. Toast 状态变化会重建团队白板连接并覆盖未保存笔迹
+
+### 问题
+
+团队白板打开期间，任意普通或站内通知 Toast 的出现与自动消失都会让 Socket.IO 连接重新建立。服务端随后发送的 baseline 可能覆盖尚未成功进入保存队列的本地笔迹，造成用户可见的数据丢失。
+
+### 根因
+
+`ToastProvider` 每次列表变化都会创建新的 context 对象，`TeamWhiteboardEditor` 的连接 effect 又依赖整个 toast 对象。引用变化触发 cleanup，旧保存队列被销毁、socket 断开；新连接收到 baseline 后按 canonical scene 重建队列和画布，而已被销毁队列中的本地状态无法参与冲突调和。
+
+### 解决方法
+
+让 Toast context 分发器及无 Provider 时的 no-op 对象保持稳定，跟踪并在手动关闭或卸载时清理自动移除定时器。白板连接 effect 通过 Effect Event 调用最新 Toast 分发器，不把 toast 对象作为连接生命周期依赖；保留 baseline 以 canonical scene 初始化新会话的既有语义。浏览器回归必须覆盖 Toast 出现和自动消失期间只存在一条白板 websocket。

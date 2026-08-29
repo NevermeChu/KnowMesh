@@ -244,6 +244,44 @@ test.describe('team whiteboard collaboration', () => {
     }
   });
 
+  test('keeps the socket connected while toast state changes', async ({ baseURL, browser }) => {
+    test.setTimeout(60_000);
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const context = await createAuthenticatedContext({
+      baseURL,
+      browser,
+      sessionToken: ownerSessionToken,
+    });
+
+    try {
+      const page = await context.newPage();
+      let whiteboardSocketCount = 0;
+      page.on('websocket', (socket) => {
+        if (socket.url().includes('/whiteboard-collaboration/socket.io')) {
+          whiteboardSocketCount += 1;
+        }
+      });
+      await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
+      await expect(page.getByText('已同步', { exact: true })).toBeVisible();
+      await expect.poll(() => whiteboardSocketCount).toBe(1);
+
+      await page.getByRole('button', { name: '导出白板' }).click();
+      const download = page.waitForEvent('download');
+      await page.getByRole('button', { name: '导出 .excalidraw' }).click();
+      await download;
+      const toast = page.getByText('已导出 Excalidraw 文件', { exact: true });
+      await expect(toast).toBeVisible();
+      await expect(toast).not.toBeVisible({ timeout: 5000 });
+      expect(whiteboardSocketCount).toBe(1);
+      await expect(page.getByText('已同步', { exact: true })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
   test('renders project viewers as read-only collaborators', async ({ baseURL, browser }) => {
     test.setTimeout(60_000);
     if (!baseURL) {

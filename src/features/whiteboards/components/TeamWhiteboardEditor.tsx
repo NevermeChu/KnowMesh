@@ -2,7 +2,7 @@
 
 import { Excalidraw, loadFromBlob } from '@excalidraw/excalidraw';
 import type { Collaborator, ExcalidrawImperativeAPI, SocketId } from '@excalidraw/excalidraw/types';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import { io } from 'socket.io-client';
 import type { Socket } from 'socket.io-client';
 import { Button } from '@/components/ui/Button';
@@ -132,6 +132,9 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [initialData] = useState(async () => await restoreScene(props.document.scene));
   const isEditable = enabled && props.canEdit && canWrite && collaborationState === 'synced';
+  const showFrozenToast = useEffectEvent((reason: 'permission-denied' | 'service-unavailable') => {
+    toast.error(reason === 'permission-denied' ? '白板权限已撤回' : '白板协作服务暂不可用');
+  });
 
   useEffect(() => {
     if (!enabled) {
@@ -185,7 +188,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
       queueRef.current?.freeze(reason);
       setCanWrite(false);
       setCollaborationState('error');
-      toast.error(reason === 'permission-denied' ? '白板权限已撤回' : '白板协作服务暂不可用');
+      showFrozenToast(reason);
     });
     socket.on('canonical', (canonical) => {
       setCollaborationState('syncing');
@@ -230,7 +233,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [enabled, props.canEdit, props.document.id, toast]);
+  }, [enabled, props.canEdit, props.document.id]);
 
   let status: React.ReactNode = (
     <span className="text-xs text-ink-faint">团队白板（协作已关闭）</span>
