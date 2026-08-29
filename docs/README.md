@@ -19,6 +19,7 @@
 | 修改全文搜索、命令面板或搜索结果排序 | [`features/search.md`](features/search.md) 和 [`adr/0006-separate-workspace-discovery-from-project-content-access.md`](adr/0006-separate-workspace-discovery-from-project-content-access.md) |
 | 修改表、索引或迁移 | [`database/schema-and-migrations.md`](database/schema-and-migrations.md) |
 | 修改生产构建、部署或回滚流程 | [`operations/deployment.md`](operations/deployment.md) |
+| 查看已核实的工程优化优先顺序（计划中） | [`engineering-optimization-plan.md`](engineering-optimization-plan.md) |
 | 查看长期保留的重要工程问题 | [`PROBLEMS.md`](PROBLEMS.md) |
 | 回看已完成的工程审查 | [`engineering-review-issues.md`](engineering-review-issues.md) 和 [`engineering-review-implementation-plan.md`](engineering-review-implementation-plan.md)（历史记录） |
 | 理解“为什么这样选” | [`adr/README.md`](adr/README.md) 和相关 Accepted ADR |
@@ -79,7 +80,7 @@
 - `database/`：描述持久化模型、迁移规则和本地数据库操作。
 - `adr/`：记录重要决策的背景、取舍和后果；Accepted ADR 保留历史。
 - `design-references/`：保存非权威视觉参考；不得据此推断已实现功能。
-- `docs/` 根目录中的实施计划与旧说明：已标记为历史资料，不作为当前实现依据。
+- `docs/` 根目录中的实施计划与旧说明：已标记为历史资料，不作为当前实现依据。进行中的优化顺序以 [`engineering-optimization-plan.md`](engineering-optimization-plan.md) 为准，该文是计划不是 Current。
 
 ## 历史实施记录
 
