@@ -23,45 +23,74 @@ describe('authorization queries', () => {
         VALUES
           ('user_owner', 'Owner', 'owner@example.com'),
           ('user_editor', 'Editor', 'editor@example.com'),
+          ('user_other_project', 'Other Project', 'other_project@example.com'),
+          ('user_personal_owner', 'Personal Owner', 'personal_owner@example.com'),
           ('user_viewer', 'Viewer', 'viewer@example.com'),
           ('user_workspace_only', 'Workspace Only', 'workspace_only@example.com')
       `);
       await transaction.query(`
         INSERT INTO workspaces (id, kind, name, owner_id)
-        VALUES ('10000000-0000-4000-8000-000000000100', 'team', 'Authorization Team', 'user_owner')
+        VALUES
+          ('10000000-0000-4000-8000-000000000100', 'team', 'Authorization Team', 'user_owner'),
+          ('10000000-0000-4000-8000-000000000200', 'personal', 'Personal Workspace', 'user_personal_owner')
       `);
       await transaction.query(`
         INSERT INTO workspace_members (workspace_id, user_id, role)
         VALUES
           ('10000000-0000-4000-8000-000000000100', 'user_owner', 'owner'),
           ('10000000-0000-4000-8000-000000000100', 'user_editor', 'editor'),
+          ('10000000-0000-4000-8000-000000000100', 'user_other_project', 'viewer'),
           ('10000000-0000-4000-8000-000000000100', 'user_viewer', 'viewer'),
-          ('10000000-0000-4000-8000-000000000100', 'user_workspace_only', 'viewer')
+          ('10000000-0000-4000-8000-000000000100', 'user_workspace_only', 'viewer'),
+          ('10000000-0000-4000-8000-000000000200', 'user_personal_owner', 'owner')
       `);
       await transaction.query(`
         INSERT INTO projects (id, workspace_id, name, owner_id)
-        VALUES (
-          '20000000-0000-4000-8000-000000000100',
-          '10000000-0000-4000-8000-000000000100',
-          'Authorization Project',
-          'user_owner'
-        )
+        VALUES
+          (
+            '20000000-0000-4000-8000-000000000100',
+            '10000000-0000-4000-8000-000000000100',
+            'Authorization Project',
+            'user_owner'
+          ),
+          (
+            '20000000-0000-4000-8000-000000000200',
+            '10000000-0000-4000-8000-000000000100',
+            'Other Project',
+            'user_owner'
+          ),
+          (
+            '20000000-0000-4000-8000-000000000300',
+            '10000000-0000-4000-8000-000000000200',
+            'Personal Project',
+            'user_personal_owner'
+          )
       `);
       await transaction.query(`
         INSERT INTO project_members (project_id, user_id, role)
         VALUES
           ('20000000-0000-4000-8000-000000000100', 'user_owner', 'owner'),
           ('20000000-0000-4000-8000-000000000100', 'user_editor', 'editor'),
-          ('20000000-0000-4000-8000-000000000100', 'user_viewer', 'viewer')
+          ('20000000-0000-4000-8000-000000000100', 'user_viewer', 'viewer'),
+          ('20000000-0000-4000-8000-000000000200', 'user_owner', 'owner'),
+          ('20000000-0000-4000-8000-000000000200', 'user_other_project', 'viewer'),
+          ('20000000-0000-4000-8000-000000000300', 'user_personal_owner', 'owner')
       `);
       await transaction.query(`
         INSERT INTO documents (id, project_id, title, created_by_id)
-        VALUES (
-          '30000000-0000-4000-8000-000000000100',
-          '20000000-0000-4000-8000-000000000100',
-          'Authorization Document',
-          'user_owner'
-        )
+        VALUES
+          (
+            '30000000-0000-4000-8000-000000000100',
+            '20000000-0000-4000-8000-000000000100',
+            'Authorization Document',
+            'user_owner'
+          ),
+          (
+            '30000000-0000-4000-8000-000000000200',
+            '20000000-0000-4000-8000-000000000300',
+            'Personal Document',
+            'user_personal_owner'
+          )
       `);
     });
 
@@ -111,6 +140,26 @@ describe('authorization queries', () => {
         }),
       ).rejects.toThrow('没有权限执行该操作');
     });
+
+    it('grants personal owner workspace capability', async () => {
+      await expect(
+        authorizeWorkspace({
+          permission: 'workspace.update',
+          userId: 'user_personal_owner',
+          workspaceId: '10000000-0000-4000-8000-000000000200',
+        }),
+      ).resolves.toMatchObject({ decision: { isResourceOwner: true } });
+    });
+
+    it('rejects missing workspace', async () => {
+      await expect(
+        authorizeWorkspace({
+          permission: 'workspace.read',
+          userId: 'user_owner',
+          workspaceId: '10000000-0000-4000-8000-000000000999',
+        }),
+      ).rejects.toThrow('没有权限执行该操作');
+    });
   });
 
   describe('project authorization', () => {
@@ -152,6 +201,27 @@ describe('authorization queries', () => {
         }),
       ).rejects.toThrow('没有权限执行该操作');
     });
+
+    it('grants personal project owner content capability', async () => {
+      const authorization = await authorizeProject({
+        permission: 'document.update',
+        projectId: '20000000-0000-4000-8000-000000000300',
+        userId: 'user_personal_owner',
+      });
+
+      expect(authorization.decision.isResourceOwner).toBe(true);
+      expect(authorization.decision.permissions).not.toContain('project.members.manage');
+    });
+
+    it('rejects missing project', async () => {
+      await expect(
+        authorizeProject({
+          permission: 'project.read',
+          projectId: '20000000-0000-4000-8000-000000000999',
+          userId: 'user_owner',
+        }),
+      ).rejects.toThrow('没有权限执行该操作');
+    });
   });
 
   describe('document authorization', () => {
@@ -182,6 +252,36 @@ describe('authorization queries', () => {
           documentId: '30000000-0000-4000-8000-000000000100',
           permission: 'document.read',
           userId: 'user_workspace_only',
+        }),
+      ).rejects.toThrow('没有权限执行该操作');
+    });
+
+    it('grants personal owner document capability', async () => {
+      await expect(
+        authorizeDocument({
+          documentId: '30000000-0000-4000-8000-000000000200',
+          permission: 'document.update',
+          userId: 'user_personal_owner',
+        }),
+      ).resolves.toMatchObject({ document: { title: 'Personal Document' } });
+    });
+
+    it('rejects member assigned only to another project', async () => {
+      await expect(
+        authorizeDocument({
+          documentId: '30000000-0000-4000-8000-000000000100',
+          permission: 'document.read',
+          userId: 'user_other_project',
+        }),
+      ).rejects.toThrow('没有权限执行该操作');
+    });
+
+    it('rejects missing document', async () => {
+      await expect(
+        authorizeDocument({
+          documentId: '30000000-0000-4000-8000-000000000999',
+          permission: 'document.read',
+          userId: 'user_owner',
         }),
       ).rejects.toThrow('没有权限执行该操作');
     });

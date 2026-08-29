@@ -1,6 +1,6 @@
 # 工程优化计划
 
-状态：计划中（不是当前实现说明）
+状态：实施中（P0 已完成；其余条目仍是计划，不是当前实现说明）
 
 本文合并两轮审查中**已用当前仓库核实**的问题，给出优先顺序与可独立合入的实施步骤。事实以工作区代码、CI 和工作流为准；未复跑的指标会标明。
 
@@ -10,7 +10,7 @@
 
 | 条目 | 核实 | 说明 |
 | --- | --- | --- |
-| Toast 导致团队白板 socket 重建并覆盖画布 | **成立，作 P0** | `ToastProvider` 每次 render 新建 context 对象；`TeamWhiteboardEditor` 连接 effect 依赖 `toast`；`baseline` 先 `dispose` 再 `applyScene(baseline.scene)`，不与未入队本地笔迹调和 |
+| Toast 导致团队白板 socket 重建并覆盖画布 | **已修复（P0）** | `ToastProvider` 现在提供稳定分发器并清理定时器；`TeamWhiteboardEditor` 通过 Effect Event 调用提示，连接 effect 不再依赖 `toast` |
 | CI 生产主机回退值、陈旧分支、`build` job 挂 production environment | **成立** | 见 `.github/workflows/CI.yml` |
 | `npm run build` 先迁移再构建 | **成立** | `package.json` 的 `build` 为 `db:migrate` + `build:next` |
 | 拖宽触发整 Shell `setState` | **结构成立** | `onPointerMove` → `onResize` → `AppShell` state；卡顿程度未用 Profiler 量化 |
@@ -41,28 +41,13 @@
 
 ---
 
-## 立即执行（P0）
+## 已完成（P0）
 
-### 1. 稳定 Toast 调用，避免团队白板重连丢笔
+### 1. 稳定 Toast 调用，避免团队白板重连丢笔（2026-08-29）
 
-**机制（已核对）**
+`ToastProvider` 的 context 分发器现在只创建一次，无 Provider 时的 no-op 对象也保持稳定；每个自动移除定时器都被跟踪，手动关闭或 Provider 卸载时会清理。`TeamWhiteboardEditor` 通过 `useEffectEvent` 读取最新 toast 分发器，socket 连接 effect 只依赖协作开关、编辑权限与文档 ID。服务端 `baseline` 语义未改变。
 
-1. `ToastProvider` 在每次 render 用内联函数组装 `contextValue`（含 `showToast` 闭包）。`toasts` 变化（弹出或 2.8s 后 `setTimeout` 移除）必定重渲染 Provider，消费者拿到**新对象引用**。
-2. `TeamWhiteboardEditor` 的连接 `useEffect` 依赖数组包含 `toast`。引用变化即 cleanup：`queue.dispose()` + `socket.disconnect()`，再新建 socket 并 `connect()`。
-3. 服务端重发 `baseline` 时无条件 `applyScene(baseline.scene)`。队列已 dispose，本地未成功保存的元素不会进入 `reconcileWhiteboardScenes`。
-4. 一次会自动消失的 toast ≈ 两次状态更新（出现 + 移除），即两次断连。工作区任意 toast 都会触发，包括 `RealtimeNotificationProvider` 的站内通知提示（该处已用 `useEffectEvent` 包住 toast，**自身 SSE 不会因 toast 重连**，但仍会驱动 `ToastProvider` 重渲染，从而打到白板）。
-5. `showToast` 的 `setTimeout` 无卸载清理。React Compiler 仅生产开启（`next.config.ts`），且无法把「每次 render 新建的 context 对象」稳定成依赖。
-
-**改法**
-
-- `ToastProvider`：用 `useState` 存列表；`showToast` / `removeToast` 用稳定函数（`useEffectEvent`，或 ref 保存最新 setter）。Context value 只在方法身份稳定时创建一次，或拆成「方法 context」与「列表仅给 viewport」避免方法随列表变。
-- 卸载时 `clearTimeout` 所有未触发的移除定时器。
-- `TeamWhiteboardEditor`：toast 调用移出连接 effect 依赖（`useEffectEvent`），与 `RealtimeNotificationContext` 同一模式。
-- 保持 `useToast()` 在无 Provider 时返回 no-op。
-
-**验证：** 打开 Team 白板作未保存笔迹 → 触发任意 toast（含通知）→ 画布不得被 baseline 抹掉、Network 不得因 toast 反复建 websocket。跑现有白板相关 e2e/integ。
-
-**不要做：** 把 `baseline` 改成永远 merge（那是另一条产品语义）；本项只消除**误触发的**重连。
+本地验证已通过完整 lint、`check:types`、`build:next`、6 个白板单元测试文件（21 个测试），以及团队白板 Chromium E2E（6 个场景）。新增浏览器回归场景覆盖 toast 出现和自动消失，确认期间只建立一条白板 websocket 且同步状态保持正常。
 
 ---
 
@@ -70,38 +55,19 @@
 
 下列编号是实施顺序，不是原审查编号。
 
-### 批次 A — 低风险、无产品语义（可与 P0 并行除白板手动验）
+### 已完成：批次 A — 低风险、无产品语义（2026-08-29）
 
-**A1. CI 收紧（原 P1-1）**
+**A1. CI 收紧（原 P1-1）：已完成。** push 仅监听 `main`；手动 CI 仅在 `main` 部署。production environment 只挂在 deploy job，普通构建读取 repository Secret。部署主机、用户、路径、服务名和可信指纹全部来自 GitHub 配置，缺失时在构建、SSH 或迁移前失败。`Release.yml` 已对齐白板公开构建变量，仓库与文档不再保存真实主机或指纹。
 
-- deploy 相关主机、用户、路径、指纹：**禁止**仓库字面量回退；vars/secrets 缺失则失败。
-- 从 push 触发去掉 `feature/permissions`。
-- `environment: production` 只保留在 `deploy` job；`build` / `Release.yml` 构建不要挂 production environment（构建所需 `BETTER_AUTH_SECRET` 用 job 级 secrets，不必整个 environment）。
-- `Release.yml` 与 CI deploy 对齐 `NEXT_PUBLIC_WHITEBOARD_*`（此前审查已确认漂移）。
-- `workflow_dispatch` 部署范围：仅允许 `main`，或显式确认，避免任意分支覆盖生产。
+**A2. 独立 `tsc`（原 P1-5）：已完成。** static job 依次执行 Next 类型生成、`npm run check:types` 和 lint。
 
-不要把真实主机、指纹写入知识库正文。
+**A3. `npm run build` 与迁移解耦（原 P1-2）：已完成。** 默认 `build` 只调用 `build:next`；现有 `build-local` 保留“临时 PGlite + 迁移 + 构建”语义并已在 README/AGENTS 标明。生产迁移仍只由 release 激活流程执行。
 
-**A2. 独立 `tsc`（原 P1-5）**
+**A4. `.gitignore` 增加 `.tmp/`（原 P2-9 中可立即做的部分）：已完成。** 根目录 `/.tmp/` 已忽略；未读取或提交其中内容。
 
-- CI static job 增加 `npm run check:types`（或 `tsc --noEmit`）。本地仍用 lefthook + ultracite。
+**A5. 授权与会话测试补洞（修正后的原 P1-4）：已完成。** PGlite 授权集成测试现覆盖 Personal Workspace/Project/Document、跨项目正文隔离及不存在 ID；新增 Session 授权集成测试覆盖有效、过期、邮箱未验证及 session/user 不匹配。未重复扩张 `PermissionPolicy` 单测或设置全仓覆盖率门槛。
 
-**A3. `npm run build` 与迁移解耦（原 P1-2）**
-
-- 默认 `build` 只跑 `build:next`（或改名为避免误用）。
-- 需要「迁移 + 构建」的本地脚本单独命名，并在 `AGENTS.md` / README 标明。
-- 可选：`db:migrate` 在 `NODE_ENV=production` 且未设显式允许变量时拒绝。生产激活仍以 `deploy/scripts/activate-release.sh` 为准（迁移前校验回滚目标，见 deployment 手册）。
-
-**A4. `.gitignore` 增加 `.tmp/`（原 P2-9 中可立即做的部分）**
-
-- 不提交损坏的本地库目录。不把已有损坏目录的内容写进文档。
-
-**A5. 授权与会话测试补洞（修正后的原 P1-4）**
-
-- **不要**再为 `PermissionPolicy` 加一套重复单测。
-- 扩展 `tests/authorization-queries.integ.ts`：Personal Workspace；文档属于项目 A、用户仅在项目 B；不存在的 id。
-- 为 `isSessionActive` 补 PGlite/integ：未过期已验证、过期、邮箱未验证、session/user 不匹配。
-- 维持现有 per-file 门槛策略；不为全仓虚荣覆盖率设 70%。可考虑给 `SessionAuthorization.ts` 加一条低门槛（有测试即可）。
+批次 A 本地验证：workflow YAML 可解析，配置中无生产主机/指纹回退；授权与 Session 集成测试 20/20、lint、`check:types` 和默认 `npm run build` 均通过。
 
 ### 批次 B — 已确认性能 / 交互（P0 之后）
 
@@ -154,9 +120,9 @@
 ## 建议日历
 
 ```text
-第 0 天     P0 Toast + 白板 effect（可热修单独 PR）
-第 0–1 天   批次 A（CI、tsc、build/迁移、gitignore、授权/会话测试）
-第 1–3 天   批次 B（拖宽、字体、编辑器 chunk）
+已完成       P0 Toast + 白板 effect
+已完成       批次 A（CI、tsc、build/迁移、gitignore、授权/会话测试）
+下一步       批次 B（拖宽、字体、编辑器 chunk）
 第 3–5 天   批次 C（revalidatePath，分 3a 偏好 / 3b 文档树 / 3c 成员）
 其后        批次 D
 ```
