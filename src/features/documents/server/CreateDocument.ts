@@ -1,7 +1,6 @@
 'use server';
 
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
 import { requireProjectPermissionInTransaction } from '@/features/permissions/server/RevalidateProjectPermission';
@@ -94,6 +93,5 @@ export async function createDocument(input: CreateDocumentInput) {
     throw new Error('文档创建失败');
   }
 
-  revalidatePath('/(workspace)', 'layout');
   return document;
 }

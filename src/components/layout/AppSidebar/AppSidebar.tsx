@@ -402,11 +402,13 @@ export function AppSidebar(props: {
             permissionRequestId.current += 1;
             setIsPermissionDialogOpen(false);
           }}
-          onMutated={(operation) => {
+          onMutated={(operation, scope) => {
             permissionRequestId.current += 1;
             setIsPermissionDialogOpen(false);
             if (operation === 'delete') {
-              setNavigationRevision((revision) => revision + 1);
+              if (scope !== 'document') {
+                setNavigationRevision((revision) => revision + 1);
+              }
               router.replace(pathname);
             }
           }}

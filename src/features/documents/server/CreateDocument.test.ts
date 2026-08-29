@@ -103,7 +103,7 @@ describe(createDocument, () => {
         userId: 'user_1',
       }),
     );
-    expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
+    expect(state.revalidatePath).not.toHaveBeenCalled();
     expect(document.id).toBe('10000000-0000-4000-8000-000000000001');
   });
 

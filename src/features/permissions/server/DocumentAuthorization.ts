@@ -10,6 +10,7 @@ async function getDocumentAuthorization(options: { documentId: string; userId: s
   const [document] = await db
     .select({
       id: documentsSchema.id,
+      parentId: documentsSchema.parentId,
       projectId: documentsSchema.projectId,
       title: documentsSchema.title,
       titleVersion: documentsSchema.titleVersion,

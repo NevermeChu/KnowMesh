@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { refreshDocumentNavigationNode } from '@/components/layout/ShellEvents';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { updateDocument } from '@/features/documents/server/UpdateDocument';
@@ -55,6 +56,10 @@ export function PermissionResourceEditor(props: {
                   setError('文件名称已在其他页面更新，请重新打开后再试');
                   return;
                 }
+                refreshDocumentNavigationNode({
+                  parentId: props.overview.document.parentId,
+                  projectId: props.overview.project.id,
+                });
               }
               props.onMutated('update', props.overview.scope);
             } catch {

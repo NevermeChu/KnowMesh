@@ -3,6 +3,7 @@
 import type { Editor } from '@tiptap/react';
 import { EditorContent } from '@tiptap/react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { refreshDocumentNavigationNode } from '@/components/layout/ShellEvents';
 import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { ContextMenu, fitContextMenuPosition } from '@/components/ui/ContextMenu';
 import type { RichTextDocument } from '../Document';
@@ -100,6 +101,10 @@ export function DocumentEditorSurface(props: {
       lastSavedTitle.current = normalizedTitle;
       hasTitleConflict.current = false;
       props.setSaveState('saved');
+      refreshDocumentNavigationNode({
+        parentId: props.document.parentId,
+        projectId: props.document.projectId,
+      });
     } catch {
       props.setSaveState('error');
     }

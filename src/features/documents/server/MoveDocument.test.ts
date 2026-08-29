@@ -259,7 +259,7 @@ describe(moveDocument, () => {
     expect(state.update).toHaveBeenCalledOnce();
     expect(state.txDelete).toHaveBeenCalledOnce();
     expect(state.txExecute).toHaveBeenCalledOnce();
-    expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
+    expect(state.revalidatePath).not.toHaveBeenCalled();
   });
 
   it('rejects a document moved after the initial authorization', async () => {

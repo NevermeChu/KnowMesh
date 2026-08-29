@@ -292,6 +292,7 @@ export async function getPermissionOverview(input: PermissionOverviewInput) {
   return {
     document: {
       id: authorization.document.id,
+      parentId: authorization.document.parentId,
       title: authorization.document.title,
       titleVersion: authorization.document.titleVersion,
     },

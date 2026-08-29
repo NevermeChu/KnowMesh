@@ -1,7 +1,6 @@
 'use server';
 
 import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { authorizeProject } from '@/features/permissions/server/ProjectAuthorization';
@@ -332,6 +331,5 @@ export async function moveDocument(input: MoveDocumentInput) {
     throw new Error('文档移动失败');
   }
 
-  revalidatePath('/(workspace)', 'layout');
   return updatedDocument;
 }

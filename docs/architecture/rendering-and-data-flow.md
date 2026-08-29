@@ -29,7 +29,7 @@ Team 白板：Client Component → Socket.IO Adapter + 官方 reconcileElements 
 
 ## 受保护页面的认证回跳
 
-`src/proxy.ts` 为页面请求生成 CSP nonce，并把严格脚本策略写入请求与响应头；Next.js 从请求 CSP 自动把同一 nonce 应用到框架脚本和根布局主题脚本，应用组件不重复传递浏览器会隐藏的 nonce 属性。Plus Jakarta Sans、Noto Sans SC 与 JetBrains Mono 由锁文件固定的 Fontsource 包随应用同源发布，CSP 不开放外部样式或字体来源。代理同时保护工作区与邀请页面：未检测到 Better Auth Session cookie 时，它将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
+`src/proxy.ts` 为页面请求生成 CSP nonce，并把严格脚本策略写入请求与响应头；Next.js 从请求 CSP 自动把同一 nonce 应用到框架脚本和根布局主题脚本，应用组件不重复传递浏览器会隐藏的 nonce 属性。Plus Jakarta Sans 由根布局加载，Noto Sans SC 与 JetBrains Mono 只由工作区布局加载；三者均由锁文件固定的 Fontsource 包随应用同源发布，CSP 不开放外部样式或字体来源。代理同时保护工作区与邀请页面：未检测到 Better Auth Session cookie 时，它将完整的站内相对路径写入 `redirect_url` 后转到 `/sign-in`。认证页服务端校验该参数不能离开当前应用，并在登录与注册页面之间继续携带它。邮箱验证成功后 Better Auth 自动创建 Session，并回到该目标；注册回调只附加用于展示成功提示的站内状态，不改变原始邀请 token。认证表单显式使用 POST 作为 hydration 前的浏览器提交语义，避免客户端处理器尚未接管时把具名密码字段放入 URL；hydration 后仍由 Better Auth 客户端执行认证。代理的 cookie 检查只用于快速重定向；页面、Server Action 和 Route Handler 仍必须通过 `requireUser()` 查询数据库并完整验证 Session。
 
 这会保留 Workspace 邀请链接的 token，但不自动接受邀请；用户仍必须在接受页明确确认，服务端 Action 再次校验 token 和已验证邮箱。`/dashboard` 只是没有安全动态目标时的 fallback。
 
@@ -106,7 +106,7 @@ Better Auth 的 after hook 不与用户写入共享同一个业务事务；hook 
 
 `createProject` 文件顶部的 `'use server'` 声明了服务器执行边界；客户端只调用该 Action，数据库访问仍位于服务器模块。
 
-项目创建成功后，Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 使共享工作区布局失效并重新读取项目列表。文档创建返回 ID 后，客户端导航到新文档并刷新对应父节点；删除清除当前客户端树，移动只刷新来源与目标父节点。拖拽不再用客户端已加载的局部兄弟列表推导中点，而是提交 `before`、`inside` 或 `after` 语义，由服务端在项目锁和完整目标同级集合内计算顺序。
+项目创建成功后，Server Action 通过 `revalidatePath('/(workspace)', 'layout')` 使共享工作区布局失效并重新读取项目列表。文档创建返回 ID 后，客户端导航到新文档，由选中路径加载对应父节点；标题更新和删除通过客户端事件刷新原父节点，移动只刷新来源与目标父节点。拖拽不再用客户端已加载的局部兄弟列表推导中点，而是提交 `before`、`inside` 或 `after` 语义，由服务端在项目锁和完整目标同级集合内计算顺序。
 
 ## 文档读取与保存
 
@@ -145,7 +145,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 
 ## 外观主题渲染
 
-主题偏好持久化在 `user_preferences`，但渲染路径不查询数据库：根布局读取 `knowmesh-theme` cookie 镜像，在 `<html>` 上输出 `data-theme` 与可选的 `dark` 类，首帧前由内联脚本把 `system` 解析为当前系统偏好并持续监听其变化。`updateThemePreference` Server Action 同时 upsert 数据库和 cookie，并 `revalidatePath('/', 'layout')`。设置页的乐观切换在本地立即应用同一解析逻辑，Action 失败时回滚。
+主题偏好持久化在 `user_preferences`，但渲染路径不查询数据库：根布局读取 `knowmesh-theme` cookie 镜像，在 `<html>` 上输出 `data-theme` 与可选的 `dark` 类，首帧前由内联脚本把 `system` 解析为当前系统偏好并持续监听其变化。`updateThemePreference` Server Action 同时 upsert 数据库和 cookie，不失效根布局；设置页的乐观切换在本地立即应用同一解析逻辑，Action 失败时回滚，后续请求由 cookie 恢复。
 
 由此产生的渲染边界：根布局读取 cookie，因此所有路由（含公开首页）均为动态渲染。细节见[系统偏好设置](../features/preferences.md)。
 

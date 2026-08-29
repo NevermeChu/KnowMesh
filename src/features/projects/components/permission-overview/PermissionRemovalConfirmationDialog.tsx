@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { refreshDocumentNavigationNode } from '@/components/layout/ShellEvents';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
@@ -105,7 +106,11 @@ export function PermissionRemovalConfirmationDialog(props: {
                 } else if (props.overview.scope === 'project') {
                   await deleteOrLeaveProject({ projectId: resource.id });
                 } else {
-                  await deleteDocument({ documentId: resource.id });
+                  const deletedDocument = await deleteDocument({ documentId: resource.id });
+                  refreshDocumentNavigationNode({
+                    parentId: deletedDocument.parentId,
+                    projectId: deletedDocument.projectId,
+                  });
                 }
                 props.onMutated('delete', props.overview.scope);
               } catch {

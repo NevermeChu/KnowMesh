@@ -22,13 +22,13 @@ updateThemePreference Server Action
 → requireUser() 鉴权 + Zod 校验
 → upsert user_preferences
 → 写入 HttpOnly cookie knowmesh-theme（有效期一年）
-→ revalidatePath('/', 'layout')
+→ 不失效布局；客户端已即时应用，后续请求由 cookie 恢复
 
 根布局（每个请求）
 → 读取 knowmesh-theme，非法值回退 system
 → <html data-theme="..." class="dark?">
 → <head> 带请求级 CSP nonce 的脚本在首帧前解析 system → prefers-color-scheme
-→ Plus Jakarta Sans、Noto Sans SC 与 JetBrains Mono 由 Fontsource 同源发布
+→ 根布局加载 Plus Jakarta Sans；工作区布局再加载 Noto Sans SC 与 JetBrains Mono
 → 内联脚本持续监听系统主题变化，跟随系统时实时切换
 ```
 
@@ -62,7 +62,7 @@ updateThemePreference Server Action
 - `src/features/preferences/components/ThemePreferenceSection.tsx`：主题卡片与乐观切换。
 - `src/components/layout/WorkspaceContent.tsx`：消费 `--content-read-width` 的共享内容容器。
 - `src/components/layout/ContentToolbar.tsx`：内容宽度下拉与乐观切换。
-- `src/app/layout.tsx`：Fontsource 字体入口、cookie 读取、`<html>` 主题属性、`--content-read-width` 内联与主题初始化脚本；脚本 nonce 由 Next.js 从请求 CSP 自动应用。
+- `src/app/layout.tsx`：公共 Plus Jakarta Sans 字体入口、cookie 读取、`<html>` 主题属性、`--content-read-width` 内联与主题初始化脚本；工作区字体入口位于 `src/app/(workspace)/layout.tsx`，脚本 nonce 由 Next.js 从请求 CSP 自动应用。
 - `src/styles/global.css`：颜色 token 体系与 `--content-read-width` 默认值。
 
 ## 相关文档

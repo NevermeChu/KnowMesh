@@ -105,7 +105,7 @@ describe(updateDocument, () => {
     expect(state.revalidatePath).not.toHaveBeenCalled();
   });
 
-  it('updates document title and revalidates workspace layout cache', async () => {
+  it('updates document title without revalidating workspace layout', async () => {
     await updateDocument({
       documentId: '10000000-0000-4000-8000-000000000001',
       expectedTitleVersion: 1,
@@ -113,7 +113,7 @@ describe(updateDocument, () => {
     });
 
     expect(state.update).toHaveBeenCalledOnce();
-    expect(state.revalidatePath).toHaveBeenCalledWith('/(workspace)', 'layout');
+    expect(state.revalidatePath).not.toHaveBeenCalled();
   });
 
   it('rejects team document content writes', async () => {

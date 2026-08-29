@@ -1,7 +1,6 @@
 'use server';
 
 import { and, eq } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { requireProjectPermissionInTransaction } from '@/features/permissions/server/RevalidateProjectPermission';
@@ -19,7 +18,7 @@ export async function deleteDocument(input: DeleteDocumentInput) {
     userId,
   });
 
-  await db.transaction(async (transaction) => {
+  const deletedDocument = await db.transaction(async (transaction) => {
     await requireProjectPermissionInTransaction({
       permission: 'document.delete',
       projectId: authorization.document.projectId,
@@ -35,12 +34,18 @@ export async function deleteDocument(input: DeleteDocumentInput) {
           eq(documentsSchema.projectId, authorization.document.projectId),
         ),
       )
-      .returning({ id: documentsSchema.id, projectId: documentsSchema.projectId });
+      .returning({
+        id: documentsSchema.id,
+        parentId: documentsSchema.parentId,
+        projectId: documentsSchema.projectId,
+      });
 
     if (!document) {
       throw new Error('文件删除失败');
     }
+
+    return document;
   });
 
-  revalidatePath('/(workspace)', 'layout');
+  return deletedDocument;
 }

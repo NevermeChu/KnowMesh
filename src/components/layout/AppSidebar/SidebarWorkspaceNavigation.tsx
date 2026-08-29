@@ -2,6 +2,11 @@
 
 import { FileText, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useEffectEvent } from 'react';
+import {
+  isDocumentNavigationNodeRefresh,
+  REFRESH_DOCUMENT_NAVIGATION_NODE_EVENT,
+} from '@/components/layout/ShellEvents';
 import type { DocumentNavigationItem } from '@/features/documents/Document';
 import { moveDocument } from '@/features/documents/server/MoveDocument';
 import type { PermissionOverviewInput } from '@/features/projects/PermissionOverview';
@@ -55,6 +60,18 @@ export function SidebarWorkspaceNavigation(props: {
     selectedProjectId,
   });
   const dialogs = useSidebarNavigationDialogs();
+  const refreshNavigationNode = useEffectEvent((event: Event) => {
+    if (event instanceof CustomEvent && isDocumentNavigationNodeRefresh(event.detail)) {
+      reloadDocumentChildren(event.detail.projectId, event.detail.parentId);
+    }
+  });
+
+  useEffect(() => {
+    window.addEventListener(REFRESH_DOCUMENT_NAVIGATION_NODE_EVENT, refreshNavigationNode);
+    return () => {
+      window.removeEventListener(REFRESH_DOCUMENT_NAVIGATION_NODE_EVENT, refreshNavigationNode);
+    };
+  }, []);
 
   const refreshMovedNodes = (options: {
     sourceParentId: string | null;

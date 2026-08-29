@@ -1,7 +1,6 @@
 'use server';
 
 import { and, eq, sql } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { authorizeDocument } from '@/features/permissions/server/DocumentAuthorization';
 import { requireProjectPermissionInTransaction } from '@/features/permissions/server/RevalidateProjectPermission';
@@ -109,10 +108,6 @@ export async function updateDocument(input: UpdateDocumentInput) {
       updatedAt: document.updatedAt,
     };
   });
-
-  if (documentInput.title !== undefined) {
-    revalidatePath('/(workspace)', 'layout');
-  }
 
   return result;
 }

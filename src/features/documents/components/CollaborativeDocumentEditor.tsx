@@ -15,6 +15,7 @@ import { useEditor } from '@tiptap/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IndexeddbPersistence } from 'y-indexeddb';
+import { refreshDocumentNavigationNode } from '@/components/layout/ShellEvents';
 import { Env } from '@/libs/Env';
 import { throttleDocumentCollaborationCursorAwareness } from '../collaboration/DocumentCollaborationAwarenessThrottle';
 import { getDocumentCollaborationCacheName } from '../collaboration/DocumentCollaborationLocalPersistence';
@@ -320,6 +321,10 @@ function DocumentCollaborationRoom(props: {
         ? { title: message.title, titleVersion: message.titleVersion }
         : current,
     );
+    refreshDocumentNavigationNode({
+      parentId: props.document.parentId,
+      projectId: props.document.projectId,
+    });
     router.refresh();
   });
 

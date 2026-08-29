@@ -191,6 +191,45 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
+  test('refreshes the document title node without replacing the sidebar', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${documentId}`);
+    const sidebar = page.locator('#app-sidebar');
+    await sidebar.evaluate((element) => {
+      element.dataset.navigationMarker = 'active';
+    });
+    const titleInput = page.getByRole('textbox', { name: '文档标题' });
+    const renamedTitle = `navigation-title-${Date.now()}`;
+
+    await titleInput.fill(renamedTitle);
+    await titleInput.press('Enter');
+    await expect(
+      page.getByRole('navigation', { exact: true, name: '个人区域' }).getByRole('link', {
+        exact: true,
+        name: renamedTitle,
+      }),
+    ).toBeVisible();
+    await expect(sidebar).toHaveAttribute('data-navigation-marker', 'active');
+
+    await titleInput.fill(seededTitle);
+    await titleInput.press('Enter');
+    await expect(
+      page.getByRole('navigation', { exact: true, name: '个人区域' }).getByRole('link', {
+        exact: true,
+        name: seededTitle,
+      }),
+    ).toBeVisible();
+    await expect(sidebar).toHaveAttribute('data-navigation-marker', 'active');
+    await close();
+  });
+
   test('flushes a personal document when navigating before debounce', async ({
     baseURL,
     browser,
@@ -405,6 +444,52 @@ test.describe('application smoke coverage', () => {
       })
       .toBe(documentId);
 
+    await close();
+  });
+
+  test('deletes a document by refreshing only its parent node', async ({ baseURL, browser }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${documentId}`);
+    const sidebar = page.locator('#app-sidebar');
+    await sidebar.evaluate((element) => {
+      element.dataset.deletionMarker = 'active';
+    });
+    const personalNavigation = page.getByRole('navigation', {
+      exact: true,
+      name: '个人区域',
+    });
+    const childLink = personalNavigation.getByRole('link', {
+      exact: true,
+      name: childDocumentTitle,
+    });
+    await personalNavigation.getByRole('button', { name: `展开${seededTitle}` }).click();
+    await expect(childLink).toBeVisible();
+    await childLink.click({ button: 'right' });
+    await page
+      .locator('#navigation-context-menu')
+      .getByRole('button', { exact: true, name: '管理文件' })
+      .click();
+
+    const deleteButtons = page.getByRole('button', { exact: true, name: '删除文件' });
+    await expect(deleteButtons).toHaveCount(1);
+    await deleteButtons.first().click();
+    await expect(deleteButtons).toHaveCount(2);
+    await deleteButtons.last().click();
+
+    await expect(childLink).toHaveCount(0);
+    await expect(sidebar).toHaveAttribute('data-deletion-marker', 'active');
+    await expect
+      .poll(async () => {
+        const result = await pool.query<{ count: number }>(
+          `SELECT count(*)::int AS count FROM documents WHERE id = '${childDocumentId}'`,
+        );
+        return result.rows[0]?.count;
+      })
+      .toBe(0);
     await close();
   });
 
