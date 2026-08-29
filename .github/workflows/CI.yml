@@ -192,7 +192,8 @@ jobs:
   deploy:
     name: Deploy production
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' &&
+        (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/permissions')) ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [build, static, unit, e2e, packaging]
     runs-on: ubuntu-latest
