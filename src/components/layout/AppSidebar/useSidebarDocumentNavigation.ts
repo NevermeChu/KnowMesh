@@ -126,6 +126,8 @@ export function useSidebarDocumentNavigation(props: {
   const reloadDocumentChildren = (projectId: string, parentId: string | null) => {
     const key = getNavigationNodeKey(projectId, parentId);
     requestTracker.current.invalidate(key);
+    // Drop in-flight selected-path merges so a later title refresh is not overwritten.
+    pathRequestId.current += 1;
     dispatch({ parentId, projectId, type: 'node.invalidate' });
     void loadDocumentChildren(projectId, parentId);
   };

@@ -206,25 +206,23 @@ test.describe('application smoke coverage', () => {
       element.dataset.navigationMarker = 'active';
     });
     const titleInput = page.getByRole('textbox', { name: '文档标题' });
+    const personalNavigation = page.getByRole('navigation', { exact: true, name: '个人区域' });
     const renamedTitle = `navigation-title-${Date.now()}`;
 
+    await expect(
+      personalNavigation.getByRole('link', { exact: true, name: seededTitle }),
+    ).toBeVisible();
     await titleInput.fill(renamedTitle);
     await titleInput.press('Enter');
     await expect(
-      page.getByRole('navigation', { exact: true, name: '个人区域' }).getByRole('link', {
-        exact: true,
-        name: renamedTitle,
-      }),
+      personalNavigation.getByRole('link', { exact: true, name: renamedTitle }),
     ).toBeVisible();
     await expect(sidebar).toHaveAttribute('data-navigation-marker', 'active');
 
     await titleInput.fill(seededTitle);
     await titleInput.press('Enter');
     await expect(
-      page.getByRole('navigation', { exact: true, name: '个人区域' }).getByRole('link', {
-        exact: true,
-        name: seededTitle,
-      }),
+      personalNavigation.getByRole('link', { exact: true, name: seededTitle }),
     ).toBeVisible();
     await expect(sidebar).toHaveAttribute('data-navigation-marker', 'active');
     await close();
