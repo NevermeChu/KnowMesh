@@ -31,8 +31,12 @@ export function ContentToolbar(props: {
   const [width, setWidth] = useState(props.contentWidth);
   const [isWidthMenuOpen, setIsWidthMenuOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const selectedDocumentId = searchParams.get('document');
+  const isWhiteboardDocument = props.documents.some(
+    (document) => document.id === selectedDocumentId && document.kind === 'whiteboard',
+  );
   const breadcrumbs = createContentBreadcrumbs({
-    documentId: searchParams.get('document') ?? undefined,
+    documentId: selectedDocumentId ?? undefined,
     documents: props.documents,
     pathname,
     projectId: searchParams.get('project') ?? undefined,
@@ -113,44 +117,48 @@ export function ContentToolbar(props: {
       <DocumentEditorToolbar />
 
       <div className="relative flex shrink-0 items-center gap-1">
-        <button
-          type="button"
-          aria-controls="content-width-menu"
-          aria-expanded={isWidthMenuOpen}
-          aria-haspopup="dialog"
-          aria-label={`内容宽度 ${width}%`}
-          title="内容宽度"
-          className="hidden h-8 min-w-11 place-items-center rounded-lg px-2 text-xs font-medium text-ink-muted transition-colors hover:bg-overlay hover:text-ink lg:grid"
-          onClick={() => {
-            setIsWidthMenuOpen((isOpen) => !isOpen);
-          }}
-        >
-          {width}%
-        </button>
-        <PopupMenu
-          id="content-width-menu"
-          isOpen={isWidthMenuOpen}
-          label="内容宽度"
-          placement={{ kind: 'anchor', side: 'bottom' }}
-          surfaceClassName="right-0 left-auto w-36 p-1"
-        >
-          <PopupMenuLabel>内容宽度</PopupMenuLabel>
-          {contentWidthPercentages.map((percentage) => (
+        {isWhiteboardDocument ? null : (
+          <>
             <button
-              key={percentage}
               type="button"
-              className={popupMenuItemClassName}
+              aria-controls="content-width-menu"
+              aria-expanded={isWidthMenuOpen}
+              aria-haspopup="dialog"
+              aria-label={`内容宽度 ${width}%`}
+              title="内容宽度"
+              className="hidden h-8 min-w-11 place-items-center rounded-lg px-2 text-xs font-medium text-ink-muted transition-colors hover:bg-overlay hover:text-ink lg:grid"
               onClick={() => {
-                selectContentWidth(percentage);
+                setIsWidthMenuOpen((isOpen) => !isOpen);
               }}
             >
-              <span className="flex-1">{percentage}%</span>
-              {percentage === width && (
-                <Check aria-hidden="true" className="size-3.5 text-accent" strokeWidth={1.8} />
-              )}
+              {width}%
             </button>
-          ))}
-        </PopupMenu>
+            <PopupMenu
+              id="content-width-menu"
+              isOpen={isWidthMenuOpen}
+              label="内容宽度"
+              placement={{ kind: 'anchor', side: 'bottom' }}
+              surfaceClassName="right-0 left-auto w-36 p-1"
+            >
+              <PopupMenuLabel>内容宽度</PopupMenuLabel>
+              {contentWidthPercentages.map((percentage) => (
+                <button
+                  key={percentage}
+                  type="button"
+                  className={popupMenuItemClassName}
+                  onClick={() => {
+                    selectContentWidth(percentage);
+                  }}
+                >
+                  <span className="flex-1">{percentage}%</span>
+                  {percentage === width && (
+                    <Check aria-hidden="true" className="size-3.5 text-accent" strokeWidth={1.8} />
+                  )}
+                </button>
+              ))}
+            </PopupMenu>
+          </>
+        )}
         <button
           type="button"
           aria-label={fullscreenLabel}

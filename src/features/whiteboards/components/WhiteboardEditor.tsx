@@ -4,7 +4,6 @@ import { Excalidraw, loadFromBlob } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { DocumentSaveStatus } from '@/features/documents/components/DocumentSaveStatus';
@@ -16,6 +15,7 @@ import { updatePersonalWhiteboard } from '../server/UpdatePersonalWhiteboard';
 import { WhiteboardSaveQueue } from '../WhiteboardSaveQueue';
 import { createWhiteboardScene } from '../WhiteboardScene';
 import { TeamWhiteboardEditor } from './TeamWhiteboardEditor';
+import { WhiteboardCanvasFrame } from './WhiteboardCanvasFrame';
 import { WhiteboardExportMenu } from './WhiteboardExportMenu';
 
 const readonlyCanvasActions = {
@@ -127,15 +127,25 @@ function PersonalWhiteboardEditor(props: {
   };
 
   return (
-    <WorkspaceContent className="py-6 sm:py-8">
-      <header className="mb-4 flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-ink-faint">
-            {isEditable ? '个人白板' : '只读白板'}
-          </p>
-          <h1 className="truncate text-xl font-semibold text-ink">{props.document.title}</h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <WhiteboardCanvasFrame
+      nestBesideExcalidrawMenu={isEditable}
+      banner={
+        saveState === 'conflict' ? (
+          <div className="flex items-center justify-between gap-3 border-b border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            <span>服务端已有更新版本。已停止自动覆盖，可先导出本地备份再刷新。</span>
+            <Button
+              onClick={() => {
+                window.location.reload();
+              }}
+              type="button"
+            >
+              刷新
+            </Button>
+          </div>
+        ) : null
+      }
+      documentActions={
+        <>
           <DocumentSaveStatus canEdit={isEditable} state={saveState} />
           {saveState === 'error' && (
             <Button
@@ -156,75 +166,64 @@ function PersonalWhiteboardEditor(props: {
             documentId={props.document.id}
             initialIsStarred={props.document.isStarred ?? false}
           />
-        </div>
-      </header>
-      {saveState === 'conflict' && (
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          <span>服务端已有更新版本。已停止自动覆盖，可先导出本地备份再刷新。</span>
-          <Button
-            onClick={() => {
-              window.location.reload();
+        </>
+      }
+      canvas={
+        <div
+          className="h-full min-h-0"
+          onDropCapture={(event) => {
+            if (event.dataTransfer.files.length > 0) {
+              event.preventDefault();
+              event.stopPropagation();
+              rejectUnsupportedAssets();
+            }
+          }}
+        >
+          <Excalidraw
+            UIOptions={{
+              canvasActions: isEditable ? editableCanvasActions : readonlyCanvasActions,
+              tools: { image: false },
             }}
-            type="button"
-          >
-            刷新
-          </Button>
+            excalidrawAPI={(api) => {
+              apiRef.current = api;
+            }}
+            initialData={initialData}
+            langCode="zh-CN"
+            onChange={(elements, appState, files) => {
+              if (!isEditable) {
+                return;
+              }
+              if (Object.keys(files).length > 0) {
+                rejectUnsupportedAssets();
+              }
+              try {
+                queue.enqueue(createWhiteboardScene({ appState, elements }));
+              } catch {
+                setSaveState('error');
+                toast.error('白板内容超出当前可保存的格式或大小限制');
+              }
+            }}
+            onLinkOpen={(_element, event) => {
+              event.preventDefault();
+            }}
+            onPaste={(data) => {
+              if (
+                (data.files && Object.keys(data.files).length > 0) ||
+                data.mixedContent?.some((item) => item.type === 'imageUrl')
+              ) {
+                rejectUnsupportedAssets();
+                return false;
+              }
+              return true;
+            }}
+            theme={theme}
+            validateEmbeddable={false}
+            viewModeEnabled={!isEditable}
+            zenModeEnabled={!isEditable}
+          />
         </div>
-      )}
-      <div
-        className="h-[calc(100dvh-var(--content-top-offset)-7rem)] min-h-[32rem] overflow-hidden rounded-xl border border-line bg-card shadow-card"
-        onDropCapture={(event) => {
-          if (event.dataTransfer.files.length > 0) {
-            event.preventDefault();
-            event.stopPropagation();
-            rejectUnsupportedAssets();
-          }
-        }}
-      >
-        <Excalidraw
-          UIOptions={{
-            canvasActions: isEditable ? editableCanvasActions : readonlyCanvasActions,
-            tools: { image: false },
-          }}
-          excalidrawAPI={(api) => {
-            apiRef.current = api;
-          }}
-          initialData={initialData}
-          langCode="zh-CN"
-          onChange={(elements, appState, files) => {
-            if (!isEditable) {
-              return;
-            }
-            if (Object.keys(files).length > 0) {
-              rejectUnsupportedAssets();
-            }
-            try {
-              queue.enqueue(createWhiteboardScene({ appState, elements }));
-            } catch {
-              setSaveState('error');
-              toast.error('白板内容超出当前可保存的格式或大小限制');
-            }
-          }}
-          onLinkOpen={(_element, event) => {
-            event.preventDefault();
-          }}
-          onPaste={(data) => {
-            if (
-              (data.files && Object.keys(data.files).length > 0) ||
-              data.mixedContent?.some((item) => item.type === 'imageUrl')
-            ) {
-              rejectUnsupportedAssets();
-              return false;
-            }
-            return true;
-          }}
-          theme={theme}
-          validateEmbeddable={false}
-          viewModeEnabled={!isEditable}
-          zenModeEnabled={!isEditable}
-        />
-      </div>
-    </WorkspaceContent>
+      }
+    />
   );
 }
 
@@ -233,8 +232,13 @@ export function WhiteboardEditor(props: {
   document: WhiteboardDocument;
   workspaceKind: WorkspaceKind;
 }) {
-  if (props.workspaceKind === 'team') {
-    return <TeamWhiteboardEditor canEdit={props.canEdit} document={props.document} />;
-  }
-  return <PersonalWhiteboardEditor {...props} />;
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      {props.workspaceKind === 'team' ? (
+        <TeamWhiteboardEditor canEdit={props.canEdit} document={props.document} />
+      ) : (
+        <PersonalWhiteboardEditor {...props} />
+      )}
+    </div>
+  );
 }

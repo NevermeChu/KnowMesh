@@ -12,7 +12,7 @@ const DynamicWhiteboardEditor = dynamic(
     return { default: mod.WhiteboardEditor };
   },
   {
-    loading: () => <div className="min-h-[32rem] animate-pulse rounded-xl bg-card" />,
+    loading: () => <div className="min-h-0 flex-1 animate-pulse bg-card" />,
     ssr: false,
   },
 );

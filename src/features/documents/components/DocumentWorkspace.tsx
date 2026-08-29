@@ -97,9 +97,19 @@ export function DocumentWorkspace(props: {
     );
   }
 
+  const fillsDocumentPane = props.selectedDocument?.kind === 'whiteboard';
+
   return (
-    <div className="-mx-5 min-h-[calc(100dvh-var(--content-top-offset))] px-5 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12">
-      <section className="min-w-0">{content}</section>
+    <div
+      className={
+        fillsDocumentPane
+          ? '-mx-5 flex h-[calc(100dvh-var(--content-top-offset))] flex-col overflow-hidden sm:-mx-8 lg:-mx-12'
+          : '-mx-5 min-h-[calc(100dvh-var(--content-top-offset))] px-5 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12'
+      }
+    >
+      <section className={fillsDocumentPane ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0'}>
+        {content}
+      </section>
     </div>
   );
 }

@@ -5,7 +5,6 @@ import type { Collaborator, ExcalidrawImperativeAPI, SocketId } from '@excalidra
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { io } from 'socket.io-client';
 import type { Socket } from 'socket.io-client';
-import { WorkspaceContent } from '@/components/layout/WorkspaceContent';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { getDocumentCollaborationColor } from '@/features/documents/collaboration/DocumentCollaborationPresence';
@@ -30,6 +29,7 @@ import type {
 } from '../collaboration/WhiteboardCollaborationProtocol';
 import { createWhiteboardScene } from '../WhiteboardScene';
 import type { WhiteboardScene } from '../WhiteboardScene';
+import { WhiteboardCanvasFrame } from './WhiteboardCanvasFrame';
 import { WhiteboardExportMenu } from './WhiteboardExportMenu';
 
 const readonlyCanvasActions = {
@@ -232,24 +232,30 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
     };
   }, [enabled, props.canEdit, props.document.id, toast]);
 
+  let status: React.ReactNode = (
+    <span className="text-xs text-ink-faint">团队白板（协作已关闭）</span>
+  );
+  if (enabled) {
+    status = members.length > 0 ? <WhiteboardPresence members={members} /> : null;
+  }
+
   return (
-    <WorkspaceContent className="py-6 sm:py-8">
-      <header className="mb-4 flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-ink-faint">
-            {enabled ? '团队白板' : '团队白板（协作已关闭）'}
-          </p>
-          <h1 className="truncate text-xl font-semibold text-ink">{props.document.title}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <WhiteboardPresence members={members} />
+    <WhiteboardCanvasFrame
+      nestBesideExcalidrawMenu={isEditable}
+      documentActions={
+        <>
           <DocumentSaveStatus
             canEdit={isEditable}
             collaborationState={enabled ? collaborationState : undefined}
             state={saveState}
           />
           {saveState === 'error' && collaborationState === 'synced' && (
-            <Button onClick={() => queueRef.current?.retry()} type="button">
+            <Button
+              onClick={() => {
+                queueRef.current?.retry();
+              }}
+              type="button"
+            >
               重试保存
             </Button>
           )}
@@ -262,57 +268,60 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
             documentId={props.document.id}
             initialIsStarred={props.document.isStarred ?? false}
           />
+        </>
+      }
+      status={status}
+      canvas={
+        <div className="h-full min-h-0">
+          <Excalidraw
+            UIOptions={{
+              canvasActions: isEditable ? editableCanvasActions : readonlyCanvasActions,
+              tools: { image: false },
+            }}
+            excalidrawAPI={(api) => {
+              apiRef.current = api;
+            }}
+            initialData={initialData}
+            isCollaborating={enabled}
+            langCode="zh-CN"
+            onChange={(elements, appState, files) => {
+              if (!isEditable || applyingRemoteScene.current) {
+                return;
+              }
+              if (Object.keys(files).length > 0) {
+                toast.error('当前白板尚不支持图片或二进制资产');
+                return;
+              }
+              try {
+                queueRef.current?.enqueue(createWhiteboardScene({ appState, elements }));
+              } catch {
+                setSaveState('error');
+                toast.error('白板内容超出当前可保存的格式或大小限制');
+              }
+            }}
+            onLinkOpen={(_element, event) => {
+              event.preventDefault();
+            }}
+            onPaste={(data) =>
+              !(
+                Object.keys(data.files ?? {}).length > 0 ||
+                data.mixedContent?.some((item) => item.type === 'imageUrl')
+              )
+            }
+            onPointerUpdate={(payload) => {
+              socketRef.current?.emit('presence', {
+                button: payload.button,
+                x: payload.pointer.x,
+                y: payload.pointer.y,
+              });
+            }}
+            theme={theme}
+            validateEmbeddable={false}
+            viewModeEnabled={!isEditable}
+            zenModeEnabled={!isEditable}
+          />
         </div>
-      </header>
-      <div className="h-[calc(100dvh-var(--content-top-offset)-7rem)] min-h-[32rem] overflow-hidden rounded-xl border border-line bg-card shadow-card">
-        <Excalidraw
-          UIOptions={{
-            canvasActions: isEditable ? editableCanvasActions : readonlyCanvasActions,
-            tools: { image: false },
-          }}
-          excalidrawAPI={(api) => {
-            apiRef.current = api;
-          }}
-          initialData={initialData}
-          isCollaborating={enabled}
-          langCode="zh-CN"
-          onChange={(elements, appState, files) => {
-            if (!isEditable || applyingRemoteScene.current) {
-              return;
-            }
-            if (Object.keys(files).length > 0) {
-              toast.error('当前白板尚不支持图片或二进制资产');
-              return;
-            }
-            try {
-              queueRef.current?.enqueue(createWhiteboardScene({ appState, elements }));
-            } catch {
-              setSaveState('error');
-              toast.error('白板内容超出当前可保存的格式或大小限制');
-            }
-          }}
-          onLinkOpen={(_element, event) => {
-            event.preventDefault();
-          }}
-          onPaste={(data) =>
-            !(
-              Object.keys(data.files ?? {}).length > 0 ||
-              data.mixedContent?.some((item) => item.type === 'imageUrl')
-            )
-          }
-          onPointerUpdate={(payload) => {
-            socketRef.current?.emit('presence', {
-              button: payload.button,
-              x: payload.pointer.x,
-              y: payload.pointer.y,
-            });
-          }}
-          theme={theme}
-          validateEmbeddable={false}
-          viewModeEnabled={!isEditable}
-          zenModeEnabled={!isEditable}
-        />
-      </div>
-    </WorkspaceContent>
+      }
+    />
   );
 }
