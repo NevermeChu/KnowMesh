@@ -124,7 +124,7 @@
 - 协作 process kit（限额、复查循环、健康 HTTP），**不**合并协议。
 - `removeWorkspaceMember`：对申请/邀请/成员三表 `inArray(projectId)` 批量删。
 - `getWorkspaceAuthorization` 对齐 `cache()`：已完成，与 Project 授权一致，仅在同一次 React 服务端请求内复用，不跨请求保留权限。
-- PGlite 迁移列表改读 `_journal.json`。
+- PGlite 迁移列表改读 `_journal.json`：已完成，集成测试迁移顺序由 Drizzle journal 单一维护。
 - 白板 `enqueue` / `receiveCanonical` 的 stringify：大场景 profile 后再改版本号/脏标记。
 - 落地页 Lighthouse 后再决定交互块 `dynamic` 与是否把 `getCurrentUser` 限制在 Header。
 - CI 复用 e2e 的 Postgres 服务跑选定 integ（LISTEN / 租约），不替代 PGlite 快测。
