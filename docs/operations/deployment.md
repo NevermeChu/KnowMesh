@@ -16,7 +16,7 @@
 - **Nginx**：公网入口，负责 HTTPS 证书、域名、HTTP 反向代理和 WebSocket Upgrade。
 - **反向代理**：用户只访问 `thisme.icu`，Nginx 再把请求转发给服务器内部端口。
 - **数据库迁移**：按顺序把 PostgreSQL Schema 升级到新代码需要的结构。
-- **软链接**：`current` 是一个指针；切换它就能让两个 systemd 服务一起使用新 release。
+- **软链接**：`current` 是一个指针；切换它就能让 Next.js 和当时已启用的协作 sidecar 一起使用新 release。
 
 ## 五分钟全景图
 
@@ -66,7 +66,7 @@ Next.js 与 Hocuspocus ───────────────→ 本机 P
 - artifact 包含什么，以及如何上传、迁移、切换、检查和回滚。
 - GitHub Secrets/Variables 的名字和用途。
 - `/etc/knowmesh.env` 中应用认识的变量。
-- Hocuspocus systemd unit 和两个 Nginx 协作片段的完整内容。
+- Hocuspocus / 白板协作的 systemd unit，以及仓库中的 Nginx WebSocket map 与协作 location 片段。
 
 仓库不能独立重建：
 
@@ -76,7 +76,7 @@ Next.js 与 Hocuspocus ───────────────→ 本机 P
 - 当前 `knowmesh.service`、完整 Nginx 站点和 sudoers；现场内容已经审计，但尚无仓库模板。
 - 服务器文件后来是否被人工修改。
 
-本项目当前不是“空服务器一键安装”。首次引导完成后，日常发布已经自动化。2026-08-23 的只读现场审计确认了两个 systemd 服务、本机 PostgreSQL、Nginx、Certbot、本地 readiness、公网 HTTPS 和公网 WSS Upgrade；现场配置仍可能在未来人工改动后漂移，因此手册保留检查命令且以服务器实时输出为准。
+本项目当前不是“空服务器一键安装”。首次引导完成后，日常发布已经自动化。2026-08-23 的只读现场审计确认了 Next.js 与 Hocuspocus、本机 PostgreSQL、Nginx、Certbot、本地 readiness、公网 HTTPS 和文档协作 WSS Upgrade。白板 sidecar、对应 Nginx include 与灰度开关是后续人工加上的，CI 不会安装 `/etc` 下的 unit 或站点片段；现场配置仍可能漂移，因此手册保留检查命令且以服务器实时输出为准。
 
 ## 当前生产拓扑
 
@@ -108,13 +108,13 @@ release 目录以 40 位 Git SHA 命名，artifact 根目录同时包含内容�
 | 操作 | 运行检查 | 部署生产 |
 | --- | --- | --- |
 | push `main` | 是 | 是 |
-| push `feature/permissions` | 是 | 否 |
+| push 其他分支 | 是 | 否 |
 | 向 `main` 提交 Pull Request | 是 | 否 |
 | Actions 页面手动运行 `CI` | 是 | 是，部署所选分支的当前 SHA |
 | Actions 页面手动运行 `Release` | 只构建 artifact | 否 |
 | commit message 包含 `[skip ci]` | GitHub 跳过 push workflow | 否 |
 
-只有 `main` push 或明确的手动 workflow 运行会覆盖 `thisme.icu`；功能分支 push 只运行检查，不部署生产。
+只有 `main` push 或明确的手动 **Run workflow**（`workflow_dispatch`）会覆盖 `thisme.icu`。非 `main` 分支的普通 push 只跑检查，Deploy 会 skip。在一次 **push** 触发的 run 上点 **Re-run all jobs** 不会改事件，Deploy 仍会 skip。GitHub 在 Actions 搜索框带 `branch:…` 时经常不显示 **Run workflow**；应打开 [CI.yml workflow 页](https://github.com/NevermeChu/KnowMesh/actions/workflows/CI.yml) 并清空筛选，按钮在标题行右侧。
 
 deploy job 使用 `production-deployment` 并发组且不取消进行中的部署，所以两个生产发布不会同时切换 `current`。
 
@@ -181,7 +181,7 @@ artifact 内容包括：
 
 生产密钥不会进入 artifact。CI workflow 同时把压缩 artifact 保存 14 天，便于审计或人工恢复。
 
-应用、迁移程序和 Hocuspocus 来自同一个 Git SHA；切换或回滚 `current` 时，两个服务因此会一起切换版本。
+应用、迁移程序、Hocuspocus 和白板 Adapter 来自同一个 Git SHA。切换或回滚 `current` 时，Next.js 与当时已启用的 sidecar 一起换版本；未启用的白板 unit 不会被 activate 脚本 start。
 
 ## deploy 如何把 artifact 变成线上版本
 
@@ -192,13 +192,13 @@ artifact 内容包括：
 3. artifact 通过 `scp` 上传到服务器 `/tmp/knowmesh-release-<SHA>.tgz`。
 4. SSH 以部署用户登录，再通过非交互 `sudo -n bash -s` 执行同一 Git SHA 中的 [`deploy/scripts/activate-release.sh`](../../deploy/scripts/activate-release.sh)；workflow 只传递受控参数（release ID、服务器路径、服务名、协作开关），不内嵌部署逻辑。
 5. 压缩包先解到 `/srv/knowmesh-app/releases/.<SHA>.staging`，逐项检查关键文件并校验 `REVISION`，再重命名为 `/srv/knowmesh-app/releases/<SHA>`。
-6. 检查 `/etc/knowmesh.env` 可读、Node.js 可执行，以及 GitHub 与服务器的协作开关一致。
+6. 检查 `/etc/knowmesh.env` 可读、Node.js 可执行，以及 GitHub 与服务器的文档协作开关、白板协作开关各自一致。
 7. 解析并验证 `current` 指向 release 根目录内仍然存在的旧版本；没有有效回滚目标时在数据库迁移前停止。
 8. 新 release 中的迁移程序读取 `/etc/knowmesh.env`，对生产 PostgreSQL 执行尚未执行的迁移。
 9. 记录旧 release，用临时链接加 `mv -Tf` 原子切换 `/srv/knowmesh-app/current`。
-10. 先重启已启用的协作 sidecar 并等待 `/ready`，再重启 Next.js 并检查 `http://127.0.0.1:3000/`。
-11. GitHub runner 从公网检查 `https://thisme.icu/`；协作启用时还要求 WSS 路径返回 `101 Switching Protocols`。
-12. 全部成功后删除本次回滚标记；失败则把 `current` 指回旧 release，并重启两个服务。
+10. 先重启已启用的 sidecar（Hocuspocus 和/或白板）并等待各自 `/ready`，再重启 Next.js 并检查 `http://127.0.0.1:3000/`。
+11. GitHub runner 从公网检查 `https://thisme.icu/`；文档协作启用时要求 `/collaboration-ws` 返回 `101`；白板灰度启用时还要求 `/whiteboard-collaboration/socket.io/` 返回 `101`。
+12. 全部成功后删除本次回滚标记；失败则把 `current` 指回旧 release，并重启 Next.js 与已启用的 sidecar。
 
 服务器上没有 Git checkout、`git pull` 或 `npm install`。服务器只运行 GitHub 已构建和验证过的 release，这避免了服务器工作树、依赖安装和未提交文件导致版本不确定。
 
@@ -214,7 +214,9 @@ artifact 内容包括：
 | Secret | `BETTER_AUTH_SECRET` | 生产构建时校验 Better Auth 配置；应与服务器值一致 |
 | Variable | `PRODUCTION_APP_URL` | 当前为 `https://thisme.icu` |
 | Variable | `PRODUCTION_COLLABORATION_URL` | 当前为 `wss://thisme.icu/collaboration-ws` |
-| Variable | `PRODUCTION_COLLABORATION_ENABLED` | 当前为 `true`；必须和服务器开关一致 |
+| Variable | `PRODUCTION_COLLABORATION_ENABLED` | 当前为 `true`；必须和服务器 `COLLABORATION_ENABLED` 一致 |
+| Variable | `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` | 缺省按 `false`；灰度开启时为 `true`，必须和服务器 `WHITEBOARD_COLLABORATION_ENABLED` 一致 |
+| Variable | `PRODUCTION_WHITEBOARD_COLLABORATION_URL` | 灰度开启时为 `https://thisme.icu`；未设置时生产构建回退到 `PRODUCTION_APP_URL` |
 
 Secret 的值在 Actions 页面不可读回；Variable 不是秘密。不要把数据库连接串放到 GitHub：生产迁移和运行时从服务器文件读取它。
 
@@ -228,8 +230,9 @@ deploy job 的服务器参数分为三类，避免散落的硬编码：
 | `NODE_BINARY` | 同上（`PRODUCTION_NODE_BINARY`） | `/home/thisme/.nvm/versions/node/v24.19.0/bin/node` |
 | `RELEASE_ROOT` / `CURRENT_LINK` / `ENVIRONMENT_FILE` | 同上（对应 `PRODUCTION_RELEASE_ROOT` 等） | `/srv/knowmesh-app/releases` / `/srv/knowmesh-app/current` / `/etc/knowmesh.env` |
 | `SERVICE_NAME` / `COLLABORATION_SERVICE_NAME` / `COLLABORATION_HEALTH_URL` | 同上（对应 `PRODUCTION_SERVICE_NAME` 等） | `knowmesh.service` / `knowmesh-collaboration.service` / `http://127.0.0.1:1235/ready` |
+| `WHITEBOARD_COLLABORATION_SERVICE_NAME` / `WHITEBOARD_COLLABORATION_HEALTH_URL` / `WHITEBOARD_COLLABORATION_DEPLOY_ENABLED` | 同上（对应 `PRODUCTION_WHITEBOARD_COLLABORATION_*`） | `knowmesh-whiteboard-collaboration.service` / `http://127.0.0.1:1245/ready` / 缺省 `false` |
 | `EXPECTED_HOST_FINGERPRINT` | workflow 内固定 pin，不允许用 Variable 覆盖 | `SHA256:s8fwWfOG9…` |
-| 公开验证 URL 与 Origin | workflow 常量 + 既有 `PRODUCTION_APP_URL`/`PRODUCTION_COLLABORATION_URL` Variables | `https://thisme.icu/` |
+| 公开验证 URL 与 Origin | workflow 常量 + `PRODUCTION_APP_URL` / `PRODUCTION_COLLABORATION_URL` / `PRODUCTION_WHITEBOARD_COLLABORATION_URL` | `https://thisme.icu/` |
 
 Variable 缺省时使用表中的稳定默认值；更换服务器、Node.js 或服务名时优先在 GitHub production environment 配置 Variable，再同步本手册。host fingerprint 是安全控制而非环境配置：服务器重装后必须在可信通道重新核对并在 workflow 中显式修改，绝不能通过 Variable 静默替换或关闭 `StrictHostKeyChecking`。
 
@@ -269,8 +272,10 @@ COLLABORATION_ADDRESS=127.0.0.1
 COLLABORATION_PORT=1234
 COLLABORATION_HEALTH_PORT=1235
 
-# Team whiteboard collaboration. Keep disabled until the adapter is accepted.
+# Team whiteboard collaboration. Keep ENABLED off until GitHub
+# PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED is also true.
 # WHITEBOARD_COLLABORATION_ENABLED=true
+# NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED=true
 WHITEBOARD_COLLABORATION_ADDRESS=127.0.0.1
 WHITEBOARD_COLLABORATION_PORT=1244
 WHITEBOARD_COLLABORATION_HEALTH_PORT=1245
@@ -282,13 +287,14 @@ WHITEBOARD_COLLABORATION_HEALTH_PORT=1245
 - `NEXT_PUBLIC_*` 会进入浏览器 JavaScript，绝不能放秘密；它们在生产构建时必须正确。只修改服务器文件不会重写已经构建好的浏览器 bundle，需要重新部署。
 - `HOSTNAME=localhost` 和 `PORT=3000` 由生产迁移程序强制检查，防止应用意外监听公网地址或错误端口。
 - `COLLABORATION_ENABLED` 不写或不是精确的 `true` 时，应用按关闭处理。当前生产启用协作，因此 GitHub Variable 和服务器文件都必须为 `true`。
-- `COLLABORATION_ADDRESS=127.0.0.1` 让 WebSocket 和健康端口只监听本机。
+- `COLLABORATION_ADDRESS=127.0.0.1` 让 WebSocket 和健康端口只监听本机。白板端口同样只应绑定 `WHITEBOARD_COLLABORATION_ADDRESS=127.0.0.1`。
+- `activate-release.sh` 只比对 GitHub 传入的白板部署开关与服务器上的 `WHITEBOARD_COLLABORATION_ENABLED`（精确 `true` 或视为关闭）。`NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 由 CI 用 GitHub Variable 打进浏览器包；服务器文件里的同名键不会改写已构建的 JS，但灰度开启时应写成 `true`，避免运行时 Env 与构建不一致。
 - 现场其余必需变量均已配置且没有重复键；`NEXT_TELEMETRY_DISABLED` 当前缺失，它不阻止应用启动，但若希望生产禁用 Next.js telemetry，应按示例补充后重启应用。
 
 安全地检查变量名是否存在，可以使用：
 
 ```bash
-sudo grep -nE '^(HOSTNAME|PORT|NEXT_PUBLIC_APP_URL|NEXT_PUBLIC_COLLABORATION_URL|DATABASE_URL|BETTER_AUTH_SECRET|RESEND_API_KEY|RESEND_FROM_EMAIL|COLLABORATION_[A-Z_]+)=' \
+sudo grep -nE '^(HOSTNAME|PORT|NEXT_PUBLIC_APP_URL|NEXT_PUBLIC_COLLABORATION_URL|NEXT_PUBLIC_WHITEBOARD_COLLABORATION_|DATABASE_URL|BETTER_AUTH_SECRET|RESEND_API_KEY|RESEND_FROM_EMAIL|COLLABORATION_[A-Z_]+|WHITEBOARD_COLLABORATION_[A-Z_]+)=' \
   /etc/knowmesh.env \
   | sed -E 's/=.*/=<configured>/'
 ```
@@ -355,11 +361,13 @@ sudo systemctl restart knowmesh-collaboration.service
 
 ### 白板协作 Adapter
 
-`knowmesh-whiteboard-collaboration.service` 的权威模板在 `deploy/systemd/knowmesh-whiteboard-collaboration.service`。它与 Hocuspocus 独立：独立端口、独立 advisory lock、独立功能开关。`WHITEBOARD_COLLABORATION_ENABLED` 与 `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 必须分别打开服务端进程和浏览器连接；任一关闭时 Team 白板只读最近成功 scene。启用前必须把 Nginx 片段 `deploy/nginx/knowmesh-whiteboard-collaboration-location.conf` include 进 HTTPS `server {}`，并把服务器环境变量与 GitHub Variable 对齐。
+`knowmesh-whiteboard-collaboration.service` 的权威模板在 `deploy/systemd/knowmesh-whiteboard-collaboration.service`。它与 Hocuspocus 独立：独立端口、独立 advisory lock、独立功能开关。`WHITEBOARD_COLLABORATION_ENABLED` 打开 sidecar 进程；`NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED`（生产构建取自 GitHub `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED`）打开浏览器连接。任一关闭时 Team 白板只读最近成功 scene。
 
-灰度默认关闭：CI deploy 在未设置 `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 时传 `false`，不会启动白板 sidecar。开启前必须同时满足：Nginx 已 include 白板 location；`/etc/knowmesh.env` 与 GitHub Variables 中的 `WHITEBOARD_COLLABORATION_ENABLED`、`NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 均为 `true`；`NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL` 指向公网同源 WSS 路径。部署后检查 `http://127.0.0.1:1245/ready` 与 `/metrics` 的 `failedDocuments`、`persistenceFailures`、`conflicts`、`activeConnections`、`activeRooms`、`invalidatedConnections`、`readOnlyWriteRejections`、`authenticationFailures` 和 `saves`。关闭灰度时把上述开关改回 `false` 并重新部署；不得删除 `documents.kind` 或白板状态。资产阶段只能在该灰度窗口观察无异常后评估。
+CI 不会把 unit 装进 `/etc/systemd/system`，也不会改 Nginx 站点。灰度缺省关闭：未设置 `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 时 deploy 传 `false`，不 start 白板 sidecar。开启步骤见下文「首次启用 Team 白板协作」。关闭灰度时把 GitHub 该 Variable 和服务器 `WHITEBOARD_COLLABORATION_ENABLED` / `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 一起改回非 `true` 并重新部署；不得删除 `documents.kind` 或白板状态。资产阶段只能在灰度观察无异常后评估。
 
-## Nginx 如何把域名转给两个服务
+修改 unit 后同样需要 `daemon-reload`；普通代码发布只切换 `current` 中的 `whiteboard-collaboration-server.cjs`。
+
+## Nginx 如何把域名转给应用与协作服务
 
 当前完整站点位于服务器 `/etc/nginx/sites-available/knowmesh`，但不在仓库中。已确认的结构是：
 
@@ -407,6 +415,7 @@ server {
 
     client_max_body_size 10m;
     include /etc/nginx/snippets/knowmesh-collaboration-location.conf;
+    include /etc/nginx/snippets/knowmesh-whiteboard-collaboration-location.conf;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -435,6 +444,9 @@ server {
 
 - `deploy/nginx/knowmesh-websocket-map.conf`
 - `deploy/nginx/knowmesh-collaboration-location.conf`
+- `deploy/nginx/knowmesh-whiteboard-collaboration-location.conf`
+
+白板 location 使用 `$knowmesh_connection_upgrade`，因此 `http` 上下文必须加载 `knowmesh-websocket-map.conf`。不要删除主站 `location /` 仍在使用的旧 `$connection_upgrade` map。
 
 每次修改 Nginx 后必须先测试，成功后才能 reload：
 
@@ -444,6 +456,205 @@ sudo systemctl reload nginx
 ```
 
 `reload` 会平滑加载新配置；`restart` 会停止再启动 Nginx，通常没有必要。
+
+## 首次启用 Team 白板协作
+
+CI 不会安装 Nginx 片段、systemd unit 或改 `/etc/knowmesh.env`。下面全部在生产机 SSH 会话执行，或在本机对 GitHub Variable 操作。不要把 Nginx `include` 行当成 shell 命令输入。不要 `cat` `/etc/knowmesh.env`。
+
+GitHub 与服务器的白板开关必须始终同为开启或同为关闭。只改一边时，`activate-release.sh` 会以 `GitHub and server whiteboard collaboration flags do not match` 失败。未把 `whiteboard-collaboration-server.cjs` 打进 `current` 之前，不要 `systemctl start` 白板 unit，也不要把 GitHub `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 设为 `true`。
+
+模板从**即将发布的 Git 引用**拉取，把 `REF` 换成该分支或完整 SHA：
+
+```bash
+REF=<即将部署的分支或 SHA>
+```
+
+### 1. 备份并安装 Nginx 片段
+
+```bash
+sudo cp -a /etc/nginx/sites-available/knowmesh /etc/nginx/sites-available/knowmesh.bak.$(date +%Y%m%d-%H%M%S)
+
+sudo curl -fsSL \
+  -o /etc/nginx/snippets/knowmesh-whiteboard-collaboration-location.conf \
+  "https://raw.githubusercontent.com/NevermeChu/KnowMesh/${REF}/deploy/nginx/knowmesh-whiteboard-collaboration-location.conf"
+
+sudo curl -fsSL \
+  -o /etc/nginx/conf.d/knowmesh-websocket-map.conf \
+  "https://raw.githubusercontent.com/NevermeChu/KnowMesh/${REF}/deploy/nginx/knowmesh-websocket-map.conf"
+```
+
+把白板 include 写进 HTTPS `server_name thisme.icu`、且位于 `location /` 之前（已存在则跳过）：
+
+```bash
+sudo python3 - <<'PY'
+from pathlib import Path
+
+path = Path("/etc/nginx/sites-available/knowmesh")
+text = path.read_text()
+collaboration = "include /etc/nginx/snippets/knowmesh-collaboration-location.conf;"
+whiteboard = "include /etc/nginx/snippets/knowmesh-whiteboard-collaboration-location.conf;"
+
+if whiteboard in text:
+    print("ok: whiteboard include already present")
+    raise SystemExit(0)
+
+if collaboration not in text:
+    raise SystemExit("error: collaboration include not found in site file")
+
+path.write_text(text.replace(collaboration, collaboration + "\n    " + whiteboard, 1))
+print("ok: inserted whiteboard include")
+PY
+
+sudo grep -n 'include /etc/nginx/snippets/knowmesh' /etc/nginx/sites-available/knowmesh
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+`nginx -t` 失败时用备份恢复站点文件，不要继续。sidecar 尚未运行时，该 location 可能 502，不影响现有页面和文档协作。
+
+### 2. 安装 systemd unit，先不要 enable
+
+```bash
+sudo curl -fsSL \
+  -o /etc/systemd/system/knowmesh-whiteboard-collaboration.service \
+  "https://raw.githubusercontent.com/NevermeChu/KnowMesh/${REF}/deploy/systemd/knowmesh-whiteboard-collaboration.service"
+
+sudo systemctl daemon-reload
+sudo systemctl is-enabled knowmesh-whiteboard-collaboration.service || true
+```
+
+`ExecStartPre` 要求 `/srv/knowmesh-app/current/whiteboard-collaboration-server.cjs` 存在。灰度关闭时不要 `enable`：unit 含 `Restart=on-failure`，而进程在 `WHITEBOARD_COLLABORATION_ENABLED` 不是精确 `true` 时会立即退出，开机或误 start 会进入重启循环。开启灰度时由 `activate-release.sh` `systemctl restart` 拉起；若希望开机自动拉起，在步骤 5 开关已为 `true` 后再 `systemctl enable`。
+
+### 3. 写入非开关环境变量，ENABLED 先保持关闭
+
+```bash
+sudo cp -a /etc/knowmesh.env /etc/knowmesh.env.bak.$(date +%Y%m%d-%H%M%S)
+
+sudo python3 - <<'PY'
+from pathlib import Path
+
+path = Path("/etc/knowmesh.env")
+text = path.read_text()
+if not text.endswith("\n"):
+    text += "\n"
+
+wanted = {
+    "NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL": "https://thisme.icu",
+    "WHITEBOARD_COLLABORATION_ADDRESS": "127.0.0.1",
+    "WHITEBOARD_COLLABORATION_PORT": "1244",
+    "WHITEBOARD_COLLABORATION_HEALTH_PORT": "1245",
+}
+
+def has_key(name: str) -> bool:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if stripped.split("=", 1)[0].strip() == name:
+            return True
+    return False
+
+added = []
+for name, value in wanted.items():
+    if has_key(name):
+        print(f"keep: {name}")
+        continue
+    text += f"{name}={value}\n"
+    added.append(name)
+    print(f"add: {name}")
+
+if added:
+    path.write_text(text)
+    print("ok: wrote missing keys")
+else:
+    print("ok: all keys already present")
+
+for name in (
+    "WHITEBOARD_COLLABORATION_ENABLED",
+    "NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED",
+):
+    if has_key(name):
+        print(f"warn: {name} already set; must match GitHub PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED")
+    else:
+        print(f"ok: {name} unset (treated as false)")
+PY
+```
+
+此时 GitHub `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 必须仍缺省或为非 `true`。
+
+### 4. 先部署制品（灰度仍关）
+
+用 **Actions → CI → Run workflow**（`workflow_dispatch`）选择含白板制品的分支。不要用功能分支的普通 push，也不要 Re-run 某次 push run。
+
+部署成功后：
+
+```bash
+test -f /srv/knowmesh-app/current/whiteboard-collaboration-server.cjs && echo ok
+```
+
+### 5. 同时打开服务器与 GitHub 开关，再部署一次
+
+服务器：
+
+```bash
+sudo python3 - <<'PY'
+from pathlib import Path
+
+path = Path("/etc/knowmesh.env")
+lines = path.read_text().splitlines(keepends=True)
+if lines and not lines[-1].endswith("\n"):
+    lines[-1] += "\n"
+
+wanted = {
+    "WHITEBOARD_COLLABORATION_ENABLED": "true",
+    "NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED": "true",
+}
+
+def key_of(line: str):
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
+        return None
+    return stripped.split("=", 1)[0].strip()
+
+seen = set()
+out = []
+for line in lines:
+    name = key_of(line)
+    if name in wanted:
+        out.append(f"{name}={wanted[name]}\n")
+        seen.add(name)
+        continue
+    out.append(line)
+
+for name, value in wanted.items():
+    if name not in seen:
+        out.append(f"{name}={value}\n")
+
+path.write_text("".join(out))
+print("ok: wrote ENABLED flags")
+PY
+
+sudo grep -E '^(WHITEBOARD_COLLABORATION_ENABLED|NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED)=' /etc/knowmesh.env
+```
+
+GitHub **Settings → Environments → production**（或本机 `gh`）：
+
+```bash
+gh variable set PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED --body true --env production --repo NevermeChu/KnowMesh
+gh variable set PRODUCTION_WHITEBOARD_COLLABORATION_URL --body "https://thisme.icu" --env production --repo NevermeChu/KnowMesh
+```
+
+两步都完成后再 **Run workflow** 一次。这次会 start sidecar，并检查本机 `http://127.0.0.1:1245/ready` 与公网白板 WSS。
+
+### 6. 开启后验收
+
+```bash
+sudo systemctl is-active knowmesh-whiteboard-collaboration.service
+curl -fsS http://127.0.0.1:1245/ready
+curl -fsS http://127.0.0.1:1245/metrics
+```
+
+`/ready` 的 `status` 必须是 `ready`。`/metrics` 中关注 `failedDocuments`、`persistenceFailures`、`conflicts`、`activeConnections`、`activeRooms`、`invalidatedConnections`、`readOnlyWriteRejections`、`authenticationFailures` 和 `saves`；指标非零不等于故障，应结合语义和日志判断。浏览器打开 Team 白板时，画布右上角不应出现「团队白板（协作已关闭）」；客户端连接 `https://thisme.icu` 同源下的 `/whiteboard-collaboration/socket.io`。公网 WSS 冒烟使用 `PRODUCTION_APP_URL` 拼该路径，不读取 `PRODUCTION_WHITEBOARD_COLLABORATION_URL`。
 
 ## PostgreSQL 与迁移
 
@@ -469,8 +680,8 @@ GitHub E2E 使用的 PostgreSQL 只证明迁移和关键行为能在真实 Postg
 自动回滚会恢复：
 
 - `/srv/knowmesh-app/current` 指向的旧 release。
-- Next.js 与 Hocuspocus 的代码版本。
-- 两个服务的运行进程。
+- Next.js 与当时已启用的 sidecar（Hocuspocus、白板 Adapter）的代码版本。
+- 这些服务的运行进程。
 
 自动回滚不会恢复：
 
@@ -490,29 +701,29 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 1. 创建 Ubuntu x86-64 主机，配置只允许必要端口的防火墙。
 2. 为域名配置 DNS，使 `thisme.icu` 和 `www.thisme.icu` 指向该主机。
 3. 安装 Nginx，申请并验证 Let's Encrypt 证书和自动续期。
-4. 安装 Node.js 24，并让 workflow 与两个 systemd unit 使用同一稳定路径。
+4. 安装 Node.js 24，并让 workflow 与各 systemd unit 使用同一稳定路径。
 5. 创建生产 PostgreSQL、数据库用户、连接限制、备份和恢复流程。
 6. 创建部署用户和专用 SSH key，把私钥放进 GitHub Secret，把公钥放进服务器 `authorized_keys`。
-7. 配置最小 sudoers 权限，使 deploy job 能管理 release 目录并重启两个指定服务。
+7. 配置最小 sudoers 权限，使 deploy job 能管理 release 目录并重启指定的应用与 sidecar 服务。
 8. 创建 `/etc/knowmesh.env`，设置严格权限，不把它放进 release。
-9. 安装 `knowmesh.service`、协作 systemd unit 和完整 Nginx 站点。
+9. 安装 `knowmesh.service`、文档协作 systemd unit 和完整 Nginx 站点。白板 unit 与 Nginx location 按「首次启用 Team 白板协作」在灰度时再装。
 10. 人工建立第一个 release 和 `current`，确认本地服务与公网 HTTPS 正常。
 11. 在 GitHub production environment 配置 Secrets/Variables，再手动运行 `CI` 接管后续发布。
 
-当前 VM 来自 Azure cloud-init，但没有发现 KnowMesh 初始化脚本、Ansible、Terraform、Docker Compose 或当前可用的 bootstrap。服务器上的旧 `/srv/knowmesh` checkout 早于当前生产 workflow，不能作为权威来源。当前仓库只版本化了协作 systemd unit 和两个协作 Nginx 片段，没有覆盖上述整个 bootstrap。迁移到新服务器前，必须先从当前服务器导出并审查未版本化配置，不能只 clone 仓库就开始部署。
+当前 VM 来自 Azure cloud-init，但没有发现 KnowMesh 初始化脚本、Ansible、Terraform、Docker Compose 或当前可用的 bootstrap。服务器上的旧 `/srv/knowmesh` checkout 早于当前生产 workflow，不能作为权威来源。当前仓库版本化了文档协作与白板协作的 systemd unit，以及 WebSocket map 与两个协作 Nginx location，没有覆盖上述整个 bootstrap。迁移到新服务器前，必须先从当前服务器导出并审查未版本化配置，不能只 clone 仓库就开始部署。
 
 ## 日常发布：你实际需要做什么
 
 正常情况下，维护者不登录服务器发布代码：
 
 1. 在本地完成修改和必要验证。
-2. 提交并 push 到会部署的分支。
-3. 打开 GitHub 仓库的 **Actions → CI**。
+2. 提交并 push。`main` 的 push 会部署；其他分支的 push 只跑检查。
+3. 打开 GitHub 仓库的 **Actions → CI**（不要带着 `branch:` 筛选找 Run workflow）。
 4. 先看 `static`、`build`、`unit`、`e2e` 和 `packaging`；任何一个失败都不会开始部署。
-5. 再看 `Deploy production` 中的构建、SSH 上传、迁移、服务切换和公网验证。
-6. 所有 job 绿色后访问生产站点，完成与改动风险相称的人工业务验收。
+5. 再看 `Deploy production`。功能分支 push 上该 job 为 skipped 是预期行为。
+6. 所有应运行的 job 绿色后访问生产站点，完成与改动风险相称的人工业务验收。
 
-需要重新验证当前分支但没有新 commit 时，可以在 **Actions → CI → Run workflow** 选择分支并运行。注意：这不是“只跑测试”，它在所有检查通过后会真实部署所选 SHA。
+需要把当前非 `main` 分支发到生产、或没有新 commit 时，在 **Actions → CI → Run workflow** 选择分支。这不是“只跑测试”，检查通过后会真实部署所选 SHA。在 push run 上 **Re-run** 不会触发 Deploy。
 
 如果只想生成可下载的生产 artifact，使用 **Actions → Release → Run workflow**。Release workflow 不连接服务器、不迁移数据库、不切换生产版本，artifact 保留 14 天。
 
@@ -531,24 +742,28 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 readlink -f /srv/knowmesh-app/current
 sudo systemctl status knowmesh.service --no-pager -l
 sudo systemctl status knowmesh-collaboration.service --no-pager -l
+sudo systemctl status knowmesh-whiteboard-collaboration.service --no-pager -l
 curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null \
   && echo "Next.js 本地健康检查通过"
 curl --fail --silent --show-error http://127.0.0.1:1235/ready
+curl --fail --silent --show-error http://127.0.0.1:1245/ready
 curl --fail --silent --show-error https://thisme.icu/ >/dev/null \
   && echo "公网 HTTPS 检查通过"
 ```
 
-`readlink` 输出应当以预期 Git SHA 结尾。`/ready` 的 JSON 中 `status` 必须是 `ready`；指标非零不等于故障，应结合字段语义和日志判断。
+`readlink` 输出应当以预期 Git SHA 结尾。文档协作 `/ready` 的 JSON 中 `status` 必须是 `ready`。白板灰度未开启时 `1245/ready` 失败是预期；开启后必须 `ready`。指标非零不等于故障，应结合字段语义和日志判断。
 
 ### 业务侧
 
-自动 WSS 冒烟只证明 TLS、Nginx 和 Hocuspocus 能完成 Upgrade，不证明登录 Cookie、文档权限和 Yjs 业务都正确。协作相关发布还应使用两个真实登录会话确认：
+自动 WSS 冒烟只证明 TLS、Nginx 和对应 sidecar 能完成 Upgrade，不证明登录 Cookie、文档权限和业务同步都正确。协作相关发布还应使用两个真实登录会话确认：
 
 1. 同一 Team 文档可以实时同步。
 2. viewer 不能编辑。
 3. 降权、移除成员或撤销 Session 后旧页面失去写入能力。
 4. 网络恢复后能够重连。
 5. 服务重启并重新打开文档后，正文仍是最近一次成功持久化的内容。
+
+白板灰度开启后，对 Team 白板重复上述权限与重连检查；确认画布右上角不是「团队白板（协作已关闭）」。
 
 ## 常用运维命令
 
@@ -557,14 +772,17 @@ curl --fail --silent --show-error https://thisme.icu/ >/dev/null \
 ```bash
 sudo systemctl status knowmesh.service --no-pager -l
 sudo systemctl status knowmesh-collaboration.service --no-pager -l
+sudo systemctl status knowmesh-whiteboard-collaboration.service --no-pager -l
 sudo journalctl -u knowmesh.service -n 100 --no-pager
 sudo journalctl -u knowmesh-collaboration.service -n 100 --no-pager
+sudo journalctl -u knowmesh-whiteboard-collaboration.service -n 100 --no-pager
 ```
 
-重启应用：
+重启应用（白板灰度开启时一并重启白板 sidecar）：
 
 ```bash
 sudo systemctl restart knowmesh-collaboration.service
+sudo systemctl restart knowmesh-whiteboard-collaboration.service
 sudo systemctl restart knowmesh.service
 ```
 
@@ -573,7 +791,8 @@ sudo systemctl restart knowmesh.service
 ```bash
 sudo systemctl cat knowmesh.service --no-pager
 sudo systemctl cat knowmesh-collaboration.service --no-pager
-sudo nginx -T | grep -nE 'server_name|collaboration-ws'
+sudo systemctl cat knowmesh-whiteboard-collaboration.service --no-pager
+sudo nginx -T | grep -nE 'server_name|collaboration-ws|whiteboard-collaboration'
 ```
 
 `systemctl cat` 不会展开 `EnvironmentFile` 内容。不要使用会完整打印 `/etc/knowmesh.env` 的命令收集诊断信息。
@@ -590,7 +809,9 @@ GitHub 看到的服务器身份和 workflow 固定值不一致。可能是服务
 
 ### GitHub 与服务器协作开关不一致
 
-检查 GitHub Variable `PRODUCTION_COLLABORATION_ENABLED` 和 `/etc/knowmesh.env` 的 `COLLABORATION_ENABLED`。两者必须都是精确的 `true` 或都关闭；当前生产预期都是 `true`。
+检查 GitHub Variable `PRODUCTION_COLLABORATION_ENABLED` 和 `/etc/knowmesh.env` 的 `COLLABORATION_ENABLED`。两者必须都是精确的 `true` 或都关闭；当前生产文档协作预期都是 `true`。
+
+白板开关同理：`PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 与服务器 `WHITEBOARD_COLLABORATION_ENABLED`。灰度关闭时两边都不得为精确 `true`。
 
 ### 数据库迁移失败
 
@@ -603,6 +824,10 @@ workflow 会把 `current` 恢复为旧 release。检查 `journalctl -u knowmesh.
 ### Hocuspocus readiness 失败
 
 workflow 不会继续启动新 Next.js，并会回滚。检查协作服务日志、1234/1235 端口、`DATABASE_URL`、Better Auth secret，以及 `/ready` 是否报告未恢复的存储失败。
+
+### 白板 Adapter readiness 失败
+
+灰度开启时，workflow 不会继续启动新 Next.js，并会回滚。检查白板服务日志、1244/1245 端口、Nginx include、`WHITEBOARD_COLLABORATION_ENABLED`，以及 `/ready` 是否报告未恢复的持久化失败。
 
 ### 本地正常但公网失败
 
@@ -628,23 +853,25 @@ workflow 不会继续启动新 Next.js，并会回滚。检查协作服务日志
 
 | 项目 | 已确认状态 | 后续动作 |
 | --- | --- | --- |
-| 应用端口 | 3000、1234、1235 和 5432 仅监听 loopback | 保持并持续检查 |
+| 应用端口 | 3000、1234、1235、1244、1245 和 5432 仅监听 loopback | 保持并持续检查 |
 | 主机防火墙 | UFW inactive，iptables 默认 ACCEPT | 核对 Azure NSG 后建立最小入站规则 |
 | SSH | 密码和交互式认证关闭；root 公钥登录仍允许 | 确认救援路径后禁用直接 root 登录 |
 | 部署 sudoers | `thisme` 可无密码执行任意 root 命令 | 改成经验证的最小部署命令或受控 root helper |
 | Next.js systemd | 以非 root 用户运行，但沙箱基本未加固 | 版本化 unit 并逐项测试加固参数 |
 | Hocuspocus systemd | 非 root，启用基础 systemd 沙箱 | 保持仓库模板与现场一致 |
+| 白板 Adapter systemd | 非 root，仓库模板含基础沙箱；灰度关闭时保持 disabled/inactive | 模板与现场一致；ENABLED 非 true 时勿 enable 或 start |
 | TLS | Let's Encrypt ECDSA 证书，Certbot timer enabled/active | 增加续期失败和到期告警 |
 | 数据库备份 | 未发现自动备份、异地副本或恢复演练 | 实际开放前补齐 |
 
 ## 修改部署配置时的同步规则
 
-- 更换域名：同时更新 DNS、证书、Nginx、GitHub 两个 URL Variable 和服务器的两个 `NEXT_PUBLIC_*`，然后重新部署。
-- 更换 Node.js：同时更新 Actions Node 版本、deploy job 的 `NODE_BINARY`、两个 systemd unit 的 `ExecStart`，再验证原生依赖兼容性。
+- 更换域名：同时更新 DNS、证书、Nginx、GitHub URL Variable 和服务器的 `NEXT_PUBLIC_*`（含白板 URL），然后重新部署。
+- 更换 Node.js：同时更新 Actions Node 版本、deploy job 的 `NODE_BINARY`、各 systemd unit 的 `ExecStart`，再验证原生依赖兼容性。
 - 更换服务器：更新 deploy host、可信 host fingerprint、SSH key、公钥和 GitHub Secret；先完成首次 bootstrap。
 - 更换端口：同时更新服务器环境、systemd/Nginx、workflow 健康检查和安全组；当前生产迁移明确要求 Next.js 仍为 3000。
 - 更换 Better Auth secret：GitHub Secret 与服务器值必须协调切换，现有 Session 可能全部失效。
 - 修改协作 unit 或 Nginx 模板：artifact 会包含新模板，但 CI 不会自动安装到 `/etc`；需要服务器管理员比较并安装。
+- 打开或关闭白板灰度：必须同时改 GitHub `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 与服务器 `WHITEBOARD_COLLABORATION_ENABLED`，并重新部署以重写浏览器包；步骤见「首次启用 Team 白板协作」。
 - 修改 Schema：提交新的迁移并确保向后兼容；不能改写已经用于生产的旧迁移。
 
 ## 相关实现
@@ -659,9 +886,12 @@ workflow 不会继续启动新 Next.js，并会回滚。检查协作服务日志
 - [激活与回滚冒烟测试](../../deploy/scripts/activate-release.smoke.sh)
 - [生产迁移入口](../../scripts/migrate-production.ts)
 - [协作服务入口](../../scripts/collaboration-server.ts)
+- [白板协作服务入口](../../scripts/whiteboard-collaboration-server.ts)
 - [协作 systemd unit](../../deploy/systemd/knowmesh-collaboration.service)
+- [白板协作 systemd unit](../../deploy/systemd/knowmesh-whiteboard-collaboration.service)
 - [Nginx WebSocket map](../../deploy/nginx/knowmesh-websocket-map.conf)
-- [Nginx WebSocket location](../../deploy/nginx/knowmesh-collaboration-location.conf)
+- [Nginx 文档协作 location](../../deploy/nginx/knowmesh-collaboration-location.conf)
+- [Nginx 白板协作 location](../../deploy/nginx/knowmesh-whiteboard-collaboration-location.conf)
 - [环境变量校验](../../src/libs/Env.ts)
 - [Next.js standalone 配置](../../next.config.ts)
 - [数据库 Schema 与迁移](../database/schema-and-migrations.md)
