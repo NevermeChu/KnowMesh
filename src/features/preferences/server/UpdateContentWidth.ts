@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import { CONTENT_WIDTH_COOKIE } from '@/features/preferences/Preferences';
@@ -36,6 +35,4 @@ export async function updateContentWidth(input: UpdateContentWidthInput) {
     path: '/',
     sameSite: 'lax',
   });
-
-  revalidatePath('/(workspace)', 'layout');
 }

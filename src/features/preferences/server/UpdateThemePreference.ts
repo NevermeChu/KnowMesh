@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { getCurrentUser } from '@/features/auth/server/CurrentUser';
 import { THEME_COOKIE } from '@/features/preferences/Preferences';
@@ -37,6 +36,4 @@ export async function updateThemePreference(input: UpdateUserThemeInput) {
     path: '/',
     sameSite: 'lax',
   });
-
-  revalidatePath('/', 'layout');
 }

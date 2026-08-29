@@ -109,6 +109,8 @@
 
 同步修改断言 `revalidatePath('/(workspace)')` 的单元测试。跑文档树与标题实时 integ。
 
+**C1. 偏好失效面：已完成。** 主题与内容宽度 Server Action 不再失效根 layout 或工作区 layout；Chromium 回归验证两项偏好即时生效、活动编辑器 DOM 保持、cookie 持久化及刷新恢复。
+
 ### 批次 D — 中期（有重复写入或有数据再做）
 
 - 导航文档列表从 `AppShell` 下移到 `ContentToolbar` 的直接父级或侧边栏内部，避免分页 merge 重绘 CommandPalette；用 Profiler 确认后再动。

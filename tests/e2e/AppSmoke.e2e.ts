@@ -319,6 +319,51 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
+  test('persists visual preferences without replacing the active editor', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto(`/personal?project=${projectId}&document=${documentId}`);
+    const editor = page.locator('.ProseMirror[contenteditable="true"]');
+    await expect(editor).toBeVisible();
+    await editor.evaluate((element) => {
+      element.dataset.preferenceMarker = 'active';
+    });
+
+    await page.getByRole('button', { name: '内容宽度 80%' }).click();
+    await page.getByRole('button', { exact: true, name: '60%' }).click();
+    await expect(page.getByRole('button', { name: '内容宽度 60%' })).toBeVisible();
+    await expect(editor).toHaveAttribute('data-preference-marker', 'active');
+    await expect
+      .poll(async () => {
+        const cookies = await page.context().cookies();
+        const cookie = cookies.find((candidate) => candidate.name === 'knowmesh-content-width');
+        return cookie?.value;
+      })
+      .toBe('60');
+
+    await page.getByRole('button', { name: '切换主题' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(editor).toHaveAttribute('data-preference-marker', 'active');
+    await expect
+      .poll(async () => {
+        const cookies = await page.context().cookies();
+        const cookie = cookies.find((candidate) => candidate.name === 'knowmesh-theme');
+        return cookie?.value;
+      })
+      .toBe('dark');
+
+    await page.reload();
+    await expect(page.getByRole('button', { name: '内容宽度 60%' })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await close();
+  });
+
   test('moves a document through sidebar drag targets', async ({ baseURL, browser }) => {
     if (!baseURL) {
       throw new Error('Playwright base URL is unavailable');
