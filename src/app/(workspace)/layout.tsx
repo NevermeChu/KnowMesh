@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import '@fontsource-variable/jetbrains-mono/wght.css';
+import '@fontsource-variable/noto-sans-sc/wght.css';
 import { cookies } from 'next/headers';
 import { AppShell } from '@/components/layout/AppShell';
 import { requireUser } from '@/features/auth/server/CurrentUser';

@@ -78,11 +78,13 @@
 
 验证：Chromium 回归覆盖拖动期间 CSS 变量预览、`pointerup` 提交、键盘步进与双击复位；类型检查通过。
 
-**B2. 字体按路由加载**
+**B2. 字体按路由加载：已完成。**
 
 - 根 layout 不再同步三套 Fontsource。落地页 / 认证以拉丁为主；工作区 layout 再加载 Noto Sans SC 与 JetBrains Mono。
 - 落地页 `font-family` 字符串与实际加载一致。
 - 验证：未登录 `/` 的 Network 不再拉 CJK 大包；工作区中文与代码块正常。
+
+生产构建验证：未登录 `/` 只引用公共字体 CSS，不引用工作区字体 CSS；工作区路由同时引用两者。Noto Sans SC 与 JetBrains Mono 的 107 个字体文件（约 4.6 MB）已退出公开路由资源图。
 
 **B3. 编辑器二次 `dynamic`**
 

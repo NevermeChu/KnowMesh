@@ -27,7 +27,7 @@ export default async function HomePage() {
         backgroundColor: 'var(--canvas)',
         color: 'var(--ink)',
         fontFamily:
-          "'Plus Jakarta Sans Variable', 'Noto Sans SC Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          "'Plus Jakarta Sans Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
       <LandingHeader currentUserId={currentUser?.id ?? null} />

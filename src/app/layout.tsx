@@ -1,6 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import '@fontsource-variable/jetbrains-mono/wght.css';
-import '@fontsource-variable/noto-sans-sc/wght.css';
 import '@fontsource-variable/plus-jakarta-sans/wght.css';
 import '@/styles/global.css';
 import { cookies } from 'next/headers';

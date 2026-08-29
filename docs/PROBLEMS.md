@@ -919,3 +919,17 @@ package script 把迁移当成生产构建的固定前置步骤，没有区分�
 ### 解决方法
 
 拖动期间只在应用外壳 DOM 节点上更新受上下限约束的 `--app-sidebar-width`；`pointerup` 才把最终值提交到 React state。`pointercancel` 恢复已提交值，键盘调整和双击复位继续直接提交，并用浏览器回归覆盖拖动预览、释放提交、键盘步进与双击复位。
+
+## 78. 公开页面被迫加载工作区中日韩与等宽字体资源
+
+### 问题
+
+未登录用户访问落地页或认证页时也会获得 Noto Sans SC 与 JetBrains Mono 的字体样式入口。生产构建中这组工作区字体包含 107 个文件、约 4.6 MB 的可请求资源，公开页面不使用代码编辑与工作区中文排版，却仍进入对应资源图。
+
+### 根因
+
+根 layout 同时导入 Plus Jakarta Sans、Noto Sans SC 和 JetBrains Mono，Next.js 因而把三套字体都视为所有路由的共同依赖。落地页内联字体栈还声明 Noto Sans SC，使公开页面的实际字体意图与加载边界无法分离。
+
+### 解决方法
+
+根 layout 只保留公开页面使用的 Plus Jakarta Sans，把 Noto Sans SC 与 JetBrains Mono 的导入下沉到认证工作区 layout，并让落地页字体栈只声明实际加载的拉丁字体及系统回退。通过生产构建的路由客户端清单和未登录 `/` 响应验证：公开页面只引用公共 CSS，工作区字体 CSS 仅出现在工作区路由。
