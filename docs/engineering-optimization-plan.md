@@ -86,11 +86,15 @@
 
 生产构建验证：未登录 `/` 只引用公共字体 CSS，不引用工作区字体 CSS；工作区路由同时引用两者。Noto Sans SC 与 JetBrains Mono 的 107 个字体文件（约 4.6 MB）已退出公开路由资源图。
 
-**B3. 编辑器二次 `dynamic`**
+**B3. 编辑器二次 `dynamic`：已完成。**
 
 - `DocumentEditorDispatcher` 对单人 Tiptap、协作 Tiptap、白板分别 `import()`。
 - `build:next` 确认 Personal 文档 chunk 不含 Hocuspocus 客户端。
 - 回归 Personal 保存、Team 协同、白板、Strict Mode 进退文档。
+
+生产构建验证：分发层约 9.9 KB，Personal 编辑器约 12.5 KB 且不含 Hocuspocus/Excalidraw，协作实现独立为约 174 KB chunk。Chromium 回归覆盖 Personal 自动保存与离开时刷新、Team 富文本双会话同步和 Team 白板双会话同步。
+
+批次 B 本地验证：lint、`check:types`、`build:next` 通过；上述 5 条 Chromium 回归全部通过。
 
 ### 批次 C — 失效面（需改测试预期）
 
@@ -126,8 +130,8 @@
 ```text
 已完成       P0 Toast + 白板 effect
 已完成       批次 A（CI、tsc、build/迁移、gitignore、授权/会话测试）
-下一步       批次 B（拖宽、字体、编辑器 chunk）
-第 3–5 天   批次 C（revalidatePath，分 3a 偏好 / 3b 文档树 / 3c 成员）
+已完成       批次 B（拖宽、字体、编辑器 chunk）
+下一步       批次 C（revalidatePath，分 3a 偏好 / 3b 文档树 / 3c 成员）
 其后        批次 D
 ```
 

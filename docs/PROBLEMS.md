@@ -933,3 +933,17 @@ package script 把迁移当成生产构建的固定前置步骤，没有区分�
 ### 解决方法
 
 根 layout 只保留公开页面使用的 Plus Jakarta Sans，把 Noto Sans SC 与 JetBrains Mono 的导入下沉到认证工作区 layout，并让落地页字体栈只声明实际加载的拉丁字体及系统回退。通过生产构建的路由客户端清单和未登录 `/` 响应验证：公开页面只引用公共 CSS，工作区字体 CSS 仅出现在工作区路由。
+
+## 79. 文档编辑器分发层把协作客户端装入单人文档 chunk
+
+### 问题
+
+打开 Personal 富文本文档时，浏览器会加载包含 Hocuspocus、Yjs 协作连接与恢复逻辑的编辑器分发 chunk，即使该文档只使用 JSON 保存。拆分前该 chunk 约 219 KB，单人编辑路径承担了无关的协作解析与下载成本。
+
+### 根因
+
+`DocumentEditorDispatcher` 虽然已经动态加载白板，但静态导入了单人 Tiptap 与协作 Tiptap 两个实现。外层 `DocumentWorkspace` 的一次动态导入只能切开“未选择文档”和“选择文档”，无法继续按运行时编辑模式形成独立 chunk。
+
+### 解决方法
+
+在分发层分别动态导入单人 Tiptap、协作 Tiptap 与白板，并为两种富文本编辑器复用既有骨架屏。生产构建确认分发层约 9.9 KB，Personal 编辑器约 12.5 KB 且不含 Hocuspocus 或 Excalidraw，协作实现单独成约 174 KB chunk；浏览器回归覆盖 Personal 保存与离开时刷新、Team 富文本协作以及 Team 白板同步。

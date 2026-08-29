@@ -2,8 +2,27 @@
 
 import dynamic from 'next/dynamic';
 import type { Document, DocumentEditorMode } from '../Document';
-import { CollaborativeDocumentEditor } from './CollaborativeDocumentEditor';
-import { DocumentEditor } from './DocumentEditor';
+import { DocumentEditorSkeleton } from './DocumentEditorSkeleton';
+
+const DynamicCollaborativeDocumentEditor = dynamic(
+  async () => {
+    const mod = await import('./CollaborativeDocumentEditor');
+    return { default: mod.CollaborativeDocumentEditor };
+  },
+  {
+    loading: () => <DocumentEditorSkeleton />,
+  },
+);
+
+const DynamicDocumentEditor = dynamic(
+  async () => {
+    const mod = await import('./DocumentEditor');
+    return { default: mod.DocumentEditor };
+  },
+  {
+    loading: () => <DocumentEditorSkeleton />,
+  },
+);
 
 const DynamicWhiteboardEditor = dynamic(
   async () => {
@@ -40,7 +59,7 @@ export function DocumentEditorDispatcher(props: {
 
   if (props.editorMode === 'collaborative') {
     return (
-      <CollaborativeDocumentEditor
+      <DynamicCollaborativeDocumentEditor
         canEdit={props.canEdit}
         currentUserId={props.currentUserId}
         document={props.document}
@@ -49,7 +68,7 @@ export function DocumentEditorDispatcher(props: {
   }
 
   return (
-    <DocumentEditor
+    <DynamicDocumentEditor
       canEditContent={props.editorMode === 'single-user' && props.canEdit}
       canEditTitle={props.canEdit}
       document={props.document}
