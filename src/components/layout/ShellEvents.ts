@@ -33,11 +33,30 @@ export function toggleZenMode() {
   }
 }
 
+let pendingCommandPaletteOpen = false;
+
 /** Dispatches a custom event to open the global command palette from any trigger. */
 export function openCommandPalette() {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
+  if (typeof window === 'undefined') {
+    return;
   }
+
+  pendingCommandPaletteOpen = true;
+  window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
+}
+
+/**
+ * Consumes a palette-open request that fired before the palette listener mounted.
+ *
+ * @returns Whether a pending open should be applied on mount.
+ */
+export function takePendingCommandPaletteOpen() {
+  if (!pendingCommandPaletteOpen) {
+    return false;
+  }
+
+  pendingCommandPaletteOpen = false;
+  return true;
 }
 
 /** Dispatches a custom event to open the keyboard shortcuts help dialog. */

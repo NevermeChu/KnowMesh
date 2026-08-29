@@ -51,10 +51,11 @@ const abortNextPostRequest = (abortsLeft: number) => {
  */
 async function openCommandPalette(page: Page) {
   const paletteDialog = page.getByRole('dialog', { exact: true, name: '快捷指令面板' });
-  await page
+  const searchLink = page
     .getByRole('navigation', { exact: true, name: '主要导航' })
-    .getByRole('link', { name: '搜索' })
-    .click();
+    .getByRole('link', { name: /搜索/u });
+  await expect(searchLink).toBeVisible();
+  await searchLink.click();
   await expect(paletteDialog).toBeVisible();
   return paletteDialog;
 }

@@ -23,6 +23,7 @@ import { createPortal } from 'react-dom';
 import {
   OPEN_COMMAND_PALETTE_EVENT,
   openShortcutsHelp,
+  takePendingCommandPaletteOpen,
   toggleZenMode,
 } from '@/components/layout/ShellEvents';
 import { Kbd } from '@/components/ui/Kbd';
@@ -448,11 +449,16 @@ export function CommandPalette(props?: { currentUserId?: string }) {
     };
 
     const handleCustomOpen = () => {
+      takePendingCommandPaletteOpen();
       setIsOpen(true);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, handleCustomOpen);
+
+    if (takePendingCommandPaletteOpen()) {
+      setIsOpen(true);
+    }
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
