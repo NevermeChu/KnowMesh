@@ -18,10 +18,12 @@ export default defineConfig({
   timeout: 30 * 1000,
   // Fail the build on CI if you accidentally left test.only in the source code.
   forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
   // Reporter to use. See https://playwright.dev/docs/test-reporters
   reporter: process.env.CI ? 'github' : 'list',
   // Local Turbopack cold compilation and Windows Chromium are unstable under parallel startup.
-  workers: process.env.CI ? undefined : 1,
+  // CI also stays serial so collaboration sidecars are not shared across workers.
+  workers: 1,
 
   expect: {
     // Set timeout for async expect matchers

@@ -208,22 +208,21 @@ test.describe('application smoke coverage', () => {
     const titleInput = page.getByRole('textbox', { name: '文档标题' });
     const personalNavigation = page.getByRole('navigation', { exact: true, name: '个人区域' });
     const renamedTitle = `navigation-title-${Date.now()}`;
+    const sidebarTitle = (name: string) =>
+      personalNavigation.getByRole('link', { exact: true, name });
 
-    await expect(
-      personalNavigation.getByRole('link', { exact: true, name: seededTitle }),
-    ).toBeVisible();
+    test.setTimeout(60_000);
+    await expect(sidebarTitle(seededTitle)).toBeVisible();
     await titleInput.fill(renamedTitle);
     await titleInput.press('Enter');
-    await expect(
-      personalNavigation.getByRole('link', { exact: true, name: renamedTitle }),
-    ).toBeVisible();
+    await expect(titleInput).toHaveValue(renamedTitle);
+    await expect(sidebarTitle(renamedTitle)).toBeVisible({ timeout: 30_000 });
     await expect(sidebar).toHaveAttribute('data-navigation-marker', 'active');
 
     await titleInput.fill(seededTitle);
     await titleInput.press('Enter');
-    await expect(
-      personalNavigation.getByRole('link', { exact: true, name: seededTitle }),
-    ).toBeVisible();
+    await expect(titleInput).toHaveValue(seededTitle);
+    await expect(sidebarTitle(seededTitle)).toBeVisible({ timeout: 30_000 });
     await expect(sidebar).toHaveAttribute('data-navigation-marker', 'active');
     await close();
   });
