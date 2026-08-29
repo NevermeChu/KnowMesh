@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppSidebar } from '@/components/layout/AppSidebar/AppSidebar';
 import { ContentToolbar } from '@/components/layout/ContentToolbar';
 import { TOGGLE_FULLSCREEN_EVENT } from '@/components/layout/ShellEvents';
@@ -15,6 +15,9 @@ import type { Workspace } from '@/features/workspaces/Workspace';
 const DEFAULT_SIDEBAR_WIDTH = 190;
 const MIN_SIDEBAR_WIDTH = 190;
 const MAX_SIDEBAR_WIDTH = 360;
+
+const clampSidebarWidth = (width: number) =>
+  Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
 
 type AppShellStyle = React.CSSProperties & {
   '--app-sidebar-width': string;
@@ -34,6 +37,7 @@ export function AppShell(props: {
   projects: Project[];
   workspaces: Workspace[];
 }) {
+  const shellRef = useRef<HTMLDivElement>(null);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isContentFullscreen, setIsContentFullscreen] = useState(false);
   const [navigationDocuments, setNavigationDocuments] = useState<DocumentNavigationItem[]>([]);
@@ -72,7 +76,11 @@ export function AppShell(props: {
 
   return (
     <DocumentEditorToolbarProvider>
-      <div className="relative min-h-dvh bg-transparent text-ink antialiased" style={shellStyle}>
+      <div
+        ref={shellRef}
+        className="relative min-h-dvh bg-transparent text-ink antialiased"
+        style={shellStyle}
+      >
         <AppSidebar
           activeWorkspace={props.activeWorkspace}
           currentUserId={props.currentUserId}
@@ -80,8 +88,14 @@ export function AppShell(props: {
           projects={props.projects}
           workspaces={props.workspaces}
           width={sidebarWidth}
-          onResize={(width) => {
-            setSidebarWidth(Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)));
+          onResizeCommit={(width) => {
+            setSidebarWidth(clampSidebarWidth(width));
+          }}
+          onResizePreview={(width) => {
+            shellRef.current?.style.setProperty(
+              '--app-sidebar-width',
+              `${clampSidebarWidth(width)}px`,
+            );
           }}
           onNavigationDocumentsChange={setNavigationDocuments}
         />

@@ -71,10 +71,12 @@
 
 ### 批次 B — 已确认性能 / 交互（P0 之后）
 
-**B1. 侧边栏拖宽不打进 React state（原 P1-3 第一刀）**
+**B1. 侧边栏拖宽不打进 React state（原 P1-3 第一刀）：已完成。**
 
 - pointermove 只写 `--app-sidebar-width`（可 rAF 节流）；pointerup 或双击再 `setState` 以便键盘与持久化（若当前未持久化宽度，可仅 CSS）。
 - 守住：不引入全局状态库。
+
+验证：Chromium 回归覆盖拖动期间 CSS 变量预览、`pointerup` 提交、键盘步进与双击复位；类型检查通过。
 
 **B2. 字体按路由加载**
 

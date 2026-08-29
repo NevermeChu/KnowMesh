@@ -124,7 +124,8 @@ export function AppSidebar(props: {
   projects: Project[];
   workspaces: Workspace[];
   width: number;
-  onResize: (width: number) => void;
+  onResizeCommit: (width: number) => void;
+  onResizePreview: (width: number) => void;
   onNavigationDocumentsChange: (documents: DocumentNavigationItem[]) => void;
 }) {
   const pathname = usePathname();
@@ -259,7 +260,7 @@ export function AppSidebar(props: {
         className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-visible border-r border-line-soft bg-surface-strong transition-transform duration-200 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } ${props.isHidden ? 'lg:-translate-x-full' : 'lg:translate-x-0'}`}
-        style={{ width: props.width }}
+        style={{ width: 'var(--app-sidebar-width)' }}
         onPointerDownCapture={closeMenuFromSidebarClick}
       >
         <button
@@ -337,14 +338,14 @@ export function AppSidebar(props: {
           title="拖拽调整宽度 / 双击恢复默认"
           className="group absolute inset-y-0 -right-0.5 z-30 hidden w-1.5 cursor-col-resize touch-none transition-colors hover:bg-accent/40 focus:bg-accent/40 focus:outline-none active:bg-accent lg:block"
           onDoubleClick={() => {
-            props.onResize(190);
+            props.onResizeCommit(190);
           }}
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft') {
-              props.onResize(props.width - 8);
+              props.onResizeCommit(props.width - 8);
             }
             if (event.key === 'ArrowRight') {
-              props.onResize(props.width + 8);
+              props.onResizeCommit(props.width + 8);
             }
           }}
           onPointerDown={(event) => {
@@ -352,11 +353,18 @@ export function AppSidebar(props: {
           }}
           onPointerMove={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              props.onResize(event.clientX);
+              props.onResizePreview(event.clientX);
             }
           }}
           onPointerUp={(event) => {
+            props.onResizeCommit(event.clientX);
             event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onPointerCancel={(event) => {
+            props.onResizePreview(props.width);
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
           }}
         />
       </aside>

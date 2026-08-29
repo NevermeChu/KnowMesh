@@ -285,6 +285,40 @@ test.describe('application smoke coverage', () => {
     await close();
   });
 
+  test('resizes the desktop sidebar through pointer and keyboard input', async ({
+    baseURL,
+    browser,
+  }) => {
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const { page, close } = await newAuthenticatedPage({ baseURL, browser });
+    await page.goto('/personal');
+    const sidebar = page.locator('#app-sidebar');
+    const resizeHandle = page.getByRole('button', { name: '调整导航栏宽度' });
+    await expect(sidebar).toHaveCSS('width', '190px');
+    const handleBounds = await resizeHandle.boundingBox();
+    if (!handleBounds) {
+      throw new Error('Sidebar resize handle bounds are unavailable');
+    }
+
+    await page.mouse.move(
+      handleBounds.x + handleBounds.width / 2,
+      handleBounds.y + handleBounds.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(280, handleBounds.y + handleBounds.height / 2, { steps: 5 });
+    await expect(sidebar).toHaveCSS('width', '280px');
+    await page.mouse.up();
+
+    await resizeHandle.press('ArrowRight');
+    await expect(sidebar).toHaveCSS('width', '288px');
+    await resizeHandle.dblclick();
+    await expect(sidebar).toHaveCSS('width', '190px');
+    await close();
+  });
+
   test('moves a document through sidebar drag targets', async ({ baseURL, browser }) => {
     if (!baseURL) {
       throw new Error('Playwright base URL is unavailable');
