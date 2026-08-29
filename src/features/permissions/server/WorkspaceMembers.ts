@@ -1,7 +1,7 @@
 'use server';
 
 import { randomBytes } from 'node:crypto';
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { recordAuditLog } from '@/features/audit-logs/server/RecordAuditLog';
@@ -769,12 +769,14 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
       .from(projectsSchema)
       .where(eq(projectsSchema.workspaceId, memberInput.workspaceId));
 
-    for (const project of projects) {
+    const projectIds = projects.map((project) => project.id);
+
+    if (projectIds.length > 0) {
       await transaction
         .delete(projectAccessRequestsSchema)
         .where(
           and(
-            eq(projectAccessRequestsSchema.projectId, project.id),
+            inArray(projectAccessRequestsSchema.projectId, projectIds),
             eq(projectAccessRequestsSchema.userId, memberInput.memberUserId),
           ),
         );
@@ -782,7 +784,7 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
         .delete(projectInvitationsSchema)
         .where(
           and(
-            eq(projectInvitationsSchema.projectId, project.id),
+            inArray(projectInvitationsSchema.projectId, projectIds),
             eq(projectInvitationsSchema.userId, memberInput.memberUserId),
           ),
         );
@@ -790,7 +792,7 @@ export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput)
         .delete(projectMembersSchema)
         .where(
           and(
-            eq(projectMembersSchema.projectId, project.id),
+            inArray(projectMembersSchema.projectId, projectIds),
             eq(projectMembersSchema.userId, memberInput.memberUserId),
           ),
         );

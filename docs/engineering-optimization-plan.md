@@ -1,6 +1,6 @@
 # 工程优化计划
 
-状态：实施中（P0 已完成；其余条目仍是计划，不是当前实现说明）
+状态：计划内可立即落地的应用改动已完成；批次 D 剩余项依赖 Profiler、Lighthouse 或运维证据，不是当前实现说明
 
 本文合并两轮审查中**已用当前仓库核实**的问题，给出优先顺序与可独立合入的实施步骤。事实以工作区代码、CI 和工作流为准；未复跑的指标会标明。
 
@@ -122,7 +122,7 @@
 - 导航文档列表从 `AppShell` 下移到 `ContentToolbar` 的直接父级或侧边栏内部，避免分页 merge 重绘 CommandPalette；用 Profiler 确认后再动。
 - `buildDocumentTree` / `workspaceSections`：仅在确认 dev 卡顿后，按 `documents` 引用记忆化；生产 Compiler 可能已足够。
 - 协作 process kit（限额、复查循环、健康 HTTP），**不**合并协议。
-- `removeWorkspaceMember`：对申请/邀请/成员三表 `inArray(projectId)` 批量删。
+- `removeWorkspaceMember`：已完成；对申请/邀请/成员三表按 Workspace 的项目 ID 集合批量删除，事务内查询数不再随项目数量线性增长。
 - `getWorkspaceAuthorization` 对齐 `cache()`：已完成，与 Project 授权一致，仅在同一次 React 服务端请求内复用，不跨请求保留权限。
 - PGlite 迁移列表改读 `_journal.json`：已完成，集成测试迁移顺序由 Drizzle journal 单一维护。
 - 白板 `enqueue` / `receiveCanonical` 的 stringify：大场景 profile 后再改版本号/脏标记。
@@ -140,7 +140,8 @@
 已完成       批次 A（CI、tsc、build/迁移、gitignore、授权/会话测试）
 已完成       批次 B（拖宽、字体、编辑器 chunk）
 已完成       批次 C（偏好 / 文档树局部失效；成员治理保留）
-下一步       批次 D（仅实施已有证据或不依赖 profile 的项目）
+已完成       批次 D 中不依赖 profile 的三项（成员批量删除、Workspace 授权 cache、PGlite journal）
+下一步       批次 D 剩余项（导航状态下移、协作 process kit、stringify、落地页、真库 integ、Excalidraw、运维）
 ```
 
 ## 明确不做

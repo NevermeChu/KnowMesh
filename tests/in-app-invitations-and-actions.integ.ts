@@ -14,6 +14,7 @@ import type {
   approveWorkspaceAccessRequest as approveWorkspaceAccessRequestType,
   declineWorkspaceInvitationInApp as declineWorkspaceInvitationInAppType,
   rejectWorkspaceAccessRequest as rejectWorkspaceAccessRequestType,
+  removeWorkspaceMember as removeWorkspaceMemberType,
 } from '@/features/permissions/server/WorkspaceMembers';
 import type { getPendingInvitations as getPendingInvitationsType } from '@/features/workspaces/server/GetPendingInvitations';
 import type { getWorkspaceInvitation as getWorkspaceInvitationType } from '@/features/workspaces/server/GetWorkspaceInvitation';
@@ -40,6 +41,7 @@ let acceptWorkspaceInvitationInApp: typeof acceptWorkspaceInvitationInAppType;
 let declineWorkspaceInvitationInApp: typeof declineWorkspaceInvitationInAppType;
 let approveWorkspaceAccessRequest: typeof approveWorkspaceAccessRequestType;
 let rejectWorkspaceAccessRequest: typeof rejectWorkspaceAccessRequestType;
+let removeWorkspaceMember: typeof removeWorkspaceMemberType;
 let acceptProjectInvitation: typeof acceptProjectInvitationType;
 let rejectProjectInvitation: typeof rejectProjectInvitationType;
 let approveProjectAccessRequest: typeof approveProjectAccessRequestType;
@@ -76,6 +78,7 @@ describe('in-app invitations and direct actions', () => {
       approveWorkspaceAccessRequest,
       declineWorkspaceInvitationInApp,
       rejectWorkspaceAccessRequest,
+      removeWorkspaceMember,
     } = workspaceMembersModule);
 
     const projectMembersModule = await import('@/features/permissions/server/ProjectMembers');
@@ -613,5 +616,90 @@ describe('in-app invitations and direct actions', () => {
     expect(item?.requesterEmail).toBe('other@knowmesh.test');
     expect(item?.requestedRole).toBe('editor');
     expect(item?.resourceName).toBe('Test Workspace 3');
+  });
+
+  it('removes workspace member access from every project', async () => {
+    currentUser = {
+      email: 'owner@knowmesh.test',
+      id: 'user_owner',
+      name: 'Owner User',
+    };
+    const workspaceId = '10000000-0000-4000-8000-000000000201';
+
+    await database.query(`
+      INSERT INTO workspace_members (workspace_id, user_id, role)
+      VALUES ('${workspaceId}', 'user_other', 'viewer')
+      ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'viewer'
+    `);
+    await database.query(`
+      INSERT INTO workspace_access_requests (workspace_id, user_id, requested_role)
+      VALUES ('${workspaceId}', 'user_other', 'editor')
+      ON CONFLICT (workspace_id, user_id) DO UPDATE SET requested_role = 'editor'
+    `);
+    await database.query(`
+      INSERT INTO project_members (project_id, user_id, role, workspace_id)
+      VALUES
+        ('20000000-0000-4000-8000-000000000201', 'user_other', 'viewer', '${workspaceId}'),
+        ('20000000-0000-4000-8000-000000000202', 'user_other', 'editor', '${workspaceId}')
+      ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role
+    `);
+    await database.query(`
+      INSERT INTO project_access_requests (project_id, user_id, requested_role)
+      VALUES
+        ('20000000-0000-4000-8000-000000000201', 'user_other', 'editor'),
+        ('20000000-0000-4000-8000-000000000202', 'user_other', 'viewer')
+      ON CONFLICT (project_id, user_id) DO UPDATE SET requested_role = EXCLUDED.requested_role
+    `);
+    await database.query(`
+      INSERT INTO project_invitations (project_id, user_id, invited_by_id, expires_at)
+      VALUES
+        ('20000000-0000-4000-8000-000000000201', 'user_other', 'user_owner', NOW() + INTERVAL '7 days'),
+        ('20000000-0000-4000-8000-000000000202', 'user_other', 'user_owner', NOW() + INTERVAL '7 days')
+      ON CONFLICT (project_id, user_id) DO UPDATE SET expires_at = EXCLUDED.expires_at
+    `);
+
+    await expect(
+      removeWorkspaceMember({ memberUserId: 'user_other', workspaceId }),
+    ).resolves.toEqual({ userId: 'user_other' });
+
+    const projectAccess = await database.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM project_access_requests
+      WHERE user_id = 'user_other'
+        AND project_id IN (
+          '20000000-0000-4000-8000-000000000201',
+          '20000000-0000-4000-8000-000000000202'
+        )
+    `);
+    const projectInvitations = await database.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM project_invitations
+      WHERE user_id = 'user_other'
+        AND project_id IN (
+          '20000000-0000-4000-8000-000000000201',
+          '20000000-0000-4000-8000-000000000202'
+        )
+    `);
+    const projectMemberships = await database.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM project_members
+      WHERE user_id = 'user_other' AND workspace_id = '${workspaceId}'
+    `);
+    const workspaceAccess = await database.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM workspace_access_requests
+      WHERE user_id = 'user_other' AND workspace_id = '${workspaceId}'
+    `);
+    const workspaceMembership = await database.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM workspace_members
+      WHERE user_id = 'user_other' AND workspace_id = '${workspaceId}'
+    `);
+
+    expect(projectAccess.rows[0]?.count).toBe('0');
+    expect(projectInvitations.rows[0]?.count).toBe('0');
+    expect(projectMemberships.rows[0]?.count).toBe('0');
+    expect(workspaceAccess.rows[0]?.count).toBe('0');
+    expect(workspaceMembership.rows[0]?.count).toBe('0');
   });
 });
