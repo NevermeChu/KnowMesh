@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
 import { getFormText } from '@/features/auth/AuthForm';
+import { getResetPasswordErrorMessage, MIN_PASSWORD_LENGTH } from '@/features/auth/PasswordPolicy';
 import { authClient } from '@/libs/AuthClient';
 
 /**
@@ -25,20 +26,35 @@ export function PasswordRecoveryForm(props: { token?: string }) {
     setError(undefined);
     setIsPending(true);
     const formData = new FormData(event.currentTarget);
-    const result = props.token
-      ? await authClient.resetPassword({
-          newPassword: getFormText(formData, 'password'),
-          token: props.token,
-        })
-      : await authClient.requestPasswordReset({
-          email: getFormText(formData, 'email').trim().toLowerCase(),
-          redirectTo: '/reset-password',
-        });
+    if (props.token) {
+      const newPassword = getFormText(formData, 'password');
+      if (newPassword.length < MIN_PASSWORD_LENGTH) {
+        setError(`密码至少需要 ${MIN_PASSWORD_LENGTH} 个字符`);
+        setIsPending(false);
+        return;
+      }
 
-    if (result.error) {
-      setError(props.token ? '链接无效或已过期，请重新申请' : '发送失败，请稍后重试');
-      setIsPending(false);
-      return;
+      const result = await authClient.resetPassword({
+        newPassword,
+        token: props.token,
+      });
+
+      if (result.error) {
+        setError(getResetPasswordErrorMessage(result.error.code));
+        setIsPending(false);
+        return;
+      }
+    } else {
+      const result = await authClient.requestPasswordReset({
+        email: getFormText(formData, 'email').trim().toLowerCase(),
+        redirectTo: '/reset-password',
+      });
+
+      if (result.error) {
+        setError('发送失败，请稍后重试');
+        setIsPending(false);
+        return;
+      }
     }
 
     setIsComplete(true);
@@ -68,7 +84,12 @@ export function PasswordRecoveryForm(props: { token?: string }) {
   return (
     <form className="space-y-4" method="post" onSubmit={submit}>
       {props.token ? (
-        <FormField htmlFor="password" label="新密码" hint="至少 8 个字符" required>
+        <FormField
+          htmlFor="password"
+          label="新密码"
+          hint={`至少 ${MIN_PASSWORD_LENGTH} 个字符`}
+          required
+        >
           <div className="relative">
             <LockKeyhole
               aria-hidden="true"
@@ -80,6 +101,7 @@ export function PasswordRecoveryForm(props: { token?: string }) {
               className="h-11 rounded-xl bg-surface/70 pr-4 pl-10"
               id="password"
               name="password"
+              minLength={MIN_PASSWORD_LENGTH}
               placeholder="输入新密码"
               required
               type="password"

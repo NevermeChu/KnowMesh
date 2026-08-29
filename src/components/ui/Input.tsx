@@ -17,6 +17,7 @@ export function Input(props: {
   hasError?: boolean;
   id?: string;
   maxLength?: number;
+  minLength?: number;
   name?: string;
   onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -41,6 +42,7 @@ export function Input(props: {
       disabled={props.disabled}
       id={props.id}
       maxLength={props.maxLength}
+      minLength={props.minLength}
       name={props.name}
       onChange={props.onChange}
       onKeyDown={props.onKeyDown}

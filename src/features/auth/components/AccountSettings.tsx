@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
 import { getFormText } from '@/features/auth/AuthForm';
+import { MIN_PASSWORD_LENGTH } from '@/features/auth/PasswordPolicy';
 import type { AuthenticatedUser } from '@/features/auth/server/CurrentUser';
 import { deleteAccount as deleteCurrentAccount } from '@/features/auth/server/DeleteAccount';
 import { clearDocumentCollaborationCachesForUser } from '@/features/documents/collaboration/DocumentCollaborationLocalPersistence';
@@ -115,10 +116,16 @@ export function AccountSettings(props: { user: AuthenticatedUser }) {
             type="password"
           />
         </FormField>
-        <FormField htmlFor="newPassword" label="新密码" hint="至少 8 个字符" required>
+        <FormField
+          htmlFor="newPassword"
+          label="新密码"
+          hint={`至少 ${MIN_PASSWORD_LENGTH} 个字符`}
+          required
+        >
           <Input
             autoComplete="new-password"
             id="newPassword"
+            minLength={MIN_PASSWORD_LENGTH}
             name="newPassword"
             required
             type="password"

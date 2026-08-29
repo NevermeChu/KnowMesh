@@ -1,5 +1,6 @@
 import 'server-only';
 import { betterAuth } from 'better-auth';
+import { MIN_PASSWORD_LENGTH } from '@/features/auth/PasswordPolicy';
 import { sendAuthenticationEmail } from '@/features/emails/server/SendAuthenticationEmail';
 import { ensureUserWorkspace } from '@/features/workspaces/server/EnsureUserWorkspace';
 import { syncPendingWorkspaceInvitations } from '@/features/workspaces/server/SyncPendingInvitations';
@@ -28,7 +29,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
-    minPasswordLength: 12,
+    minPasswordLength: MIN_PASSWORD_LENGTH,
     sendResetPassword: async ({ user, url }) => {
       await sendAuthenticationEmail({ kind: 'password-reset', to: user.email, url });
     },

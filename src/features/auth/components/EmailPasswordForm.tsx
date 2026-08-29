@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
 import { getFormText } from '@/features/auth/AuthForm';
+import { MIN_PASSWORD_LENGTH } from '@/features/auth/PasswordPolicy';
 import { authClient } from '@/libs/AuthClient';
 import {
   createAuthenticationPageUrl,
@@ -80,8 +81,10 @@ export function EmailPasswordForm(props: { mode: 'sign-in' | 'sign-up'; redirect
         <div className="mb-4 grid size-11 place-items-center rounded-xl bg-card text-accent shadow-card">
           <Mail className="size-5" strokeWidth={1.8} />
         </div>
-        <p className="font-semibold text-ink">账号已创建</p>
-        <p className="mt-1">验证邮件已发送。打开邮件中的链接后将自动登录，并返回刚才的页面。</p>
+        <p className="font-semibold text-ink">请查收邮件</p>
+        <p className="mt-1">
+          若该邮箱可注册，你将收到验证邮件。打开邮件中的链接后将自动登录，并返回刚才的页面。
+        </p>
         <Link
           className="mt-4 inline-flex font-semibold text-accent transition-colors hover:text-accent-strong"
           href={alternatePageUrl}
@@ -139,7 +142,7 @@ export function EmailPasswordForm(props: { mode: 'sign-in' | 'sign-up'; redirect
       <FormField
         htmlFor="password"
         label="密码"
-        hint={props.mode === 'sign-up' ? '至少 8 个字符' : undefined}
+        hint={props.mode === 'sign-up' ? `至少 ${MIN_PASSWORD_LENGTH} 个字符` : undefined}
         reserveErrorSpace={false}
         required
       >
@@ -153,6 +156,7 @@ export function EmailPasswordForm(props: { mode: 'sign-in' | 'sign-up'; redirect
             autoComplete={props.mode === 'sign-in' ? 'current-password' : 'new-password'}
             className="h-11 rounded-xl bg-surface/70 pr-11 pl-10"
             id="password"
+            minLength={props.mode === 'sign-up' ? MIN_PASSWORD_LENGTH : undefined}
             name="password"
             placeholder="输入密码"
             required
