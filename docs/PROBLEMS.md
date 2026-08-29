@@ -838,3 +838,28 @@ Playwright 在配置了 `webServer.env` 后不再默认传入完整 `process.env
 
 ### 解决方法
 每次收到 baseline 都丢弃旧队列，按当前 canonical scene 与 revision 新建保存队列；冻结队列的忽略语义保持不变，由新队列承接重启后的写入。
+
+## 72. 已注册邮箱再次注册会伪装成功且不发验证邮件
+
+### 问题
+
+已存在账户再次提交注册时，页面仍可完成提交流程，但不会发出验证邮件，原先还会显示“账号已创建”等成功文案，使用者无法区分新注册与邮箱已被占用。
+
+### 根因
+
+Better Auth 在 `requireEmailVerification` 开启时对重复邮箱返回合成成功响应（`token: null` 的伪造用户），不抛 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`，也不调用验证邮件发送，以避免注册接口被用于探测邮箱是否存在。前端把无错误码的注册响应一律当成新账号已创建。
+
+### 解决方法
+
+保留该防枚举行为，不向客户端暴露邮箱是否已注册。注册提交成功后只显示中性提示：若该邮箱可注册，将收到验证邮件；打开邮件链接后自动登录。已注册邮箱继续不发信，文案也不再声称账号已创建。
+
+## 73. 指令面板 E2E 用 Ctrl+K 打开会与 hydration 和页面拦截竞态
+
+### 问题
+协作栈上的指令面板韧性用例在 CI 中等不到「快捷指令面板」对话框，整次检查失败，依赖其成功的生产 Deploy 被 skip。
+
+### 根因
+`CommandPalette` 只在客户端 `useEffect` 里注册 Ctrl/Cmd+K。用例在 `goto` 后立即按键，并在打开前对 `**/personal**` 安装 Playwright route。Linux runner 上按键可能落在监听注册之前；过宽的 `/personal` 拦截还会碰到打开面板时发往当前页的 Server Action，对话框从未挂载。
+
+### 解决方法
+先点击侧栏「主要导航」里的「搜索」（走 `openCommandPalette`），再断言对话框。模拟过期搜索的 route 必须在面板打开之后安装，且只延迟带共享检索词的 POST。
