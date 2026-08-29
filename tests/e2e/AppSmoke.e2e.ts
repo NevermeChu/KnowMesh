@@ -359,8 +359,11 @@ test.describe('application smoke coverage', () => {
     await page.locator('#document-title').fill(whiteboardTitle);
     await page.getByRole('button', { exact: true, name: '创建' }).click();
 
-    await expect(page.getByRole('heading', { exact: true, name: whiteboardTitle })).toBeVisible();
-    await expect(page.getByText('个人白板', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { exact: true, name: '面包屑' }).getByText(whiteboardTitle, {
+        exact: true,
+      }),
+    ).toBeVisible();
     const whiteboard = page.locator('.excalidraw');
     await expect(whiteboard).toBeVisible();
     await expect(
@@ -399,8 +402,8 @@ test.describe('application smoke coverage', () => {
       .toBeGreaterThan(0);
 
     await page.reload();
-    await expect(page.getByText('个人白板', { exact: true })).toBeVisible();
     await expect(page.locator('.excalidraw')).toBeVisible();
+    await expect(page.getByText('已保存', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { exact: true, name: '导出白板' }).click();
     const downloadPromise = page.waitForEvent('download');

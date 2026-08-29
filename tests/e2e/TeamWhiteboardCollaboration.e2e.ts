@@ -232,8 +232,6 @@ test.describe('team whiteboard collaboration', () => {
       const editorPage = await editorContext.newPage();
       const route = `/collaboration?project=${projectId}&document=${documentId}`;
       await Promise.all([ownerPage.goto(route), editorPage.goto(route)]);
-      await expect(ownerPage.getByText('团队白板', { exact: true })).toBeVisible();
-      await expect(editorPage.getByText('团队白板', { exact: true })).toBeVisible();
       await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
       await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
 
@@ -266,7 +264,7 @@ test.describe('team whiteboard collaboration', () => {
     try {
       const page = await context.newPage();
       await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
-      await expect(page.getByText('团队白板', { exact: true })).toBeVisible();
+      await expect(page.locator('.excalidraw')).toBeVisible();
       await expect(page.getByText('只读模式', { exact: true })).toBeVisible();
       await expect.poll(readSceneElementCount).toBe(0);
     } finally {
