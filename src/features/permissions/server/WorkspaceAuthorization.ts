@@ -1,12 +1,13 @@
 import 'server-only';
 import { and, eq } from 'drizzle-orm';
+import { cache } from 'react';
 import { db } from '@/libs/DB';
 import { workspaceMembersSchema, workspacesSchema } from '@/models/Schema';
 import { AuthorizationError } from '../AuthorizationError';
 import type { Permission } from '../Permission';
 import { getWorkspacePermissions } from '../PermissionPolicy';
 
-async function getWorkspaceAuthorization(options: { userId: string; workspaceId: string }) {
+const getCachedWorkspaceAuthorization = cache(async (workspaceId: string, userId: string) => {
   const [access] = await db
     .select({
       id: workspacesSchema.id,
@@ -17,28 +18,27 @@ async function getWorkspaceAuthorization(options: { userId: string; workspaceId:
     })
     .from(workspacesSchema)
     .innerJoin(workspaceMembersSchema, eq(workspaceMembersSchema.workspaceId, workspacesSchema.id))
-    .where(
-      and(
-        eq(workspacesSchema.id, options.workspaceId),
-        eq(workspaceMembersSchema.userId, options.userId),
-      ),
-    )
+    .where(and(eq(workspacesSchema.id, workspaceId), eq(workspaceMembersSchema.userId, userId)))
     .limit(1);
 
   if (!access) {
     return null;
   }
 
-  const role = access.ownerId === options.userId ? 'owner' : access.role;
+  const role = access.ownerId === userId ? 'owner' : access.role;
 
   return {
     decision: {
       grants: [{ role, source: 'workspace' as const }],
-      isResourceOwner: access.ownerId === options.userId,
+      isResourceOwner: access.ownerId === userId,
       permissions: getWorkspacePermissions(role, access.kind),
     },
     workspace: access,
   };
+});
+
+export async function getWorkspaceAuthorization(options: { userId: string; workspaceId: string }) {
+  return await getCachedWorkspaceAuthorization(options.workspaceId, options.userId);
 }
 
 export async function authorizeWorkspace(options: {

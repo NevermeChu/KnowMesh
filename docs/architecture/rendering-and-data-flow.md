@@ -48,7 +48,7 @@ Team 白板：Client Component → Socket.IO Adapter + 官方 reconcileElements 
 → 页面结构和序列化数据发送给浏览器
 ```
 
-`getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。项目或文档节点展开时，客户端调用 `getDocumentNavigationChildren` Server Action；直接访问深层文档时，页面查询 `getDocumentNavigationPath` 并只把根到当前节点的有界路径注入导航树。`getCurrentUser`、`getWorkspaceContext`、`getProjectAuthorization` 和 `getUnreadNotificationCount` 使用 React 请求级缓存（`cache()`），使 Layout、具体页面与鉴权入口在同一次 Server Component 渲染中复用 Session 或查询结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
+`getWorkspaceContext` 和 `getWorkspaceNavigation` 是 `server-only` 普通函数，不是 Server Action。它们与 `WorkspaceLayout` 在同一服务器边界内调用，不产生额外浏览器请求。项目或文档节点展开时，客户端调用 `getDocumentNavigationChildren` Server Action；直接访问深层文档时，页面查询 `getDocumentNavigationPath` 并只把根到当前节点的有界路径注入导航树。`getCurrentUser`、`getWorkspaceContext`、`getWorkspaceAuthorization`、`getProjectAuthorization` 和 `getUnreadNotificationCount` 使用 React 请求级缓存（`cache()`），使 Layout、具体页面与鉴权入口在同一次 Server Component 渲染中复用 Session、授权或查询结果；该缓存不跨请求保存身份或权限。cookie 只保存上次选择，服务端必须重新验证成员关系；无效或已失去访问权时回退到 Personal Workspace。
 
 ## 工作台流式聚合
 
