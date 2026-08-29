@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feature/permissions]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -20,7 +20,6 @@ jobs:
     name: Build with ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: production
 
     steps:
       - uses: actions/checkout@v6
@@ -73,8 +72,14 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Generate route types
+        run: npx next typegen
+
+      - name: TypeScript
+        run: npm run check:types
+
       - name: Linter
-        run: npx next typegen && npm run lint
+        run: npm run lint
 
   unit:
     strategy:
@@ -187,7 +192,7 @@ jobs:
   deploy:
     name: Deploy production
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: [build, static, unit, e2e, packaging]
     runs-on: ubuntu-latest
@@ -199,22 +204,22 @@ jobs:
       group: production-deployment
       cancel-in-progress: false
     env:
-      DEPLOY_HOST: ${{ vars.PRODUCTION_DEPLOY_HOST || '20.46.165.183' }}
-      DEPLOY_PORT: ${{ vars.PRODUCTION_DEPLOY_PORT || '22' }}
-      DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER || 'thisme' }}
-      EXPECTED_HOST_FINGERPRINT: SHA256:s8fwWfOG9piXBn7D7gxG98WflWbmvvOeZyDoRUy2o+A
-      NODE_BINARY: ${{ vars.PRODUCTION_NODE_BINARY || '/home/thisme/.nvm/versions/node/v24.19.0/bin/node' }}
-      RELEASE_ROOT: ${{ vars.PRODUCTION_RELEASE_ROOT || '/srv/knowmesh-app/releases' }}
-      CURRENT_LINK: ${{ vars.PRODUCTION_CURRENT_LINK || '/srv/knowmesh-app/current' }}
-      ENVIRONMENT_FILE: ${{ vars.PRODUCTION_ENVIRONMENT_FILE || '/etc/knowmesh.env' }}
-      SERVICE_NAME: ${{ vars.PRODUCTION_SERVICE_NAME || 'knowmesh.service' }}
-      COLLABORATION_SERVICE_NAME: ${{ vars.PRODUCTION_COLLABORATION_SERVICE_NAME || 'knowmesh-collaboration.service' }}
-      COLLABORATION_HEALTH_URL: ${{ vars.PRODUCTION_COLLABORATION_HEALTH_URL || 'http://127.0.0.1:1235/ready' }}
-      COLLABORATION_DEPLOY_ENABLED: ${{ vars.PRODUCTION_COLLABORATION_ENABLED || 'false' }}
-      WHITEBOARD_COLLABORATION_SERVICE_NAME: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_SERVICE_NAME || 'knowmesh-whiteboard-collaboration.service' }}
-      WHITEBOARD_COLLABORATION_HEALTH_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_HEALTH_URL || 'http://127.0.0.1:1245/ready' }}
-      WHITEBOARD_COLLABORATION_DEPLOY_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED || 'false' }}
-      PUBLIC_HEALTH_URL: https://thisme.icu/
+      DEPLOY_HOST: ${{ vars.PRODUCTION_DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.PRODUCTION_DEPLOY_PORT }}
+      DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
+      EXPECTED_HOST_FINGERPRINT: ${{ vars.PRODUCTION_SSH_HOST_FINGERPRINT }}
+      NODE_BINARY: ${{ vars.PRODUCTION_NODE_BINARY }}
+      RELEASE_ROOT: ${{ vars.PRODUCTION_RELEASE_ROOT }}
+      CURRENT_LINK: ${{ vars.PRODUCTION_CURRENT_LINK }}
+      ENVIRONMENT_FILE: ${{ vars.PRODUCTION_ENVIRONMENT_FILE }}
+      SERVICE_NAME: ${{ vars.PRODUCTION_SERVICE_NAME }}
+      COLLABORATION_SERVICE_NAME: ${{ vars.PRODUCTION_COLLABORATION_SERVICE_NAME }}
+      COLLABORATION_HEALTH_URL: ${{ vars.PRODUCTION_COLLABORATION_HEALTH_URL }}
+      COLLABORATION_DEPLOY_ENABLED: ${{ vars.PRODUCTION_COLLABORATION_ENABLED }}
+      WHITEBOARD_COLLABORATION_SERVICE_NAME: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_SERVICE_NAME }}
+      WHITEBOARD_COLLABORATION_HEALTH_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_HEALTH_URL }}
+      WHITEBOARD_COLLABORATION_DEPLOY_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED }}
+      PUBLIC_HEALTH_URL: ${{ vars.PRODUCTION_APP_URL }}
       PUBLIC_COLLABORATION_URL: ${{ vars.PRODUCTION_COLLABORATION_URL }}
       PUBLIC_WHITEBOARD_COLLABORATION_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_URL }}
       PUBLIC_APP_ORIGIN: ${{ vars.PRODUCTION_APP_URL }}
@@ -227,14 +232,48 @@ jobs:
         with:
           node-version: 24.x
 
+      - name: Validate production deployment configuration
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          required=(
+            DEPLOY_HOST DEPLOY_PORT DEPLOY_USER EXPECTED_HOST_FINGERPRINT NODE_BINARY
+            RELEASE_ROOT CURRENT_LINK ENVIRONMENT_FILE SERVICE_NAME
+            COLLABORATION_SERVICE_NAME COLLABORATION_HEALTH_URL COLLABORATION_DEPLOY_ENABLED
+            WHITEBOARD_COLLABORATION_SERVICE_NAME WHITEBOARD_COLLABORATION_HEALTH_URL
+            WHITEBOARD_COLLABORATION_DEPLOY_ENABLED PUBLIC_HEALTH_URL PUBLIC_COLLABORATION_URL
+            PUBLIC_WHITEBOARD_COLLABORATION_URL PUBLIC_APP_ORIGIN BETTER_AUTH_SECRET
+            DEPLOY_SSH_PRIVATE_KEY
+          )
+          missing=false
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required production configuration: ${name}"
+              missing=true
+            fi
+          done
+          if [[ "${missing}" == true ]]; then
+            exit 1
+          fi
+          if [[ "${COLLABORATION_DEPLOY_ENABLED}" != true && "${COLLABORATION_DEPLOY_ENABLED}" != false ]]; then
+            echo '::error::PRODUCTION_COLLABORATION_ENABLED must be true or false'
+            exit 1
+          fi
+          if [[ "${WHITEBOARD_COLLABORATION_DEPLOY_ENABLED}" != true && "${WHITEBOARD_COLLABORATION_DEPLOY_ENABLED}" != false ]]; then
+            echo '::error::PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED must be true or false'
+            exit 1
+          fi
+
       - name: Build standalone application
         run: npm run build-local
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
           NEXT_PUBLIC_COLLABORATION_URL: ${{ vars.PRODUCTION_COLLABORATION_URL }}
-          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED || 'false' }}
-          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_URL || vars.PRODUCTION_APP_URL }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_URL }}
 
       - name: Prepare production release
         run: |

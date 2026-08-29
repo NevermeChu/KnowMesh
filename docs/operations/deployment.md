@@ -108,13 +108,14 @@ release 目录以 40 位 Git SHA 命名，artifact 根目录同时包含内容�
 | 操作 | 运行检查 | 部署生产 |
 | --- | --- | --- |
 | push `main` | 是 | 是 |
-| push 其他分支 | 是 | 否 |
+| push 其他分支 | 否；通过 Pull Request 或手动运行检查 | 否 |
 | 向 `main` 提交 Pull Request | 是 | 否 |
-| Actions 页面手动运行 `CI` | 是 | 是，部署所选分支的当前 SHA |
+| Actions 页面手动运行 `CI`，选择 `main` | 是 | 是 |
+| Actions 页面手动运行 `CI`，选择其他分支 | 是 | 否 |
 | Actions 页面手动运行 `Release` | 只构建 artifact | 否 |
 | commit message 包含 `[skip ci]` | GitHub 跳过 push workflow | 否 |
 
-只有 `main` push 或明确的手动 **Run workflow**（`workflow_dispatch`）会覆盖 `thisme.icu`。非 `main` 分支的普通 push 只跑检查，Deploy 会 skip。在一次 **push** 触发的 run 上点 **Re-run all jobs** 不会改事件，Deploy 仍会 skip。GitHub 在 Actions 搜索框带 `branch:…` 时经常不显示 **Run workflow**；应打开 [CI.yml workflow 页](https://github.com/NevermeChu/KnowMesh/actions/workflows/CI.yml) 并清空筛选，按钮在标题行右侧。
+只有 `main` push 或在 `main` 上明确手动运行 `CI` 才会覆盖 `thisme.icu`。其他分支的 push 不触发 CI；需要检查时应提交指向 `main` 的 Pull Request，或手动运行 `CI`。手动选择其他分支时 Deploy 必定 skip，不能绕过 `main` 边界。在一次 **push** 触发的 run 上点 **Re-run all jobs** 不会改事件，Deploy 仍按原分支判断。GitHub 在 Actions 搜索框带 `branch:…` 时经常不显示 **Run workflow**；应打开 [CI.yml workflow 页](https://github.com/NevermeChu/KnowMesh/actions/workflows/CI.yml) 并清空筛选，按钮在标题行右侧。
 
 deploy job 使用 `production-deployment` 并发组且不取消进行中的部署，所以两个生产发布不会同时切换 `current`。
 
@@ -122,7 +123,7 @@ deploy job 使用 `production-deployment` 并发组且不取消进行中的部�
 
 ### 1. `static`：静态检查
 
-它先执行 Next.js 类型生成，再运行项目 Lint。这里主要发现类型、格式和静态规则问题，不启动生产服务。
+它先执行 Next.js 类型生成，再分别运行独立的 `npm run check:types` 与项目 Lint。这里主要发现类型、格式和静态规则问题，不启动生产服务。
 
 ### 2. `build`：构建检查
 
@@ -204,6 +205,20 @@ artifact 内容包括：
 
 ## 配置分成三层
 
+### GitHub repository 构建配置
+
+`build` 与 `Release` job 不挂载 production environment，避免普通构建等待生产审批或获得部署权限。它们从 repository 级配置读取：
+
+| 类型 | 名称 | 用途 |
+| --- | --- | --- |
+| Secret | `BETTER_AUTH_SECRET` | CI 构建配置和 E2E 会话签名；必须与服务器运行时值协调维护 |
+| Variable | `PRODUCTION_APP_URL` | 生产公开应用 URL；会写入浏览器构建 |
+| Variable | `PRODUCTION_COLLABORATION_URL` | 生产文档协作公开 URL |
+| Variable | `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` | 必须显式为 `true` 或 `false` |
+| Variable | `PRODUCTION_WHITEBOARD_COLLABORATION_URL` | 生产白板协作公开 URL；关闭功能时仍需显式配置 |
+
+这些配置缺失时构建必须失败，不能回退到仓库字面量。生产进程从服务器 `/etc/knowmesh.env` 读取 `BETTER_AUTH_SECRET`；轮换时必须协调更新 repository Secret 与服务器值。
+
 ### GitHub production environment
 
 打开仓库的 **Settings → Environments → production**。当前 workflow 需要：
@@ -211,30 +226,21 @@ artifact 内容包括：
 | 类型 | 名称 | 用途 |
 | --- | --- | --- |
 | Secret | `PRODUCTION_SSH_PRIVATE_KEY` | GitHub 连接生产服务器的专用私钥 |
-| Secret | `BETTER_AUTH_SECRET` | 生产构建时校验 Better Auth 配置；应与服务器值一致 |
-| Variable | `PRODUCTION_APP_URL` | 当前为 `https://thisme.icu` |
-| Variable | `PRODUCTION_COLLABORATION_URL` | 当前为 `wss://thisme.icu/collaboration-ws` |
-| Variable | `PRODUCTION_COLLABORATION_ENABLED` | 当前为 `true`；必须和服务器 `COLLABORATION_ENABLED` 一致 |
-| Variable | `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` | 缺省按 `false`；灰度开启时为 `true`，必须和服务器 `WHITEBOARD_COLLABORATION_ENABLED` 一致 |
-| Variable | `PRODUCTION_WHITEBOARD_COLLABORATION_URL` | 灰度开启时为 `https://thisme.icu`；未设置时生产构建回退到 `PRODUCTION_APP_URL` |
+| Variable | `PRODUCTION_DEPLOY_HOST` / `PRODUCTION_DEPLOY_PORT` / `PRODUCTION_DEPLOY_USER` | SSH 目标 |
+| Variable | `PRODUCTION_SSH_HOST_FINGERPRINT` | 从可信通道核对的 ED25519 SHA-256 指纹 |
+| Variable | `PRODUCTION_NODE_BINARY` | 服务器 Node.js 可执行文件绝对路径 |
+| Variable | `PRODUCTION_RELEASE_ROOT` / `PRODUCTION_CURRENT_LINK` / `PRODUCTION_ENVIRONMENT_FILE` | release、当前链接和运行时环境文件路径 |
+| Variable | `PRODUCTION_SERVICE_NAME` | Next.js systemd unit |
+| Variable | `PRODUCTION_COLLABORATION_SERVICE_NAME` / `PRODUCTION_COLLABORATION_HEALTH_URL` / `PRODUCTION_COLLABORATION_ENABLED` | 文档协作部署参数；开关必须显式为 `true` 或 `false` |
+| Variable | `PRODUCTION_WHITEBOARD_COLLABORATION_SERVICE_NAME` / `PRODUCTION_WHITEBOARD_COLLABORATION_HEALTH_URL` / `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` | 白板协作部署参数；开关必须显式为 `true` 或 `false` |
+
+production environment 可以用同名 Variable 覆盖 repository 级公开构建值，但两层必须保持一致。deploy 在构建、SSH 或迁移之前验证全部必需配置；任何缺失值都会让部署失败。真实主机和指纹只保存在受控的 GitHub environment 中，不写进仓库。
 
 Secret 的值在 Actions 页面不可读回；Variable 不是秘密。不要把数据库连接串放到 GitHub：生产迁移和运行时从服务器文件读取它。
 
-### workflow 中的部署参数分层
+### workflow 中的部署参数边界
 
-deploy job 的服务器参数分为三类，避免散落的硬编码：
-
-| 参数 | 分类 | 当前生效值 |
-| --- | --- | --- |
-| `DEPLOY_HOST` / `DEPLOY_PORT` / `DEPLOY_USER` | GitHub Environment variable 覆盖 + 稳定默认值（`PRODUCTION_DEPLOY_HOST` 等） | `20.46.165.183` / `22` / `thisme` |
-| `NODE_BINARY` | 同上（`PRODUCTION_NODE_BINARY`） | `/home/thisme/.nvm/versions/node/v24.19.0/bin/node` |
-| `RELEASE_ROOT` / `CURRENT_LINK` / `ENVIRONMENT_FILE` | 同上（对应 `PRODUCTION_RELEASE_ROOT` 等） | `/srv/knowmesh-app/releases` / `/srv/knowmesh-app/current` / `/etc/knowmesh.env` |
-| `SERVICE_NAME` / `COLLABORATION_SERVICE_NAME` / `COLLABORATION_HEALTH_URL` | 同上（对应 `PRODUCTION_SERVICE_NAME` 等） | `knowmesh.service` / `knowmesh-collaboration.service` / `http://127.0.0.1:1235/ready` |
-| `WHITEBOARD_COLLABORATION_SERVICE_NAME` / `WHITEBOARD_COLLABORATION_HEALTH_URL` / `WHITEBOARD_COLLABORATION_DEPLOY_ENABLED` | 同上（对应 `PRODUCTION_WHITEBOARD_COLLABORATION_*`） | `knowmesh-whiteboard-collaboration.service` / `http://127.0.0.1:1245/ready` / 缺省 `false` |
-| `EXPECTED_HOST_FINGERPRINT` | workflow 内固定 pin，不允许用 Variable 覆盖 | `SHA256:s8fwWfOG9…` |
-| 公开验证 URL 与 Origin | workflow 常量 + `PRODUCTION_APP_URL` / `PRODUCTION_COLLABORATION_URL` / `PRODUCTION_WHITEBOARD_COLLABORATION_URL` | `https://thisme.icu/` |
-
-Variable 缺省时使用表中的稳定默认值；更换服务器、Node.js 或服务名时优先在 GitHub production environment 配置 Variable，再同步本手册。host fingerprint 是安全控制而非环境配置：服务器重装后必须在可信通道重新核对并在 workflow 中显式修改，绝不能通过 Variable 静默替换或关闭 `StrictHostKeyChecking`。
+deploy job 不含主机、用户、路径、服务名或 host fingerprint 的字面量回退。GitHub environment 是这些值的唯一来源；服务器重装或迁移后，管理员必须通过可信控制台重新核对 ED25519 指纹，再更新 `PRODUCTION_SSH_HOST_FINGERPRINT`。不得关闭 `StrictHostKeyChecking`，也不得把临时扫描结果直接当成可信指纹。
 
 激活与回滚的服务器端实现在 [`deploy/scripts/activate-release.sh`](../../deploy/scripts/activate-release.sh) 和 [`rollback-release.sh`](../../deploy/scripts/rollback-release.sh)：脚本启用 `set -euo pipefail`，校验 release ID 为 40 位十六进制、所有解析路径和回滚目标都位于 release 根目录内。激活脚本在迁移前验证旧 release 可用于回滚，再保持迁移先于切换、协作先于应用、内部健康检查失败即回滚的既有顺序。公开 HTTPS/WSS 验证仍留在 GitHub runner。两个脚本由 CI 的 `packaging` job 在临时目录中配合 systemctl/curl 桩执行冒烟测试（[`deploy/scripts/activate-release.smoke.sh`](../../deploy/scripts/activate-release.smoke.sh)），测试从不连接真实生产主机。
 
@@ -363,7 +369,7 @@ sudo systemctl restart knowmesh-collaboration.service
 
 `knowmesh-whiteboard-collaboration.service` 的权威模板在 `deploy/systemd/knowmesh-whiteboard-collaboration.service`。它与 Hocuspocus 独立：独立端口、独立 advisory lock、独立功能开关。`WHITEBOARD_COLLABORATION_ENABLED` 打开 sidecar 进程；`NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED`（生产构建取自 GitHub `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED`）打开浏览器连接。任一关闭时 Team 白板只读最近成功 scene。
 
-CI 不会把 unit 装进 `/etc/systemd/system`，也不会改 Nginx 站点。灰度缺省关闭：未设置 `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 时 deploy 传 `false`，不 start 白板 sidecar。开启步骤见下文「首次启用 Team 白板协作」。关闭灰度时把 GitHub 该 Variable 和服务器 `WHITEBOARD_COLLABORATION_ENABLED` / `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 一起改回非 `true` 并重新部署；不得删除 `documents.kind` 或白板状态。资产阶段只能在灰度观察无异常后评估。
+CI 不会把 unit 装进 `/etc/systemd/system`，也不会改 Nginx 站点。灰度关闭时，repository 与 production environment 的 `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 都必须显式为 `false`，服务器 `WHITEBOARD_COLLABORATION_ENABLED` / `NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED` 也必须关闭。开启步骤见下文「首次启用 Team 白板协作」；不得删除 `documents.kind` 或白板状态。资产阶段只能在灰度观察无异常后评估。
 
 修改 unit 后同样需要 `daemon-reload`；普通代码发布只切换 `current` 中的 `whiteboard-collaboration-server.cjs`。
 
@@ -580,11 +586,11 @@ for name in (
 PY
 ```
 
-此时 GitHub `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 必须仍缺省或为非 `true`。
+此时 GitHub repository 与 production environment 的 `PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED` 都必须显式为 `false`。
 
 ### 4. 先部署制品（灰度仍关）
 
-用 **Actions → CI → Run workflow**（`workflow_dispatch`）选择含白板制品的分支。不要用功能分支的普通 push，也不要 Re-run 某次 push run。
+先把含白板制品的变更合入 `main`，再用 **Actions → CI → Run workflow**（`workflow_dispatch`）选择 `main`。功能分支手动运行只执行检查，不会部署；不要用普通 push 或 Re-run 绕过该边界。
 
 部署成功后：
 
@@ -640,6 +646,8 @@ sudo grep -E '^(WHITEBOARD_COLLABORATION_ENABLED|NEXT_PUBLIC_WHITEBOARD_COLLABOR
 GitHub **Settings → Environments → production**（或本机 `gh`）：
 
 ```bash
+gh variable set PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED --body true --repo NevermeChu/KnowMesh
+gh variable set PRODUCTION_WHITEBOARD_COLLABORATION_URL --body "https://thisme.icu" --repo NevermeChu/KnowMesh
 gh variable set PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED --body true --env production --repo NevermeChu/KnowMesh
 gh variable set PRODUCTION_WHITEBOARD_COLLABORATION_URL --body "https://thisme.icu" --env production --repo NevermeChu/KnowMesh
 ```
@@ -708,7 +716,7 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 8. 创建 `/etc/knowmesh.env`，设置严格权限，不把它放进 release。
 9. 安装 `knowmesh.service`、文档协作 systemd unit 和完整 Nginx 站点。白板 unit 与 Nginx location 按「首次启用 Team 白板协作」在灰度时再装。
 10. 人工建立第一个 release 和 `current`，确认本地服务与公网 HTTPS 正常。
-11. 在 GitHub production environment 配置 Secrets/Variables，再手动运行 `CI` 接管后续发布。
+11. 配置 GitHub repository 构建 Secret/Variables 与 production environment 部署 Secret/Variables，再在 `main` 手动运行 `CI` 接管后续发布。
 
 当前 VM 来自 Azure cloud-init，但没有发现 KnowMesh 初始化脚本、Ansible、Terraform、Docker Compose 或当前可用的 bootstrap。服务器上的旧 `/srv/knowmesh` checkout 早于当前生产 workflow，不能作为权威来源。当前仓库版本化了文档协作与白板协作的 systemd unit，以及 WebSocket map 与两个协作 Nginx location，没有覆盖上述整个 bootstrap。迁移到新服务器前，必须先从当前服务器导出并审查未版本化配置，不能只 clone 仓库就开始部署。
 
@@ -717,13 +725,13 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 正常情况下，维护者不登录服务器发布代码：
 
 1. 在本地完成修改和必要验证。
-2. 提交并 push。`main` 的 push 会部署；其他分支的 push 只跑检查。
+2. 提交并 push。`main` 的 push 会运行检查并部署；其他分支通过 Pull Request 或手动 workflow 获取检查。
 3. 打开 GitHub 仓库的 **Actions → CI**（不要带着 `branch:` 筛选找 Run workflow）。
 4. 先看 `static`、`build`、`unit`、`e2e` 和 `packaging`；任何一个失败都不会开始部署。
-5. 再看 `Deploy production`。功能分支 push 上该 job 为 skipped 是预期行为。
+5. 再看 `Deploy production`。手动运行非 `main` 分支时该 job 为 skipped 是预期行为。
 6. 所有应运行的 job 绿色后访问生产站点，完成与改动风险相称的人工业务验收。
 
-需要把当前非 `main` 分支发到生产、或没有新 commit 时，在 **Actions → CI → Run workflow** 选择分支。这不是“只跑测试”，检查通过后会真实部署所选 SHA。在 push run 上 **Re-run** 不会触发 Deploy。
+没有新 commit 但需要重新部署时，在 **Actions → CI → Run workflow** 选择 `main`。非 `main` 分支不能直接部署；必须先合入 `main`。在 push run 上 **Re-run** 不会改变原事件或分支边界。
 
 如果只想生成可下载的生产 artifact，使用 **Actions → Release → Run workflow**。Release workflow 不连接服务器、不迁移数据库、不切换生产版本，artifact 保留 14 天。
 

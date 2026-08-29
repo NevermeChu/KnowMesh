@@ -28,6 +28,8 @@
 ## Commands
 Use these `npm run` scripts: `dev:next`, `dev`, `build:next`, `build-local`, `build`, `start`, `clean`, `lint`, `lint:fix`, `check:types`, `test`, `test:e2e`, `db:generate`, `db:migrate`, and `db:studio`.
 
+`build` and `build:next` never run migrations. Use `build-local` when a local production-build check must start temporary PGlite and apply migrations first; production migrations remain part of the release activation workflow.
+
 ## Git Commits
 Conventional Commits: `type: summary` without scope. The summary should be a short, specific sentence that explains what changed and where or why, not a vague phrase. Types: `feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert`. `BREAKING CHANGE:` footer when needed.
 

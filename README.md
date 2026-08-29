@@ -62,8 +62,8 @@ npm run dev
 | :--- | :--- |
 | `npm run dev` | 启动本地开发环境（自动拉起 PGlite、运行数据库迁移并启动 Next.js） |
 | `npm run dev:next` | 仅启动 Next.js 开发服务器（需数据库已就绪） |
-| `npm run build` | 运行数据库迁移并构建生产包 |
-| `npm run build-local` | 基于内存数据库验证本地生产构建 |
+| `npm run build` | 仅构建 Next.js 生产包，不修改数据库 |
+| `npm run build-local` | 启动临时 PGlite、执行迁移并验证本地生产构建 |
 | `npm run start` | 启动生产服务 |
 | `npm run test` | 运行单元测试与集成测试 |
 | `npm run test:e2e` | 运行 Playwright 端到端测试 |

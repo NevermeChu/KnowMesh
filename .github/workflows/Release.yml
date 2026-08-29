@@ -7,7 +7,6 @@ jobs:
   build:
     name: Build production artifact
     runs-on: ubuntu-latest
-    environment: production
 
     steps:
       - uses: actions/checkout@v6
@@ -17,12 +16,38 @@ jobs:
         with:
           node-version: 24.x
 
+      - name: Validate build configuration
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
+          NEXT_PUBLIC_COLLABORATION_URL: ${{ vars.PRODUCTION_COLLABORATION_URL }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_URL }}
+        run: |
+          set -euo pipefail
+          required=(
+            BETTER_AUTH_SECRET NEXT_PUBLIC_APP_URL NEXT_PUBLIC_COLLABORATION_URL
+            NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required build configuration: ${name}"
+              exit 1
+            fi
+          done
+          if [[ "${NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED}" != true && "${NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED}" != false ]]; then
+            echo '::error::PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED must be true or false'
+            exit 1
+          fi
+
       - name: Build standalone application
         run: npm run build-local
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ vars.PRODUCTION_APP_URL }}
           NEXT_PUBLIC_COLLABORATION_URL: ${{ vars.PRODUCTION_COLLABORATION_URL }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_ENABLED }}
+          NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL: ${{ vars.PRODUCTION_WHITEBOARD_COLLABORATION_URL }}
 
       - name: Prepare production artifact
         run: |

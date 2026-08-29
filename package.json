@@ -7,7 +7,7 @@
     "dev": "node scripts/local-runtime.ts dev",
     "build:next": "next build",
     "build-local": "node scripts/local-runtime.ts build-local",
-    "build": "run-s db:migrate build:next",
+    "build": "npm run build:next",
     "collaboration": "tsx --env-file=.env scripts/collaboration-server.ts",
     "collaboration:prepare": "tsx --env-file=.env scripts/collaboration-server.ts --prepare",
     "whiteboard:collaboration": "tsx --env-file=.env scripts/whiteboard-collaboration-server.ts",

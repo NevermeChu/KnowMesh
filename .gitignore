@@ -45,6 +45,7 @@ yarn-error.log*
 
 # local folder
 local
+/.tmp/
 
 # vercel
 .vercel

@@ -877,3 +877,31 @@ Better Auth 在 `requireEmailVerification` 开启时对重复邮箱返回合成�
 ### 解决方法
 
 让 Toast context 分发器及无 Provider 时的 no-op 对象保持稳定，跟踪并在手动关闭或卸载时清理自动移除定时器。白板连接 effect 通过 Effect Event 调用最新 Toast 分发器，不把 toast 对象作为连接生命周期依赖；保留 baseline 以 canonical scene 初始化新会话的既有语义。浏览器回归必须覆盖 Toast 出现和自动消失期间只存在一条白板 websocket。
+
+## 75. CI 构建与生产部署共享权限边界并允许配置回退
+
+### 问题
+
+普通 build 和独立 Release artifact job 都挂载 production environment；手动 CI 可以从任意分支进入生产 Deploy。部署主机、用户、路径、服务名和可信指纹还存在仓库字面量或缺省回退，配置缺失时可能继续连接旧目标，而不是在改变生产状态前失败。
+
+### 根因
+
+workflow 把“验证代码”“生成制品”和“获得生产部署权限”作为同一环境边界维护，并把特定服务器配置当成仓库默认值。分支判断只区分 push，没有对 `workflow_dispatch` 应用同样的生产来源约束，也没有统一的配置完整性预检。
+
+### 解决方法
+
+只有 deploy job 挂载 production environment；build 与 Release 从 repository Secret/Variable 获取构建所需公开配置。push 只监听 `main`，手动 CI 只有选择 `main` 才能部署。所有部署目标、路径、服务名、功能开关和可信指纹都由 GitHub production environment 显式提供，并在构建、SSH、迁移之前统一验证；真实主机和指纹不得写入仓库。
+
+## 76. 默认构建命令隐式执行数据库迁移
+
+### 问题
+
+调用者只想验证生产构建时，`npm run build` 会先执行 `db:migrate`，可能修改当前 `DATABASE_URL` 指向的数据库。构建失败与迁移失败也被绑定为同一操作，难以判断构建是否本身可通过。
+
+### 根因
+
+package script 把迁移当成生产构建的固定前置步骤，没有区分纯编译、带临时数据库的本地集成构建与受回滚前置条件保护的生产激活迁移。
+
+### 解决方法
+
+默认 `build` 只调用 `build:next`。需要验证迁移与构建组合时使用 `build-local`，由本地运行器启动临时 PGlite 后迁移并构建；生产迁移继续只由 release 激活脚本在确认有效回滚目标后执行。
