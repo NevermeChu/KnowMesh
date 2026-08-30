@@ -4,6 +4,9 @@ import type { WhiteboardScene } from '../WhiteboardScene';
 
 export const WHITEBOARD_COLLABORATION_PATH = '/whiteboard-collaboration/socket.io';
 export const MAX_WHITEBOARD_CONFLICT_RETRIES = 3;
+export const MAX_WHITEBOARD_SAVE_EVENTS_PER_WINDOW = 20;
+export const WHITEBOARD_SAVE_DEBOUNCE_MS = 750;
+export const WHITEBOARD_SAVE_RATE_WINDOW_MS = 10_000;
 
 export const whiteboardCollaborationHandshakeSchema = z.object({
   documentId: z.uuid(),
@@ -27,12 +30,18 @@ const canonicalSceneSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
-export const whiteboardSaveAcknowledgementSchema = z.discriminatedUnion('status', [
+export const whiteboardSaveAcknowledgementSchema = z.union([
   canonicalSceneSchema.extend({ clientMutationId: z.uuid(), status: z.literal('conflict') }),
   canonicalSceneSchema.extend({ clientMutationId: z.uuid(), status: z.literal('saved') }),
   z.object({
     clientMutationId: z.uuid(),
     message: z.enum(['permission-denied', 'persistence-failed']),
+    status: z.literal('error'),
+  }),
+  z.object({
+    clientMutationId: z.uuid(),
+    message: z.literal('rate-limited'),
+    retryAfterMs: z.number().int().positive(),
     status: z.literal('error'),
   }),
 ]);

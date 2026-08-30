@@ -24,4 +24,15 @@ describe('whiteboard collaboration protocol', () => {
       }).success,
     ).toBeFalsy();
   });
+
+  it('accepts rate-limit backpressure with a retry delay', () => {
+    expect(
+      whiteboardSaveAcknowledgementSchema.safeParse({
+        clientMutationId: crypto.randomUUID(),
+        message: 'rate-limited',
+        retryAfterMs: 1000,
+        status: 'error',
+      }).success,
+    ).toBeTruthy();
+  });
 });

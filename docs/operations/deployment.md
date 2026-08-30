@@ -662,7 +662,7 @@ curl -fsS http://127.0.0.1:1245/ready
 curl -fsS http://127.0.0.1:1245/metrics
 ```
 
-`/ready` 的 `status` 必须是 `ready`。`/metrics` 中关注 `failedDocuments`、`persistenceFailures`、`conflicts`、`activeConnections`、`activeRooms`、`invalidatedConnections`、`readOnlyWriteRejections`、`authenticationFailures` 和 `saves`；指标非零不等于故障，应结合语义和日志判断。浏览器打开 Team 白板时，画布右上角不应出现「团队白板（协作已关闭）」；客户端连接 `https://thisme.icu` 同源下的 `/whiteboard-collaboration/socket.io`。公网 WSS 冒烟使用 `PRODUCTION_APP_URL` 拼该路径，不读取 `PRODUCTION_WHITEBOARD_COLLABORATION_URL`。
+`/ready` 的 `status` 必须是 `ready`。`/metrics` 中关注 `failedDocuments`、`persistenceFailures`、`conflicts`、`activeConnections`、`activeRooms`、`invalidatedConnections`、`readOnlyWriteRejections`、`authenticationFailures`、`rateLimitedSaves` 和 `saves`；指标非零不等于故障，应结合语义和日志判断。`rateLimitedSaves` 持续增长表示客户端正在触及保存窗口的背压边界，应排查场景合并是否失效或是否存在滥用流量，并与持久化失败区分。浏览器打开 Team 白板时，画布右上角不应出现「团队白板（协作已关闭）」；客户端连接 `https://thisme.icu` 同源下的 `/whiteboard-collaboration/socket.io`。公网 WSS 冒烟使用 `PRODUCTION_APP_URL` 拼该路径，不读取 `PRODUCTION_WHITEBOARD_COLLABORATION_URL`。
 
 ## PostgreSQL 与迁移
 

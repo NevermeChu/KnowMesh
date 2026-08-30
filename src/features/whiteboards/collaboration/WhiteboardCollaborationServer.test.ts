@@ -2,7 +2,11 @@ import { once } from 'node:events';
 import { io } from 'socket.io-client';
 import type { Socket } from 'socket.io-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WHITEBOARD_COLLABORATION_PATH } from './WhiteboardCollaborationProtocol';
+import {
+  MAX_WHITEBOARD_SAVE_EVENTS_PER_WINDOW,
+  WHITEBOARD_COLLABORATION_PATH,
+  whiteboardSaveAcknowledgementSchema,
+} from './WhiteboardCollaborationProtocol';
 import type {
   WhiteboardCanonicalScene,
   WhiteboardSocketData,
@@ -203,5 +207,45 @@ describe('whiteboard collaboration server', () => {
 
     writer.disconnect();
     reader.disconnect();
+  });
+
+  it('returns rate-limit backpressure without disconnecting the writer', async () => {
+    const port = await startService();
+    const { socket } = await connectClient(port);
+    let expectedRevision = 1;
+
+    for (let index = 0; index < MAX_WHITEBOARD_SAVE_EVENTS_PER_WINDOW; index += 1) {
+      const acknowledgement = whiteboardSaveAcknowledgementSchema.parse(
+        await socket.timeout(2000).emitWithAck('save', {
+          clientMutationId: crypto.randomUUID(),
+          expectedRevision,
+          scene: state.scene,
+        }),
+      );
+      if (acknowledgement.status !== 'saved') {
+        throw new Error('Expected a saved acknowledgement before the rate limit');
+      }
+      expectedRevision = acknowledgement.revision;
+    }
+
+    const rateLimited = whiteboardSaveAcknowledgementSchema.parse(
+      await socket.timeout(2000).emitWithAck('save', {
+        clientMutationId: crypto.randomUUID(),
+        expectedRevision,
+        scene: state.scene,
+      }),
+    );
+
+    expect(rateLimited).toMatchObject({
+      message: 'rate-limited',
+      status: 'error',
+    });
+    expect(rateLimited).toHaveProperty('retryAfterMs', expect.any(Number));
+    expect(socket.connected).toBeTruthy();
+    expect(
+      service?.metrics.snapshot({ activeConnections: 1, activeRooms: 1 }).rateLimitedSaves,
+    ).toBe(1);
+
+    socket.disconnect();
   });
 });

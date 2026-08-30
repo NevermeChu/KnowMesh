@@ -195,3 +195,20 @@ export const EMPTY_WHITEBOARD_SCENE: WhiteboardScene = {
   type: 'excalidraw',
   version: WHITEBOARD_SCENE_SCHEMA_VERSION,
 };
+
+/**
+ * Creates a stable identity for the persisted versions in an Excalidraw scene.
+ *
+ * @param scene - Normalized whiteboard scene.
+ * @returns Fingerprint that ignores restore-only element fields.
+ */
+export function getWhiteboardSceneVersionFingerprint(scene: WhiteboardScene) {
+  return JSON.stringify({
+    elements: scene.elements.map((element) => ({
+      id: element.id,
+      isDeleted: element.isDeleted,
+      version: element.version,
+      versionNonce: element.versionNonce,
+    })),
+  });
+}

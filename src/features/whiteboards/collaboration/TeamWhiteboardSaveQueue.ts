@@ -1,6 +1,9 @@
 import type { SaveState } from '@/features/documents/components/DocumentSaveStatus';
 import type { WhiteboardScene } from '../WhiteboardScene';
-import { MAX_WHITEBOARD_CONFLICT_RETRIES } from './WhiteboardCollaborationProtocol';
+import {
+  MAX_WHITEBOARD_CONFLICT_RETRIES,
+  WHITEBOARD_SAVE_DEBOUNCE_MS,
+} from './WhiteboardCollaborationProtocol';
 import type {
   WhiteboardCanonicalScene,
   WhiteboardSaveAcknowledgement,
@@ -47,8 +50,7 @@ export class TeamWhiteboardSaveQueue {
     if (!this.pending) {
       return;
     }
-    this.clearDebounce();
-    this.debounceTimer = setTimeout(() => void this.flush(), 250);
+    this.scheduleFlush();
   }
 
   freeze(reason: 'permission-denied' | 'service-unavailable') {
@@ -78,7 +80,7 @@ export class TeamWhiteboardSaveQueue {
       await this.options.apply(this.latestScene);
       if (this.pending) {
         this.options.onStateChange('saving');
-        await this.drain();
+        this.scheduleFlush();
       } else {
         this.options.onStateChange('saved');
       }
@@ -90,6 +92,9 @@ export class TeamWhiteboardSaveQueue {
     this.clearDebounce();
     if (this.activeDrain) {
       await this.activeDrain;
+      if (this.pending) {
+        this.scheduleFlush();
+      }
       return;
     }
     // oxlint-disable-next-line promise/prefer-await-to-then -- Drain must start behind the queue mutex.
@@ -120,6 +125,11 @@ export class TeamWhiteboardSaveQueue {
     }
   }
 
+  private scheduleFlush(delayMs = WHITEBOARD_SAVE_DEBOUNCE_MS) {
+    this.clearDebounce();
+    this.debounceTimer = setTimeout(() => void this.flush(), delayMs);
+  }
+
   private async drain() {
     while (this.pending && !this.frozen) {
       const candidate = this.latestScene;
@@ -141,6 +151,9 @@ export class TeamWhiteboardSaveQueue {
         this.pending = true;
         if (result.message === 'permission-denied') {
           this.freeze('permission-denied');
+        } else if (result.message === 'rate-limited') {
+          this.options.onStateChange('saving');
+          this.scheduleFlush(result.retryAfterMs);
         } else {
           this.options.onStateChange('error');
         }
@@ -161,6 +174,12 @@ export class TeamWhiteboardSaveQueue {
       }
       this.retryCount = 0;
       this.pending = JSON.stringify(this.latestScene) !== JSON.stringify(candidate);
+      if (this.pending) {
+        this.options.onStateChange('saving');
+        this.scheduleFlush();
+        return;
+      }
+      break;
     }
     this.options.onStateChange('saved');
   }

@@ -11,6 +11,8 @@ import {
 } from './WhiteboardCollaborationPersistence';
 import {
   WHITEBOARD_COLLABORATION_PATH,
+  MAX_WHITEBOARD_SAVE_EVENTS_PER_WINDOW,
+  WHITEBOARD_SAVE_RATE_WINDOW_MS,
   whiteboardCandidateSchema,
   whiteboardPointerSchema,
 } from './WhiteboardCollaborationProtocol';
@@ -30,8 +32,6 @@ const MAX_CONNECTIONS = 1000;
 const MAX_CONNECTIONS_PER_DOCUMENT = 100;
 const MAX_CONNECTIONS_PER_USER = 10;
 const MAX_HTTP_BUFFER_BYTES = 6 * 1024 * 1024;
-const MAX_SAVE_EVENTS_PER_WINDOW = 20;
-const SAVE_RATE_WINDOW_MS = 10_000;
 const WRITE_REVALIDATION_INTERVAL_MS = 3000;
 
 function toRequestHeaders(headers: Record<string, string | string[] | undefined>) {
@@ -173,10 +173,19 @@ export function createWhiteboardCollaborationServer(options: { allowedOrigin: st
       }
       const now = Date.now();
       saveEventTimestamps = saveEventTimestamps.filter(
-        (timestamp) => now - timestamp < SAVE_RATE_WINDOW_MS,
+        (timestamp) => now - timestamp < WHITEBOARD_SAVE_RATE_WINDOW_MS,
       );
-      if (saveEventTimestamps.length >= MAX_SAVE_EVENTS_PER_WINDOW) {
-        socket.disconnect(true);
+      if (saveEventTimestamps.length >= MAX_WHITEBOARD_SAVE_EVENTS_PER_WINDOW) {
+        metrics.recordRateLimitedSave();
+        acknowledge({
+          clientMutationId: parsed.data.clientMutationId,
+          message: 'rate-limited',
+          retryAfterMs: Math.max(
+            1,
+            (saveEventTimestamps[0] ?? now) + WHITEBOARD_SAVE_RATE_WINDOW_MS - now,
+          ),
+          status: 'error',
+        });
         return;
       }
       saveEventTimestamps.push(now);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createWhiteboardScene,
   EMPTY_WHITEBOARD_SCENE,
+  getWhiteboardSceneVersionFingerprint,
   whiteboardSceneSchema,
 } from './WhiteboardScene';
 
@@ -68,5 +69,29 @@ describe('whiteboard scene validation', () => {
       elements: [rectangle],
       files: {},
     });
+  });
+
+  it('ignores restore-only fields in version fingerprints', () => {
+    const canonical = { ...EMPTY_WHITEBOARD_SCENE, elements: [rectangle] };
+    const restored = {
+      ...EMPTY_WHITEBOARD_SCENE,
+      elements: [{ ...rectangle, angle: 0, seed: 1234 }],
+    };
+
+    expect(getWhiteboardSceneVersionFingerprint(restored)).toBe(
+      getWhiteboardSceneVersionFingerprint(canonical),
+    );
+  });
+
+  it('detects edited element versions in fingerprints', () => {
+    const canonical = { ...EMPTY_WHITEBOARD_SCENE, elements: [rectangle] };
+    const edited = {
+      ...EMPTY_WHITEBOARD_SCENE,
+      elements: [{ ...rectangle, version: 2 }],
+    };
+
+    expect(getWhiteboardSceneVersionFingerprint(edited)).not.toBe(
+      getWhiteboardSceneVersionFingerprint(canonical),
+    );
   });
 });

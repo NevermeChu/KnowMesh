@@ -27,7 +27,7 @@ import type {
   WhiteboardCollaborationMember,
   WhiteboardServerToClientEvents,
 } from '../collaboration/WhiteboardCollaborationProtocol';
-import { createWhiteboardScene } from '../WhiteboardScene';
+import { createWhiteboardScene, getWhiteboardSceneVersionFingerprint } from '../WhiteboardScene';
 import type { WhiteboardScene } from '../WhiteboardScene';
 import { WhiteboardCanvasFrame } from './WhiteboardCanvasFrame';
 import { WhiteboardExportMenu } from './WhiteboardExportMenu';
@@ -119,6 +119,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
   const toast = useToast();
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const applyingRemoteScene = useRef(false);
+  const appliedRemoteSceneFingerprint = useRef<string | null>(null);
   const queueRef = useRef<TeamWhiteboardSaveQueue | null>(null);
   const socketRef = useRef<Socket<
     WhiteboardServerToClientEvents,
@@ -149,6 +150,12 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
         return;
       }
       const restored = await restoreScene(scene);
+      appliedRemoteSceneFingerprint.current = getWhiteboardSceneVersionFingerprint(
+        createWhiteboardScene({
+          appState: restored.appState ?? {},
+          elements: restored.elements ?? [],
+        }),
+      );
       applyingRemoteScene.current = true;
       api.updateScene({
         appState: restored.appState ?? undefined,
@@ -296,7 +303,16 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
                 return;
               }
               try {
-                queueRef.current?.enqueue(createWhiteboardScene({ appState, elements }));
+                const scene = createWhiteboardScene({ appState, elements });
+                const remoteFingerprint = appliedRemoteSceneFingerprint.current;
+                if (remoteFingerprint) {
+                  if (getWhiteboardSceneVersionFingerprint(scene) === remoteFingerprint) {
+                    appliedRemoteSceneFingerprint.current = null;
+                    return;
+                  }
+                  appliedRemoteSceneFingerprint.current = null;
+                }
+                queueRef.current?.enqueue(scene);
               } catch {
                 setSaveState('error');
                 toast.error('白板内容超出当前可保存的格式或大小限制');

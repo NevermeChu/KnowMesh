@@ -43,6 +43,96 @@ const canonical = (options: {
 });
 
 describe(TeamWhiteboardSaveQueue, () => {
+  it('coalesces changes that arrive while a save is active', async () => {
+    vi.useFakeTimers();
+    try {
+      const first = createScene('first');
+      const latest = createScene('latest', 2);
+      const deferred = Promise.withResolvers<WhiteboardSaveAcknowledgement>();
+      const save = vi
+        .fn<(options: SaveCandidate) => Promise<WhiteboardSaveAcknowledgement>>()
+        .mockImplementationOnce(async () => await deferred.promise)
+        .mockImplementation(
+          async (options) =>
+            await Promise.resolve(
+              canonical({ revision: 3, scene: options.scene, status: 'saved' }),
+            ),
+        );
+      const queue = new TeamWhiteboardSaveQueue({
+        apply: createApplyMock(),
+        initialRevision: 1,
+        initialScene: EMPTY_WHITEBOARD_SCENE,
+        onFrozen: createFrozenMock(),
+        onStateChange: createStateMock(),
+        reconcile:
+          vi.fn<(local: WhiteboardScene, remote: WhiteboardScene) => Promise<WhiteboardScene>>(),
+        save,
+      });
+
+      queue.enqueue(first);
+      const firstFlush = queue.flush();
+      await vi.advanceTimersByTimeAsync(0);
+      queue.enqueue(latest);
+      deferred.resolve(canonical({ revision: 2, scene: first, status: 'saved' }));
+      await firstFlush;
+
+      expect(save).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(749);
+      expect(save).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(save).toHaveBeenCalledTimes(2);
+      expect(save.mock.calls[1]?.[0]).toMatchObject({ expectedRevision: 2, scene: latest });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries the latest scene after rate-limit backpressure', async () => {
+    vi.useFakeTimers();
+    try {
+      const scene = createScene('rate-limited');
+      const onFrozen = createFrozenMock();
+      const onStateChange = createStateMock();
+      const save = vi
+        .fn<(options: SaveCandidate) => Promise<WhiteboardSaveAcknowledgement>>()
+        .mockResolvedValueOnce({
+          clientMutationId: crypto.randomUUID(),
+          message: 'rate-limited',
+          retryAfterMs: 1000,
+          status: 'error',
+        })
+        .mockImplementation(
+          async (options) =>
+            await Promise.resolve(
+              canonical({ revision: 2, scene: options.scene, status: 'saved' }),
+            ),
+        );
+      const queue = new TeamWhiteboardSaveQueue({
+        apply: createApplyMock(),
+        initialRevision: 1,
+        initialScene: EMPTY_WHITEBOARD_SCENE,
+        onFrozen,
+        onStateChange,
+        reconcile:
+          vi.fn<(local: WhiteboardScene, remote: WhiteboardScene) => Promise<WhiteboardScene>>(),
+        save,
+      });
+
+      queue.enqueue(scene);
+      await queue.flush();
+
+      expect(save).toHaveBeenCalledOnce();
+      expect(onFrozen).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(999);
+      expect(save).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(save).toHaveBeenCalledTimes(2);
+      expect(onStateChange).toHaveBeenLastCalledWith('saved');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('reconciles conflict and retries with the canonical revision', async () => {
     const local = createScene('local');
     const remote = createScene('remote');
@@ -102,6 +192,8 @@ describe(TeamWhiteboardSaveQueue, () => {
     });
 
     expect(apply).toHaveBeenCalledWith(merged);
+    expect(save).not.toHaveBeenCalled();
+    await queue.flush();
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({ expectedRevision: 2, scene: merged }),
     );

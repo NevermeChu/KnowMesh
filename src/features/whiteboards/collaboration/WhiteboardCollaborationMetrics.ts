@@ -3,6 +3,7 @@ export class WhiteboardCollaborationMetrics {
   private conflicts = 0;
   private invalidatedConnections = 0;
   private persistenceFailures = 0;
+  private rateLimitedSaves = 0;
   private readonly failedDocumentIds = new Set<string>();
   private readOnlyWriteRejections = 0;
   private saves = 0;
@@ -28,6 +29,10 @@ export class WhiteboardCollaborationMetrics {
     this.readOnlyWriteRejections += 1;
   }
 
+  recordRateLimitedSave() {
+    this.rateLimitedSaves += 1;
+  }
+
   recordLoadSuccess(documentId: string) {
     this.failedDocumentIds.delete(documentId);
   }
@@ -49,6 +54,7 @@ export class WhiteboardCollaborationMetrics {
       failedDocuments: this.failedDocumentIds.size,
       invalidatedConnections: this.invalidatedConnections,
       persistenceFailures: this.persistenceFailures,
+      rateLimitedSaves: this.rateLimitedSaves,
       readOnlyWriteRejections: this.readOnlyWriteRejections,
       saves: this.saves,
     };

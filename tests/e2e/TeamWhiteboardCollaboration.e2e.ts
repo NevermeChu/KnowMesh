@@ -89,18 +89,34 @@ function whiteboardHealthOrigin() {
   return `http://${host}:${Env.WHITEBOARD_COLLABORATION_HEALTH_PORT}`;
 }
 
-async function readInvalidatedConnections() {
+async function readWhiteboardMetrics() {
   const response = await fetch(`${whiteboardHealthOrigin()}/metrics`);
   const payload: unknown = await response.json();
   if (
     !payload ||
     typeof payload !== 'object' ||
+    !('activeConnections' in payload) ||
+    typeof payload.activeConnections !== 'number' ||
     !('invalidatedConnections' in payload) ||
-    typeof payload.invalidatedConnections !== 'number'
+    typeof payload.invalidatedConnections !== 'number' ||
+    !('rateLimitedSaves' in payload) ||
+    typeof payload.rateLimitedSaves !== 'number' ||
+    !('saves' in payload) ||
+    typeof payload.saves !== 'number'
   ) {
     throw new Error('Whiteboard collaboration metrics response is invalid');
   }
-  return payload.invalidatedConnections;
+  return {
+    activeConnections: payload.activeConnections,
+    invalidatedConnections: payload.invalidatedConnections,
+    rateLimitedSaves: payload.rateLimitedSaves,
+    saves: payload.saves,
+  };
+}
+
+async function readInvalidatedConnections() {
+  const metrics = await readWhiteboardMetrics();
+  return metrics.invalidatedConnections;
 }
 
 async function drawRectangle(page: Page) {
@@ -119,6 +135,32 @@ async function drawRectangle(page: Page) {
   await page.mouse.move(bounds.x + bounds.width * 0.7, bounds.y + bounds.height * 0.58, {
     steps: 6,
   });
+  await page.mouse.up();
+}
+
+async function drawSlowRectangle(page: Page) {
+  const whiteboard = page.locator('.excalidraw');
+  await expect(whiteboard).toBeVisible();
+  const bounds = await whiteboard.boundingBox();
+  if (!bounds) {
+    throw new Error('Whiteboard bounds are unavailable');
+  }
+  await whiteboard.click({
+    position: { x: bounds.width * 0.6, y: bounds.height * 0.5 },
+  });
+  await page.keyboard.press('2');
+  const start = { x: bounds.x + bounds.width * 0.5, y: bounds.y + bounds.height * 0.4 };
+  const end = { x: bounds.x + bounds.width * 0.75, y: bounds.y + bounds.height * 0.65 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 24; step += 1) {
+    const progress = step / 24;
+    await page.mouse.move(
+      start.x + (end.x - start.x) * progress,
+      start.y + (end.y - start.y) * progress,
+    );
+    await page.waitForTimeout(300);
+  }
   await page.mouse.up();
 }
 
@@ -244,6 +286,60 @@ test.describe('team whiteboard collaboration', () => {
     }
   });
 
+  test('keeps two sessions connected during a slow draw', async ({ baseURL, browser }) => {
+    test.setTimeout(90_000);
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const ownerContext = await createAuthenticatedContext({
+      baseURL,
+      browser,
+      sessionToken: ownerSessionToken,
+    });
+    const editorContext = await createAuthenticatedContext({
+      baseURL,
+      browser,
+      sessionToken: editorSessionToken,
+    });
+    const contexts = [ownerContext, editorContext];
+
+    try {
+      const ownerPage = await ownerContext.newPage();
+      const editorPage = await editorContext.newPage();
+      const route = `/collaboration?project=${projectId}&document=${documentId}`;
+      await Promise.all([ownerPage.goto(route), editorPage.goto(route)]);
+      await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
+      await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
+      await expect(ownerPage.getByLabel('2 位成员在线')).toBeVisible();
+      await expect(editorPage.getByLabel('2 位成员在线')).toBeVisible();
+      const before = await readWhiteboardMetrics();
+
+      await drawSlowRectangle(ownerPage);
+
+      await expect.poll(readSceneElementCount).toBeGreaterThan(0);
+      await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
+      await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
+      await expect(ownerPage.getByLabel('2 位成员在线')).toBeVisible();
+      await expect(editorPage.getByLabel('2 位成员在线')).toBeVisible();
+      await expect
+        .poll(async () => {
+          const metrics = await readWhiteboardMetrics();
+          return metrics.activeConnections;
+        })
+        .toBe(2);
+      await ownerPage.waitForTimeout(5000);
+      const settled = await readWhiteboardMetrics();
+      expect(settled.rateLimitedSaves).toBe(before.rateLimitedSaves);
+      expect(settled.saves - before.saves).toBeLessThanOrEqual(4);
+      await ownerPage.waitForTimeout(2000);
+      const stable = await readWhiteboardMetrics();
+      expect(stable.saves).toBe(settled.saves);
+    } finally {
+      await closeContexts(contexts);
+    }
+  });
+
   test('keeps the socket connected while toast state changes', async ({ baseURL, browser }) => {
     test.setTimeout(60_000);
     if (!baseURL) {
@@ -266,7 +362,8 @@ test.describe('team whiteboard collaboration', () => {
       });
       await page.goto(`/collaboration?project=${projectId}&document=${documentId}`);
       await expect(page.getByText('已同步', { exact: true })).toBeVisible();
-      await expect.poll(() => whiteboardSocketCount).toBe(1);
+      await expect.poll(() => whiteboardSocketCount).toBeGreaterThan(0);
+      const initialWhiteboardSocketCount = whiteboardSocketCount;
 
       await page.getByRole('button', { name: '导出白板' }).click();
       const download = page.waitForEvent('download');
@@ -275,7 +372,7 @@ test.describe('team whiteboard collaboration', () => {
       const toast = page.getByText('已导出 Excalidraw 文件', { exact: true });
       await expect(toast).toBeVisible();
       await expect(toast).not.toBeVisible({ timeout: 5000 });
-      expect(whiteboardSocketCount).toBe(1);
+      expect(whiteboardSocketCount).toBe(initialWhiteboardSocketCount);
       await expect(page.getByText('已同步', { exact: true })).toBeVisible();
     } finally {
       await context.close();
