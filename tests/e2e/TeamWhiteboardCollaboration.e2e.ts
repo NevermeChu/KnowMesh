@@ -278,6 +278,10 @@ test.describe('team whiteboard collaboration', () => {
       await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
 
       await drawRectangle(ownerPage);
+      await expect(editorPage.locator('[data-whiteboard-realtime-sequence]')).toHaveAttribute(
+        'data-whiteboard-element-count',
+        /^[1-9]\d*$/u,
+      );
       await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible({ timeout: 15_000 });
       await expect.poll(readSceneElementCount).toBeGreaterThan(0);
       await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
