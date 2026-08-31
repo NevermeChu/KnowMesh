@@ -167,7 +167,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - 当前存在 `/api/realtime/notifications` SSE Route Handler，基于 Web Streams `ReadableStream` 向已登录用户推送实时通知与未读数同步事件，包含 25 秒心跳保活。跨进程信号由 PostgreSQL `LISTEN / NOTIFY` 传递，进程内 `NotificationBroadcaster` 只负责向本进程连接扇出。
 - `src/proxy.ts` 的 matcher 排除了 `/api`；Route Handler 由自身通过 `requireUser()` 执行 Session 和身份校验。
 - 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地运行器、CI 和生产制品路径均能按开关启动它，并覆盖同 SHA 服务切换、回滚和公网 Upgrade 冒烟。
-- 当前存在独立 Socket.IO 白板协作服务；它只接受 WebSocket 传输，使用 Better Auth Cookie、同源 Origin 与 Project 直接权限认证，按独立开关、端口、健康检查和 advisory lock 运行。经过权限与结构校验的元素版本增量直接在房间内转发，不等待数据库；完整 scene 另经 750 毫秒合并、revision CAS 和提交后 canonical 广播持久化。Presence 名单只在连接生命周期变化时发送，光标按 33 毫秒合并为单连接增量并使用可丢弃的移动消息。实时 scene、保存、冲突、Presence、光标与权限失效都不经过 Hocuspocus/Yjs。
+- 当前存在独立 Socket.IO 白板协作服务；它只接受 WebSocket 传输，使用 Better Auth Cookie、同源 Origin 与 Project 直接权限认证，按独立开关、端口、健康检查和 advisory lock 运行。经过权限与结构校验的元素版本增量直接在房间内转发，不等待数据库；完整 scene 另经 750 毫秒合并、revision CAS 和提交后 canonical 广播持久化。Presence 名单只在连接生命周期变化时发送，光标按 33 毫秒合并为单连接最新目标并使用可丢弃的移动消息；接收端通过所有协作者共享的动画帧循环平滑追踪目标，停止移动后停止调度。实时 scene、保存、冲突、Presence、光标与权限失效都不经过 Hocuspocus/Yjs。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
 

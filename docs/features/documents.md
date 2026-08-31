@@ -99,7 +99,7 @@ Personal 白板可导出 `.excalidraw`、PNG 和 SVG。Team 白板在独立协�
 
 本地 `onChange` 同时进入两条独立路径。实时路径按 33 毫秒窗口只发送相对已知基线发生版本变化的元素、删除 tombstone 和可持久化 appState；拖动结束时立即冲刷最后一帧。服务端验证消息与当前写权限后直接转发，不等待数据库事务；接收端丢弃同一连接的旧序号，使用 `reconcileElements` 合并并以 `CaptureUpdateAction.NEVER` 应用，避免远端变化进入本地 Undo 历史。持久化路径继续通过共享的 750 毫秒尾随静默窗口合并完整场景，包括保存进行期间继续产生的变化，再以 revision CAS 写入数据库。保存成功后的 canonical 用于确认和纠偏，而不是首次呈现远端编辑。远端 scene 应用前仍记录元素版本与可持久化 appState 的身份指纹，从组件与队列两层阻断恢复回声循环。
 
-在线成员名单与高频光标使用不同事件。Presence 只在连接加入或离开时广播，并以服务端连接 ID 作为 Excalidraw collaborator 的稳定键；光标以 33 毫秒窗口发送最新坐标，移动包使用 Socket.IO volatile 语义，使拥塞时丢弃旧位置而不在恢复后追赶播放，拖动结束的最终 `pointerup` 使用可靠消息。服务端只向其他连接转发单个光标增量，不为每个坐标重建整个成员数组；客户端光标更新只替换 collaborators Map 并调用 Excalidraw，不更新 React 成员 state。服务端分别限制实时 scene、光标和保存事件频率并记录接受量与丢弃量指标；保存窗口仍为每条连接 10 秒内 20 次，达到上限时保持连接并以 `retryAfterMs` 通知客户端只重试最新完整场景。
+在线成员名单与高频光标使用不同事件。Presence 只在连接加入或离开时广播，并以服务端连接 ID 作为 Excalidraw collaborator 的稳定键；光标以 33 毫秒窗口发送最新目标坐标，移动包使用 Socket.IO volatile 语义，使拥塞时丢弃旧位置而不在恢复后追赶播放，拖动结束的最终 `pointerup` 使用可靠消息。服务端只向其他连接转发单个光标增量，不为每个坐标重建整个成员数组。接收端按连接 ID 和序号接受最新目标，所有远端光标共用一个 `requestAnimationFrame` 循环，以 50 毫秒快速缓出从当前显示位置追踪目标；目标到达后停止动画，真实 `down → up` 立即精确落点。每帧至多替换一次 collaborators Map 并调用一次 Excalidraw，不更新 React 成员 state，也不通过提高网络发送频率换取流畅度。服务端分别限制实时 scene、光标和保存事件频率并记录接受量与丢弃量指标；保存窗口仍为每条连接 10 秒内 20 次，达到上限时保持连接并以 `retryAfterMs` 通知客户端只重试最新完整场景。
 
 `viewer` 可接收 scene、Presence 与光标，但实时 scene 和持久化写入都会被服务端拒绝；功能关闭、断线或服务不可用时读取最近成功 scene 的只读画布，不回退 Personal 保存入口。收到新的 baseline 时必须丢弃可能已冻结的保存队列与实时发布器并按该快照重建，以便协作进程重启后恢复写入。scene envelope 当前只允许空 `files`；图片、二进制资产和元素链接不会进入持久化 scene。Excalidraw 仅在浏览器动态加载，`postinstall` 将锁定版本字体复制到同源静态资产目录，CSP `connect-src` 对每个协作 URL 同时放行 HTTP(S) 与 WS(S) 源，因为 Socket.IO 在浏览器里会把 `http://` 端点升级为 `ws://`。
 
