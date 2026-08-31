@@ -20,6 +20,8 @@ import {
   reconcileWhiteboardScenes,
   reconcileWhiteboardSceneUpdate,
 } from '../collaboration/reconcileWhiteboardScenes';
+import { TeamWhiteboardCursorSmoother } from '../collaboration/TeamWhiteboardCursorSmoother';
+import type { SmoothedWhiteboardCursor } from '../collaboration/TeamWhiteboardCursorSmoother';
 import { TeamWhiteboardRealtimePublisher } from '../collaboration/TeamWhiteboardRealtimePublisher';
 import { TeamWhiteboardSaveQueue } from '../collaboration/TeamWhiteboardSaveQueue';
 import {
@@ -161,6 +163,38 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
         socketRef.current?.disconnect();
       };
     }
+    let cursorRenderFrame = 0;
+    const cursorSmoother = new TeamWhiteboardCursorSmoother({
+      publish: (updates: SmoothedWhiteboardCursor[]) => {
+        let collaborators = collaboratorsRef.current;
+        let changed = false;
+        for (const update of updates) {
+          const connectionId = toCollaboratorSocketId(update.connectionId);
+          const collaborator = collaborators.get(connectionId);
+          if (!collaborator) {
+            continue;
+          }
+          if (!changed) {
+            collaborators = new Map(collaborators);
+            changed = true;
+          }
+          collaborators.set(connectionId, {
+            ...collaborator,
+            button: update.button,
+            pointer: { tool: update.tool, x: update.x, y: update.y },
+          });
+        }
+        if (!changed) {
+          return;
+        }
+        collaboratorsRef.current = collaborators;
+        apiRef.current?.updateScene({ collaborators });
+        cursorRenderFrame += 1;
+        if (canvasRef.current) {
+          canvasRef.current.dataset.whiteboardCursorFrame = String(cursorRenderFrame);
+        }
+      },
+    });
     const applyScene = async (scene: WhiteboardScene) => {
       const api = apiRef.current;
       if (!api) {
@@ -193,6 +227,9 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
         currentConnectionId,
         members: presenceMembers,
       });
+      cursorSmoother.retainConnections(
+        new Set(presenceMembers.map((member) => member.connectionId)),
+      );
       apiRef.current?.updateScene({ collaborators: collaboratorsRef.current });
     };
     const socket: Socket<WhiteboardServerToClientEvents, WhiteboardClientToServerEvents> = io(
@@ -225,24 +262,10 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
         return;
       }
       receivedCursorSequences.current.set(cursor.connectionId, cursor.clientSequence);
-      const connectionId = toCollaboratorSocketId(cursor.connectionId);
-      const collaborator = collaboratorsRef.current.get(connectionId);
-      if (!collaborator) {
-        return;
+      if (canvasRef.current) {
+        canvasRef.current.dataset.whiteboardCursorSequence = String(cursor.clientSequence);
       }
-      const collaborators = new Map<SocketId, Collaborator>([
-        ...collaboratorsRef.current,
-        [
-          connectionId,
-          {
-            ...collaborator,
-            button: cursor.button,
-            pointer: { tool: cursor.tool, x: cursor.x, y: cursor.y },
-          },
-        ],
-      ]);
-      collaboratorsRef.current = collaborators;
-      apiRef.current?.updateScene({ collaborators });
+      cursorSmoother.push(cursor);
     });
     socket.on('scene', (update: WhiteboardRemoteSceneUpdate) => {
       const previousSequence = receivedSceneSequences.current.get(update.connectionId) ?? -1;
@@ -287,6 +310,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
     socket.on('baseline', (baseline) => {
       receivedCursorSequences.current.clear();
       receivedSceneSequences.current.clear();
+      cursorSmoother.clear();
       applyPresence(baseline.members, socket.id);
       setCanWrite(baseline.canWrite && props.canEdit);
       queueRef.current?.dispose();
@@ -332,6 +356,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
     });
     socket.connect();
     return () => {
+      cursorSmoother.dispose();
       queueRef.current?.dispose();
       realtimePublisherRef.current?.dispose();
       socket.disconnect();
