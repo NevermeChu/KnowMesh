@@ -3,6 +3,7 @@ import {
   createWhiteboardScene,
   EMPTY_WHITEBOARD_SCENE,
   getWhiteboardSceneVersionFingerprint,
+  WhiteboardRemoteSceneEchoGuard,
   whiteboardSceneSchema,
 } from './WhiteboardScene';
 
@@ -93,5 +94,32 @@ describe('whiteboard scene validation', () => {
     expect(getWhiteboardSceneVersionFingerprint(edited)).not.toBe(
       getWhiteboardSceneVersionFingerprint(canonical),
     );
+  });
+
+  it('detects persisted app state changes in fingerprints', () => {
+    const canonical = { ...EMPTY_WHITEBOARD_SCENE, elements: [rectangle] };
+    const edited = {
+      ...canonical,
+      appState: { viewBackgroundColor: '#f8fafc' },
+    };
+
+    expect(getWhiteboardSceneVersionFingerprint(edited)).not.toBe(
+      getWhiteboardSceneVersionFingerprint(canonical),
+    );
+  });
+
+  it('ignores every matching remote callback until the scene changes', () => {
+    const guard = new WhiteboardRemoteSceneEchoGuard();
+    const canonical = { ...EMPTY_WHITEBOARD_SCENE, elements: [rectangle] };
+    const edited = {
+      ...EMPTY_WHITEBOARD_SCENE,
+      elements: [{ ...rectangle, version: 2 }],
+    };
+    guard.mark(canonical);
+
+    expect(guard.shouldIgnore(canonical)).toBeTruthy();
+    expect(guard.shouldIgnore(canonical)).toBeTruthy();
+    expect(guard.shouldIgnore(edited)).toBeFalsy();
+    expect(guard.shouldIgnore(canonical)).toBeFalsy();
   });
 });

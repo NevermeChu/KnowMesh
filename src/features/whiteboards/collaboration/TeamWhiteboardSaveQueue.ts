@@ -1,4 +1,5 @@
 import type { SaveState } from '@/features/documents/components/DocumentSaveStatus';
+import { haveSameWhiteboardSceneVersion } from '../WhiteboardScene';
 import type { WhiteboardScene } from '../WhiteboardScene';
 import {
   MAX_WHITEBOARD_CONFLICT_RETRIES,
@@ -45,7 +46,7 @@ export class TeamWhiteboardSaveQueue {
       return;
     }
     this.latestScene = scene;
-    this.pending = JSON.stringify(scene) !== JSON.stringify(this.canonicalScene);
+    this.pending = !haveSameWhiteboardSceneVersion(scene, this.canonicalScene);
     this.options.onStateChange(this.pending ? 'saving' : 'saved');
     if (!this.pending) {
       return;
@@ -69,14 +70,16 @@ export class TeamWhiteboardSaveQueue {
       if (canonical.revision <= this.revision || this.frozen) {
         return;
       }
-      const hadLocalChanges =
-        JSON.stringify(this.latestScene) !== JSON.stringify(this.canonicalScene);
+      const hadLocalChanges = !haveSameWhiteboardSceneVersion(
+        this.latestScene,
+        this.canonicalScene,
+      );
       this.revision = canonical.revision;
       this.canonicalScene = canonical.scene;
       this.latestScene = hadLocalChanges
         ? await this.options.reconcile(this.latestScene, canonical.scene)
         : canonical.scene;
-      this.pending = JSON.stringify(this.latestScene) !== JSON.stringify(this.canonicalScene);
+      this.pending = !haveSameWhiteboardSceneVersion(this.latestScene, this.canonicalScene);
       await this.options.apply(this.latestScene);
       if (this.pending) {
         this.options.onStateChange('saving');
@@ -173,7 +176,7 @@ export class TeamWhiteboardSaveQueue {
         continue;
       }
       this.retryCount = 0;
-      this.pending = JSON.stringify(this.latestScene) !== JSON.stringify(candidate);
+      this.pending = !haveSameWhiteboardSceneVersion(this.latestScene, candidate);
       if (this.pending) {
         this.options.onStateChange('saving');
         this.scheduleFlush();

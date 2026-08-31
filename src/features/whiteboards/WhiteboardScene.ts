@@ -204,6 +204,7 @@ export const EMPTY_WHITEBOARD_SCENE: WhiteboardScene = {
  */
 export function getWhiteboardSceneVersionFingerprint(scene: WhiteboardScene) {
   return JSON.stringify({
+    appState: scene.appState,
     elements: scene.elements.map((element) => ({
       id: element.id,
       isDeleted: element.isDeleted,
@@ -211,4 +212,28 @@ export function getWhiteboardSceneVersionFingerprint(scene: WhiteboardScene) {
       versionNonce: element.versionNonce,
     })),
   });
+}
+
+export function haveSameWhiteboardSceneVersion(left: WhiteboardScene, right: WhiteboardScene) {
+  return getWhiteboardSceneVersionFingerprint(left) === getWhiteboardSceneVersionFingerprint(right);
+}
+
+/** Tracks the current remote scene until a genuine persisted change diverges from it. */
+export class WhiteboardRemoteSceneEchoGuard {
+  private fingerprint: string | null = null;
+
+  mark(scene: WhiteboardScene) {
+    this.fingerprint = getWhiteboardSceneVersionFingerprint(scene);
+  }
+
+  shouldIgnore(scene: WhiteboardScene) {
+    if (this.fingerprint === null) {
+      return false;
+    }
+    if (getWhiteboardSceneVersionFingerprint(scene) === this.fingerprint) {
+      return true;
+    }
+    this.fingerprint = null;
+    return false;
+  }
 }

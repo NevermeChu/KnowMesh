@@ -43,6 +43,37 @@ const canonical = (options: {
 });
 
 describe(TeamWhiteboardSaveQueue, () => {
+  it('ignores restore-only element fields without a version change', async () => {
+    vi.useFakeTimers();
+    try {
+      const initialScene = createScene('restored');
+      const restoredScene: WhiteboardScene = {
+        ...initialScene,
+        elements: [{ ...initialScene.elements[0], angle: 0, seed: 1234 }],
+      };
+      const onStateChange = createStateMock();
+      const save = vi.fn<(options: SaveCandidate) => Promise<WhiteboardSaveAcknowledgement>>();
+      const queue = new TeamWhiteboardSaveQueue({
+        apply: createApplyMock(),
+        initialRevision: 1,
+        initialScene,
+        onFrozen: createFrozenMock(),
+        onStateChange,
+        reconcile:
+          vi.fn<(local: WhiteboardScene, remote: WhiteboardScene) => Promise<WhiteboardScene>>(),
+        save,
+      });
+
+      queue.enqueue(restoredScene);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(save).not.toHaveBeenCalled();
+      expect(onStateChange).toHaveBeenLastCalledWith('saved');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('coalesces changes that arrive while a save is active', async () => {
     vi.useFakeTimers();
     try {

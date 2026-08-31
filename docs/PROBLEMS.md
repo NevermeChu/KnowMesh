@@ -1024,7 +1024,7 @@ PGlite 测试帮助器直接按 Drizzle journal 的 entries 顺序生成 SQL 文
 
 保存队列使用共享的 750 毫秒尾随静默窗口。首次变化、保存进行期间的新变化以及远端 canonical 合并后仍待提交的变化都经过同一窗口；一次保存成功后不再立即循环发送 pending scene。版本冲突仍使用 canonical revision 和官方 `reconcileElements` 在有界重试循环内协调，不改变 Team 白板的 revision/CAS 权威。
 
-客户端应用远端场景时记录元素 `id`、`version`、`versionNonce` 和 `isDeleted` 组成的版本指纹。restore 补充默认样式或内部字段不会改变该指纹，因此对应的一次延迟 `onChange` 会被识别为远端恢复回声并忽略；真实元素编辑会提升版本，不会被误过滤。该判断避免依赖 microtask 时序或 Excalidraw 不稳定的瞬态 appState。
+客户端应用远端场景时记录元素 `id`、`version`、`versionNonce`、`isDeleted` 与可持久化 appState 组成的版本指纹。restore 补充默认样式或内部字段不会改变该指纹；只要后续 `onChange` 仍与远端基线一致，无论回调出现一次还是多次，都被识别为恢复回声并忽略。真实元素编辑会提升版本，可持久化画布设置也会改变指纹，此时才清除远端基线并进入保存队列。保存队列判断本地、canonical 与保存中场景是否相同时也复用该语义指纹，不再用完整 JSON 差异把 restore 字段误判为新编辑。两层判断共同避免依赖 microtask 时序、固定回调次数或 Excalidraw 不稳定的瞬态字段。
 
 协议和服务端在保存窗口已满时返回包含 `retryAfterMs` 的非致命 `rate-limited` 确认，并保持 Socket.IO 连接。客户端保留最新待保存场景，在退避时间结束后自动重试；服务端通过 `rateLimitedSaves` 指标暴露背压事件，便于区分客户端合并异常、滥用流量和数据库持久化失败。
 
