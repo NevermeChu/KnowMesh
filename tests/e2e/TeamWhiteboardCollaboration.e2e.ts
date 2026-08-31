@@ -164,6 +164,16 @@ async function drawSlowRectangle(page: Page) {
   await page.mouse.up();
 }
 
+async function moveWhiteboardCursor(page: Page, horizontalRatio: number) {
+  const whiteboard = page.locator('.excalidraw');
+  await expect(whiteboard).toBeVisible();
+  const bounds = await whiteboard.boundingBox();
+  if (!bounds) {
+    throw new Error('Whiteboard bounds are unavailable');
+  }
+  await page.mouse.move(bounds.x + bounds.width * horizontalRatio, bounds.y + bounds.height * 0.5);
+}
+
 test.describe('team whiteboard collaboration', () => {
   test.skip(
     Env.WHITEBOARD_COLLABORATION_ENABLED !== 'true' ||
@@ -339,6 +349,56 @@ test.describe('team whiteboard collaboration', () => {
       await ownerPage.waitForTimeout(2000);
       const stable = await readWhiteboardMetrics();
       expect(stable.saves).toBe(settled.saves);
+    } finally {
+      await closeContexts(contexts);
+    }
+  });
+
+  test('smooths remote cursors between low-frequency targets', async ({ baseURL, browser }) => {
+    test.setTimeout(60_000);
+    if (!baseURL) {
+      throw new Error('Playwright base URL is unavailable');
+    }
+
+    const ownerContext = await createAuthenticatedContext({
+      baseURL,
+      browser,
+      sessionToken: ownerSessionToken,
+    });
+    const editorContext = await createAuthenticatedContext({
+      baseURL,
+      browser,
+      sessionToken: editorSessionToken,
+    });
+    const contexts = [ownerContext, editorContext];
+
+    try {
+      const ownerPage = await ownerContext.newPage();
+      const editorPage = await editorContext.newPage();
+      const route = `/collaboration?project=${projectId}&document=${documentId}`;
+      await Promise.all([ownerPage.goto(route), editorPage.goto(route)]);
+      await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
+      await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
+      await expect(editorPage.getByLabel('2 位成员在线')).toBeVisible();
+      const editorCanvas = editorPage.locator('[data-whiteboard-cursor-frame]');
+
+      await moveWhiteboardCursor(ownerPage, 0.35);
+      await expect(editorCanvas).toHaveAttribute('data-whiteboard-cursor-sequence', /^\d+$/u);
+      const firstSequence = Number(
+        await editorCanvas.getAttribute('data-whiteboard-cursor-sequence'),
+      );
+      const firstFrame = Number(await editorCanvas.getAttribute('data-whiteboard-cursor-frame'));
+
+      await moveWhiteboardCursor(ownerPage, 0.75);
+
+      await expect
+        .poll(async () =>
+          Number(await editorCanvas.getAttribute('data-whiteboard-cursor-sequence')),
+        )
+        .toBeGreaterThan(firstSequence);
+      await expect
+        .poll(async () => Number(await editorCanvas.getAttribute('data-whiteboard-cursor-frame')))
+        .toBeGreaterThan(firstFrame + 1);
     } finally {
       await closeContexts(contexts);
     }
