@@ -102,7 +102,7 @@
 - `document_id` 是指向 `documents.id` 的主键外键；删除 Document 时数据库级联删除白板状态。
 - `scene` 保存经过应用层校验的版本化 Excalidraw scene envelope；第一阶段 `files` 必须为空，scene 不进入富文本正文或搜索投影。
 - `scene_schema_version` 记录 KnowMesh envelope 版本，当前为 `1`；它不等于 Excalidraw npm 版本。
-- `revision` 从 `1` 开始，供后续 Personal 与 Team 白板保存使用 compare-and-swap；`created_at` 与 `updated_at` 记录初始化和最近保存时间。
+- `revision` 从 `1` 开始，Personal 与 Team 白板保存都使用它执行 compare-and-swap；`created_at` 与 `updated_at` 记录初始化和最近保存时间。
 - 延迟约束触发器在事务提交时保证：whiteboard Document 恰有一条白板状态且不能具有富文本协作状态，rich-text Document 不能具有白板状态。这样创建可以先插入 Document、再在同一事务插入空 scene，同时不允许半成品提交。
 - 数据库不理解 scene JSON 的元素语义、大小和字段白名单；这些由 `WhiteboardScene.ts` 的 Zod 边界执行，绕过应用直接写入仍可能产生无效 scene。
 
@@ -132,6 +132,14 @@
 - `(user_id, created_at DESC)` 索引支持按收藏时间倒序检索用户的收藏文档。
 - 包含收藏记录创建时间。
 
+### `audit_logs`
+
+- UUID 主键；`workspace_id` 保存事件发生时的稳定 Team Workspace UUID，不建立外键，因此 Workspace 删除后审计历史和同事务写入的 `workspace_deleted` 事件仍可保留。
+- `actor_user_id` 保存事件发生时的用户 ID，同样不建立本地用户外键；账户删除不会抹除既有审计归因。
+- `action` 与可选 `target_kind` 使用应用共享枚举，`target_id` 保存事件发生时的资源标识；`metadata` 保存调用入口提供的结构化上下文，数据库只保证它是 JSONB，不校验键集合或业务语义。
+- `ip_address` 与 `user_agent` 保存请求上下文；读取入口仍按活跃 Team Workspace 的唯一 Owner 授权，表本身不提供跨 Workspace 访问边界。
+- `(workspace_id, created_at DESC)` 支持 Workspace 时间线分页，`actor_user_id` 索引支持按操作者筛选。
+
 
 当前已经加入 Better Auth 本地用户表。认证迁移完成后，业务表中的 `owner_id` 和 `user_id` 保存 Better Auth 字符串用户 ID；账户删除由应用事务同时删除该用户拥有的 Workspace、Project、其他业务关系和 Better Auth `user` 行。其他通知中的触发者引用置空，其他人 Project 中保留的 Document 使用 `deleted_user` 替换 `created_by_id`，因此这些业务引用不会全部直接级联到 `user`。
 
@@ -146,6 +154,14 @@
 自 `0032_clammy_garia.sql` 起，`starred_documents.user_id` 也以 `ON DELETE CASCADE` 外键引用 `user.id`。迁移先删除无法关联现有用户的孤儿收藏，再建立约束；应用收藏写入使用明确目标状态和联合主键冲突处理，使重复收藏或取消收藏请求幂等。
 
 自 `0033_flippant_warlock.sql` 起，Document 增加默认回填为 `rich-text` 的 `kind`，并新增一对一 `document_whiteboard_states`。迁移使用延迟约束触发器维护 Document kind、白板状态和富文本协作状态之间的互斥关系。
+
+## 迁移工作流
+
+- 修改持久化结构时先更新 `src/models/Schema.ts`，再运行 `npm run db:generate`；生成的 SQL、snapshot 与 `migrations/meta/_journal.json` 必须作为同一变更审查，不能只提交其中一部分。
+- `_journal.json` 的 entries 是迁移执行顺序的权威清单。PGlite 集成测试帮助器也按 journal 解析文件名，不按文件系统枚举或字符串排序猜测顺序；新增、重命名或删除迁移时必须同步 journal。
+- `npm run dev` 启动持久化 `local.db/` PGlite，并在 Next.js 前执行迁移；`npm run build-local` 使用临时内存 PGlite 执行迁移后再构建。`dev:next`、`build` 与 `build:next` 不启动数据库，也不执行迁移。
+- 已经运行数据库时可以显式执行 `npm run db:migrate`。生产环境只由 release artifact 中的迁移程序在版本切换前执行 journal 中尚未应用的迁移，应用构建本身不得隐式迁移生产数据库。
+- 迁移必须向后兼容当前可回滚应用版本；生产 Schema 不执行自动 down migration，破坏性变化使用分阶段 expand/contract。
 
 ## 数据库约束与应用层不变量
 

@@ -15,13 +15,19 @@ KnowMesh 使用 Next.js App Router、React Server Components、Better Auth、Dri
      ├─ AppShell
      ├─ AppSidebar
      ├─ CreateProjectDialog
-     └─ Tiptap DocumentEditor
-            │ Server Actions
-            ▼
+     └─ DocumentEditorDispatcher
+          ├─ Personal Tiptap → Server Actions
+          ├─ Team Tiptap → Hocuspocus / Yjs
+          └─ Excalidraw → Personal Server Action / Team Socket.IO
+                       │
+                       ▼
 Next.js 服务器
 ├─ Server Components 和路由布局
 ├─ Better Auth 服务端会话验证与 API Route Handler
 ├─ server-only 查询
+├─ Server Actions 与 SSE Route Handler
+├─ Hocuspocus 文档协作进程
+├─ Socket.IO 白板协作进程
 └─ Drizzle
        │
        ▼
@@ -95,6 +101,7 @@ PostgreSQL / 本地 PGlite
 - 工作区、项目和文件的能力授权、分层管理弹窗、重命名与删除。
 - 项目内文档创建、列表和读取。
 - 基于 Tiptap 的富文本编辑：Personal 文档单人编辑与 JSONB 自动保存；Team 文档基于 Hocuspocus/Yjs 实时协同编辑与派生快照持久化。
+- 基于 Excalidraw 的白板编辑：Personal 白板使用 revision CAS 自动保存；Team 白板使用独立 Socket.IO Adapter、scene revision、客户端冲突合并与保存背压重试。
 - 文档 Markdown 下载、复制以及浏览器打印。
 - 受项目正文权限约束的全站搜索与用户级文档收藏。
 - 站内通知列表、未读统计和已读操作。

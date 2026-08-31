@@ -15,6 +15,7 @@
 权限通知：权限 Server Action → 同一数据库事务写业务状态与用户通知
 Personal 正文：Client Component → 防抖/失焦保存 → Server Action → JSONB
 Team 正文：Client Component → 浏览器 Yjs 副本 + Hocuspocus Provider → Yjs 状态 + JSONB 派生快照
+Personal 白板：Client Component → 串行保存队列 → Server Action → PostgreSQL scene revision
 Team 白板：Client Component → Socket.IO Adapter + 官方 reconcileElements → PostgreSQL scene revision
 ```
 
@@ -129,7 +130,9 @@ Personal 文档的 Tiptap 正文变更先在客户端合并，随后调用 `upda
 
 模式分流把 Workspace 正文权威类型和协作服务当前是否允许写入分开表达。功能开关关闭时，所有 Team 文档都选择 `collaborative-readonly`，直接显示当前 JSON 快照且不建立 Provider；正文编辑和 `updateDocument(content)` 保持关闭，标题继续按独立业务授权保存。重新启用后，已有状态继续使用既有 Yjs 历史，尚未初始化的 Team 文档才从经过验证的 JSON 快照建立首次 Yjs 状态。
 
-独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本先检查全部受管端口，只有端口空闲才启动数据库、迁移、协作与 Next.js；任一受管进程异常退出都会结束整组服务，预检失败且尚未启动子进程时不会进入端口清理。Windows 下长生命周期子进程使用独立进程组，Next.js CLI 启动时显式加载隐藏窗口预加载器并覆盖其内部 `fork` 与 `spawn`，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。GitHub Actions 已在真实 PostgreSQL 与协作服务下确认 E2E 和容器清理；生产 release 包含同 SHA 的协作可执行文件、systemd/Nginx 模板和受显式部署开关保护的双服务健康检查与回滚。生产 systemd、Nginx、readiness、HTTPS 与公网 WSS Upgrade 已验证并启用；真实登录双会话业务验收仍需单独确认。
+`DocumentEditorDispatcher` 按内容类型和编辑模式动态加载三条独立运行路径：Personal 富文本、Team 协作富文本和白板。Excalidraw 只在浏览器加载并禁用 SSR；打开富文本文档不会下载白板运行时，打开 Personal 文档也不会提前创建协作 Provider。该分包边界只减少不相关运行时代码，不改变服务端已经确定的权限或内容权威。
+
+独立 Hocuspocus 入口按房间加载或初始化 Team 文档 Yjs 状态，并在节流存储时于同一数据库事务更新二进制状态和经过 Schema 验证的 JSON 投影。失败的 store 按文档保留内存状态并周期重试；存在任一未恢复文档时 readiness 保持失败，最后一个客户端离开也不得卸载该文档。关闭流程逐篇尝试最终持久化，一个失败不得跳过其他文档。WebSocket 握手要求同源 Origin 和有效 Better Auth Session，服务端根据 Team Project 直接成员权限决定读写，viewer 连接由 Hocuspocus 标记为只读；写入前重新检查数据库 Session 与权限，成员、角色、Session 和文档变更通过事务后 PostgreSQL 通知触发复查，并以 15 秒周期复查兜底。通知与周期复查都按连接隔离查询异常，单个失败不会阻断后续连接撤权。客户端显示 Provider 连接/同步状态及经过服务端身份净化的 Presence；认证失败同时撤销正文和标题的旧页面写入能力。本地运行脚本先检查全部受管端口，只有端口空闲才启动数据库、迁移、协作与 Next.js；任一受管进程异常退出都会结束整组服务，预检失败且尚未启动子进程时不会进入端口清理。Windows 下长生命周期子进程使用独立进程组，Next.js CLI 启动时显式加载隐藏窗口预加载器并覆盖其内部 `fork` 与 `spawn`，关闭时通过 IPC 先请求协作进程持久化，再清理 Next.js 与数据库。GitHub Actions 在真实 PostgreSQL 与协作服务下运行 E2E 和容器清理；生产 release 包含同 SHA 的两个协作可执行文件、systemd/Nginx 模板以及受显式部署开关保护的健康检查与回滚。仓库只能证明这些部署路径存在并受测试约束，实际生产开关、服务状态和公网 Upgrade 必须以部署时的实时检查为准。
 
 `DocumentEditor` 在创建和销毁时通过 `DocumentEditorToolbarProvider` 注册当前 Tiptap 实例。共享 `ContentToolbar` 从该上下文取得编辑器，仅在可编辑文档打开时显示格式命令；编辑器内容仍由文档页面持有，工具栏上下文不保存正文副本。
 
@@ -163,7 +166,8 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - 当前存在 `/api/auth/[...all]` Better Auth Route Handler，提供认证和账户生命周期接口。
 - 当前存在 `/api/realtime/notifications` SSE Route Handler，基于 Web Streams `ReadableStream` 向已登录用户推送实时通知与未读数同步事件，包含 25 秒心跳保活。跨进程信号由 PostgreSQL `LISTEN / NOTIFY` 传递，进程内 `NotificationBroadcaster` 只负责向本进程连接扇出。
 - `src/proxy.ts` 的 matcher 排除了 `/api`；Route Handler 由自身通过 `requireUser()` 执行 Session 和身份校验。
-- 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地、CI 和生产部署已接入真实运行路径，生产 release 与部署流程覆盖同 SHA 协作进程、双服务回滚和公网 Upgrade 冒烟。生产功能开关已经启用，真实登录双会话业务验收仍需单独确认。
+- 当前存在独立 Hocuspocus 双向 WebSocket 服务与客户端 Provider；本地运行器、CI 和生产制品路径均能按开关启动它，并覆盖同 SHA 服务切换、回滚和公网 Upgrade 冒烟。
+- 当前存在独立 Socket.IO 白板协作服务；它只接受 WebSocket 传输，使用 Better Auth Cookie、同源 Origin 与 Project 直接权限认证，按独立开关、端口、健康检查和 advisory lock 运行。保存、冲突、Presence 与权限失效都不经过 Hocuspocus/Yjs。
 
 新增其他传输边界时，应根据实际实现更新本文档；在代码出现前不预先指定其协议、鉴权或部署方案。
 
@@ -195,12 +199,16 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - `src/app/layout.tsx`：根布局主题 cookie 读取与 `<html>` 主题输出。
 - `src/components/layout/AppShell.tsx`：客户端工作区外壳。
 - `src/features/documents/components/ProjectDocumentsPage.tsx`：项目文档服务端页面组合。
+- `src/features/documents/components/DocumentEditorDispatcher.tsx`：按内容类型和编辑模式动态加载独立编辑器运行时。
 - `src/features/documents/server/GetProjectDocuments.ts`：文档 server-only 查询。
 - `src/features/documents/server/CreateDocument.ts`：文档创建 Server Action。
 - `src/features/documents/server/UpdateDocument.ts`：文档更新 Server Action。
 - `src/features/documents/server/DeleteDocument.ts`：文档删除 Server Action。
 - `scripts/collaboration-server.ts`：由本地运行脚本按功能开关管理的独立 Hocuspocus 服务入口。
 - `src/features/documents/collaboration/DocumentCollaborationServer.ts`：协作文档加载、存储、健康检查与关闭生命周期。
+- `scripts/whiteboard-collaboration-server.ts`：由本地运行脚本按独立开关管理的 Socket.IO 白板协作入口。
+- `src/features/whiteboards/collaboration/WhiteboardCollaborationServer.ts`：白板认证、Presence、保存、背压、健康检查与权限失效。
+- `src/features/whiteboards/collaboration/TeamWhiteboardSaveQueue.ts`：客户端 scene 合并、冲突重试和保存节流队列。
 - `src/features/projects/server/UpdateProject.ts` 和 `DeleteProject.ts`：项目管理 Server Action。
 - `src/features/workspaces/server/UpdateWorkspace.ts` 和 `DeleteWorkspace.ts`：Workspace 管理 Server Action。
 
@@ -218,3 +226,4 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 - [ADR 0012：Team 文档使用 Yjs 权威状态与 ProseMirror JSON 派生快照](../adr/0012-use-yjs-for-team-document-collaboration.md)
 - [ADR 0014：使用浏览器 Yjs 副本缩小协作硬崩溃丢失窗口](../adr/0014-use-browser-yjs-replicas-for-crash-recovery.md)
 - [ADR 0015：按节点加载文档导航树](../adr/0015-lazy-load-document-navigation.md)
+- [ADR 0016：使用 Document 类型与 Excalidraw scene 协议承载白板](../adr/0016-use-document-kind-and-excalidraw-scene-protocol.md)
