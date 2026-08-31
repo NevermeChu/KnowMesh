@@ -185,6 +185,66 @@ describe('whiteboard collaboration server', () => {
     reader.disconnect();
   });
 
+  it('relays realtime scene updates without waiting for persistence', async () => {
+    const port = await startService();
+    const { socket: writer } = await connectClient(port);
+    const { socket: reader } = await connectClient(port);
+    const sceneUpdate = waitForEvent<{
+      clientSequence: number;
+      connectionId: string;
+    }>(reader, 'scene');
+
+    writer.emit('scene', {
+      clientSequence: 0,
+      scene: { ...state.scene, appState: { viewBackgroundColor: '#ffffff' } },
+    });
+
+    await expect(sceneUpdate).resolves.toMatchObject({
+      clientSequence: 0,
+      connectionId: writer.id,
+    });
+    expect(state.revision).toBe(1);
+    expect(
+      service?.metrics.snapshot({ activeConnections: 2, activeRooms: 1 }).liveSceneUpdates,
+    ).toBe(1);
+
+    writer.disconnect();
+    reader.disconnect();
+  });
+
+  it('relays cursor deltas without rebroadcasting the member roster', async () => {
+    const port = await startService();
+    const { socket: writer } = await connectClient(port);
+    const { socket: reader } = await connectClient(port);
+    let presenceEvents = 0;
+    reader.on('presence', () => {
+      presenceEvents += 1;
+    });
+    const cursor = waitForEvent<{ button: string; connectionId: string; x: number }>(
+      reader,
+      'cursor',
+    );
+
+    writer.emit('cursor', {
+      button: 'down',
+      clientSequence: 0,
+      tool: 'pointer',
+      x: 10,
+      y: 20,
+    });
+
+    await expect(cursor).resolves.toMatchObject({
+      button: 'down',
+      connectionId: writer.id,
+      x: 10,
+    });
+    await Promise.resolve();
+    expect(presenceEvents).toBe(0);
+
+    writer.disconnect();
+    reader.disconnect();
+  });
+
   it('returns a persistence error without broadcasting', async () => {
     state.persistError = new Error('Database unavailable');
     const port = await startService();

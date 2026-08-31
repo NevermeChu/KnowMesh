@@ -10,10 +10,13 @@ import {
   saveTeamWhiteboardCandidate,
 } from './WhiteboardCollaborationPersistence';
 import {
-  WHITEBOARD_COLLABORATION_PATH,
+  MAX_WHITEBOARD_CURSOR_EVENTS_PER_WINDOW,
+  MAX_WHITEBOARD_LIVE_SCENE_EVENTS_PER_WINDOW,
   MAX_WHITEBOARD_SAVE_EVENTS_PER_WINDOW,
+  WHITEBOARD_COLLABORATION_PATH,
   WHITEBOARD_SAVE_RATE_WINDOW_MS,
   whiteboardCandidateSchema,
+  whiteboardLiveSceneUpdateSchema,
   whiteboardPointerSchema,
 } from './WhiteboardCollaborationProtocol';
 import type {
@@ -144,6 +147,7 @@ export function createWhiteboardCollaborationServer(options: { allowedOrigin: st
       membersByDocument.get(context.documentId) ?? new Map<string, WhiteboardCollaborationMember>();
     membersByDocument.set(context.documentId, documentMembers);
     documentMembers.set(socket.id, {
+      connectionId: socket.id,
       id: context.userId,
       image: context.image,
       name: context.name,
@@ -164,7 +168,48 @@ export function createWhiteboardCollaborationServer(options: { allowedOrigin: st
       return;
     }
 
+    let cursorEventTimestamps: number[] = [];
+    let liveSceneEventTimestamps: number[] = [];
     let saveEventTimestamps: number[] = [];
+
+    socket.on('scene', async (updateValue) => {
+      const update = whiteboardLiveSceneUpdateSchema.safeParse(updateValue);
+      if (!update.success) {
+        socket.disconnect(true);
+        return;
+      }
+      const now = Date.now();
+      liveSceneEventTimestamps = liveSceneEventTimestamps.filter(
+        (timestamp) => now - timestamp < WHITEBOARD_SAVE_RATE_WINDOW_MS,
+      );
+      if (liveSceneEventTimestamps.length >= MAX_WHITEBOARD_LIVE_SCENE_EVENTS_PER_WINDOW) {
+        metrics.recordDroppedLiveSceneUpdate();
+        return;
+      }
+      liveSceneEventTimestamps.push(now);
+      if (!context.canWrite) {
+        metrics.recordReadOnlyWriteRejection();
+        return;
+      }
+      try {
+        if (now - context.accessValidatedAt >= WRITE_REVALIDATION_INTERVAL_MS) {
+          if (!(await revalidateWhiteboardCollaborationConnection(context))) {
+            metrics.recordInvalidatedConnection();
+            freezeSocket(socket.id, 'permission-denied');
+            return;
+          }
+          context.accessValidatedAt = now;
+        }
+        socket.to(context.documentId).emit('scene', {
+          ...update.data,
+          connectionId: socket.id,
+        });
+        metrics.recordLiveSceneUpdate();
+      } catch {
+        freezeSocket(socket.id, 'service-unavailable');
+      }
+    });
+
     socket.on('save', async (candidateValue, acknowledge) => {
       const parsed = whiteboardCandidateSchema.safeParse(candidateValue);
       if (!parsed.success) {
@@ -200,20 +245,19 @@ export function createWhiteboardCollaborationServer(options: { allowedOrigin: st
         return;
       }
       try {
-        if (
-          now - context.accessValidatedAt >= WRITE_REVALIDATION_INTERVAL_MS &&
-          !(await revalidateWhiteboardCollaborationConnection(context))
-        ) {
-          metrics.recordInvalidatedConnection();
-          acknowledge({
-            clientMutationId: parsed.data.clientMutationId,
-            message: 'permission-denied',
-            status: 'error',
-          });
-          freezeSocket(socket.id, 'permission-denied');
-          return;
+        if (now - context.accessValidatedAt >= WRITE_REVALIDATION_INTERVAL_MS) {
+          if (!(await revalidateWhiteboardCollaborationConnection(context))) {
+            metrics.recordInvalidatedConnection();
+            acknowledge({
+              clientMutationId: parsed.data.clientMutationId,
+              message: 'permission-denied',
+              status: 'error',
+            });
+            freezeSocket(socket.id, 'permission-denied');
+            return;
+          }
+          context.accessValidatedAt = now;
         }
-        context.accessValidatedAt = now;
         const result = await saveTeamWhiteboardCandidate({
           documentId: context.documentId,
           expectedRevision: parsed.data.expectedRevision,
@@ -249,14 +293,25 @@ export function createWhiteboardCollaborationServer(options: { allowedOrigin: st
       }
     });
 
-    socket.on('presence', (pointerValue) => {
+    socket.on('cursor', (pointerValue) => {
       const pointer = whiteboardPointerSchema.safeParse(pointerValue);
-      const member = documentMembers.get(socket.id);
-      if (!pointer.success || !member) {
+      if (!pointer.success) {
         return;
       }
-      documentMembers.set(socket.id, { ...member, pointer: pointer.data });
-      emitPresence(context.documentId);
+      const now = Date.now();
+      cursorEventTimestamps = cursorEventTimestamps.filter(
+        (timestamp) => now - timestamp < WHITEBOARD_SAVE_RATE_WINDOW_MS,
+      );
+      if (cursorEventTimestamps.length >= MAX_WHITEBOARD_CURSOR_EVENTS_PER_WINDOW) {
+        metrics.recordDroppedCursorUpdate();
+        return;
+      }
+      cursorEventTimestamps.push(now);
+      socket.to(context.documentId).volatile.emit('cursor', {
+        ...pointer.data,
+        connectionId: socket.id,
+      });
+      metrics.recordCursorUpdate();
     });
 
     socket.on('disconnect', () => {

@@ -1,7 +1,11 @@
 export class WhiteboardCollaborationMetrics {
   private authenticationFailures = 0;
   private conflicts = 0;
+  private cursorUpdates = 0;
+  private droppedCursorUpdates = 0;
+  private droppedLiveSceneUpdates = 0;
   private invalidatedConnections = 0;
+  private liveSceneUpdates = 0;
   private persistenceFailures = 0;
   private rateLimitedSaves = 0;
   private readonly failedDocumentIds = new Set<string>();
@@ -14,6 +18,18 @@ export class WhiteboardCollaborationMetrics {
 
   recordConflict() {
     this.conflicts += 1;
+  }
+
+  recordCursorUpdate() {
+    this.cursorUpdates += 1;
+  }
+
+  recordDroppedCursorUpdate() {
+    this.droppedCursorUpdates += 1;
+  }
+
+  recordDroppedLiveSceneUpdate() {
+    this.droppedLiveSceneUpdates += 1;
   }
 
   recordInvalidatedConnection() {
@@ -37,6 +53,10 @@ export class WhiteboardCollaborationMetrics {
     this.failedDocumentIds.delete(documentId);
   }
 
+  recordLiveSceneUpdate() {
+    this.liveSceneUpdates += 1;
+  }
+
   recordSave(documentId: string) {
     this.saves += 1;
     this.failedDocumentIds.delete(documentId);
@@ -51,8 +71,12 @@ export class WhiteboardCollaborationMetrics {
       ...options,
       authenticationFailures: this.authenticationFailures,
       conflicts: this.conflicts,
+      cursorUpdates: this.cursorUpdates,
+      droppedCursorUpdates: this.droppedCursorUpdates,
+      droppedLiveSceneUpdates: this.droppedLiveSceneUpdates,
       failedDocuments: this.failedDocumentIds.size,
       invalidatedConnections: this.invalidatedConnections,
+      liveSceneUpdates: this.liveSceneUpdates,
       persistenceFailures: this.persistenceFailures,
       rateLimitedSaves: this.rateLimitedSaves,
       readOnlyWriteRejections: this.readOnlyWriteRejections,

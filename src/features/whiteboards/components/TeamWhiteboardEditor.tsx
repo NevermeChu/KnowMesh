@@ -1,6 +1,6 @@
 'use client';
 
-import { Excalidraw, loadFromBlob } from '@excalidraw/excalidraw';
+import { CaptureUpdateAction, Excalidraw, loadFromBlob } from '@excalidraw/excalidraw';
 import type { Collaborator, ExcalidrawImperativeAPI, SocketId } from '@excalidraw/excalidraw/types';
 import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import { io } from 'socket.io-client';
@@ -16,7 +16,11 @@ import type {
 import { StarDocumentButton } from '@/features/documents/components/StarDocumentButton';
 import type { WhiteboardDocument } from '@/features/documents/Document';
 import { Env } from '@/libs/Env';
-import { reconcileWhiteboardScenes } from '../collaboration/reconcileWhiteboardScenes';
+import {
+  reconcileWhiteboardScenes,
+  reconcileWhiteboardSceneUpdate,
+} from '../collaboration/reconcileWhiteboardScenes';
+import { TeamWhiteboardRealtimePublisher } from '../collaboration/TeamWhiteboardRealtimePublisher';
 import { TeamWhiteboardSaveQueue } from '../collaboration/TeamWhiteboardSaveQueue';
 import {
   WHITEBOARD_COLLABORATION_PATH,
@@ -25,6 +29,8 @@ import {
 import type {
   WhiteboardClientToServerEvents,
   WhiteboardCollaborationMember,
+  WhiteboardCursorUpdate,
+  WhiteboardRemoteSceneUpdate,
   WhiteboardServerToClientEvents,
 } from '../collaboration/WhiteboardCollaborationProtocol';
 import { createWhiteboardScene, WhiteboardRemoteSceneEchoGuard } from '../WhiteboardScene';
@@ -68,23 +74,28 @@ async function restoreScene(scene: WhiteboardScene) {
   );
 }
 
-function toCollaboratorSocketId(memberId: string, index: number) {
+function toCollaboratorSocketId(connectionId: string) {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Excalidraw brands collaborator map keys as SocketId.
-  return `${memberId}:${index}` as SocketId;
+  return connectionId as SocketId;
 }
 
-function toCollaborators(members: WhiteboardCollaborationMember[]) {
+function toCollaborators(options: {
+  currentConnectionId: string | undefined;
+  current: Map<SocketId, Collaborator>;
+  members: WhiteboardCollaborationMember[];
+}) {
   const collaborators = new Map<SocketId, Collaborator>();
-  for (const [index, member] of members.entries()) {
+  for (const member of options.members) {
+    const connectionId = toCollaboratorSocketId(member.connectionId);
     const color = getDocumentCollaborationColor(member.id);
-    collaborators.set(toCollaboratorSocketId(member.id, index), {
+    const current = options.current.get(connectionId);
+    collaborators.set(connectionId, {
       avatarUrl: member.image ?? undefined,
-      button: member.pointer?.button,
+      button: current?.button,
       color: { background: color, stroke: color },
       id: member.id,
-      pointer: member.pointer
-        ? { tool: 'pointer', x: member.pointer.x, y: member.pointer.y }
-        : undefined,
+      isCurrentUser: member.connectionId === options.currentConnectionId,
+      pointer: current?.pointer,
       username: member.name,
     });
   }
@@ -97,11 +108,11 @@ function WhiteboardPresence(props: { members: WhiteboardCollaborationMember[] })
   }
   return (
     <div aria-label={`${props.members.length} 位成员在线`} className="flex items-center -space-x-1">
-      {props.members.slice(0, 4).map((member, index) => {
+      {props.members.slice(0, 4).map((member) => {
         const initial = member.name.trim().slice(0, 1).toLocaleUpperCase();
         return (
           <span
-            key={`${member.id}:${index}`}
+            key={member.connectionId}
             className="grid size-6 place-items-center rounded-full border-2 border-canvas bg-accent text-[10px] font-semibold text-white"
             title={member.name}
           >
@@ -119,8 +130,13 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
   const toast = useToast();
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const applyingRemoteScene = useRef(false);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const collaboratorsRef = useRef(new Map<SocketId, Collaborator>());
+  const receivedCursorSequences = useRef(new Map<string, number>());
+  const receivedSceneSequences = useRef(new Map<string, number>());
   const remoteSceneEchoGuard = useRef(new WhiteboardRemoteSceneEchoGuard());
   const queueRef = useRef<TeamWhiteboardSaveQueue | null>(null);
+  const realtimePublisherRef = useRef<TeamWhiteboardRealtimePublisher | null>(null);
   const socketRef = useRef<Socket<
     WhiteboardServerToClientEvents,
     WhiteboardClientToServerEvents
@@ -141,6 +157,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
     if (!enabled) {
       return () => {
         queueRef.current?.dispose();
+        realtimePublisherRef.current?.dispose();
         socketRef.current?.disconnect();
       };
     }
@@ -159,15 +176,24 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
       applyingRemoteScene.current = true;
       api.updateScene({
         appState: restored.appState ?? undefined,
+        captureUpdate: CaptureUpdateAction.NEVER,
         elements: restored.elements ?? [],
       });
       queueMicrotask(() => {
         applyingRemoteScene.current = false;
       });
     };
-    const applyPresence = (presenceMembers: WhiteboardCollaborationMember[]) => {
+    const applyPresence = (
+      presenceMembers: WhiteboardCollaborationMember[],
+      currentConnectionId?: string,
+    ) => {
       setMembers(presenceMembers);
-      apiRef.current?.updateScene({ collaborators: toCollaborators(presenceMembers) });
+      collaboratorsRef.current = toCollaborators({
+        current: collaboratorsRef.current,
+        currentConnectionId,
+        members: presenceMembers,
+      });
+      apiRef.current?.updateScene({ collaborators: collaboratorsRef.current });
     };
     const socket: Socket<WhiteboardServerToClientEvents, WhiteboardClientToServerEvents> = io(
       Env.NEXT_PUBLIC_WHITEBOARD_COLLABORATION_URL,
@@ -190,7 +216,61 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
       setCanWrite(false);
       setCollaborationState((current) => (current === 'error' ? current : 'offline'));
     });
-    socket.on('presence', applyPresence);
+    socket.on('presence', (presenceMembers) => {
+      applyPresence(presenceMembers, socket.id);
+    });
+    socket.on('cursor', (cursor: WhiteboardCursorUpdate) => {
+      const previousSequence = receivedCursorSequences.current.get(cursor.connectionId) ?? -1;
+      if (cursor.clientSequence <= previousSequence) {
+        return;
+      }
+      receivedCursorSequences.current.set(cursor.connectionId, cursor.clientSequence);
+      const connectionId = toCollaboratorSocketId(cursor.connectionId);
+      const collaborator = collaboratorsRef.current.get(connectionId);
+      if (!collaborator) {
+        return;
+      }
+      const collaborators = new Map<SocketId, Collaborator>([
+        ...collaboratorsRef.current,
+        [
+          connectionId,
+          {
+            ...collaborator,
+            button: cursor.button,
+            pointer: { tool: cursor.tool, x: cursor.x, y: cursor.y },
+          },
+        ],
+      ]);
+      collaboratorsRef.current = collaborators;
+      apiRef.current?.updateScene({ collaborators });
+    });
+    socket.on('scene', (update: WhiteboardRemoteSceneUpdate) => {
+      const previousSequence = receivedSceneSequences.current.get(update.connectionId) ?? -1;
+      if (update.clientSequence <= previousSequence) {
+        return;
+      }
+      receivedSceneSequences.current.set(update.connectionId, update.clientSequence);
+      const api = apiRef.current;
+      if (!api) {
+        return;
+      }
+      const reconciled = reconcileWhiteboardSceneUpdate({ api, update: update.scene });
+      realtimePublisherRef.current?.observeScene(update.scene);
+      remoteSceneEchoGuard.current.mark(reconciled.scene);
+      applyingRemoteScene.current = true;
+      api.updateScene({
+        appState: reconciled.appState,
+        captureUpdate: CaptureUpdateAction.NEVER,
+        elements: reconciled.elements,
+      });
+      if (canvasRef.current) {
+        canvasRef.current.dataset.whiteboardElementCount = String(reconciled.elements.length);
+        canvasRef.current.dataset.whiteboardRealtimeSequence = String(update.clientSequence);
+      }
+      queueMicrotask(() => {
+        applyingRemoteScene.current = false;
+      });
+    });
     socket.on('frozen', (reason) => {
       queueRef.current?.freeze(reason);
       setCanWrite(false);
@@ -205,11 +285,27 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
       })();
     });
     socket.on('baseline', (baseline) => {
-      applyPresence(baseline.members);
+      receivedCursorSequences.current.clear();
+      receivedSceneSequences.current.clear();
+      applyPresence(baseline.members, socket.id);
       setCanWrite(baseline.canWrite && props.canEdit);
       queueRef.current?.dispose();
+      realtimePublisherRef.current?.dispose();
       void (async () => {
         await applyScene(baseline.scene);
+        realtimePublisherRef.current = new TeamWhiteboardRealtimePublisher({
+          initialScene: baseline.scene,
+          publishCursor: (pointer, volatile) => {
+            if (volatile) {
+              socket.volatile.emit('cursor', pointer);
+            } else {
+              socket.emit('cursor', pointer);
+            }
+          },
+          publishScene: (update) => {
+            socket.emit('scene', update);
+          },
+        });
         queueRef.current = new TeamWhiteboardSaveQueue({
           apply: applyScene,
           initialRevision: baseline.revision,
@@ -237,6 +333,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
     socket.connect();
     return () => {
       queueRef.current?.dispose();
+      realtimePublisherRef.current?.dispose();
       socket.disconnect();
       socketRef.current = null;
     };
@@ -282,7 +379,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
       }
       status={status}
       canvas={
-        <div className="h-full min-h-0">
+        <div className="h-full min-h-0" ref={canvasRef}>
           <Excalidraw
             UIOptions={{
               canvasActions: isEditable ? editableCanvasActions : readonlyCanvasActions,
@@ -307,6 +404,7 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
                 if (remoteSceneEchoGuard.current.shouldIgnore(scene)) {
                   return;
                 }
+                realtimePublisherRef.current?.enqueueScene(scene);
                 queueRef.current?.enqueue(scene);
               } catch {
                 setSaveState('error');
@@ -323,11 +421,13 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
               )
             }
             onPointerUpdate={(payload) => {
-              socketRef.current?.emit('presence', {
+              const pointer = {
                 button: payload.button,
+                tool: payload.pointer.tool,
                 x: payload.pointer.x,
                 y: payload.pointer.y,
-              });
+              };
+              realtimePublisherRef.current?.enqueueCursor(pointer);
             }}
             theme={theme}
             validateEmbeddable={false}

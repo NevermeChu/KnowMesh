@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_WHITEBOARD_SCENE } from '../WhiteboardScene';
 import {
   whiteboardCandidateSchema,
+  whiteboardLiveSceneUpdateSchema,
+  whiteboardPointerSchema,
   whiteboardSaveAcknowledgementSchema,
 } from './WhiteboardCollaborationProtocol';
 
@@ -32,6 +34,24 @@ describe('whiteboard collaboration protocol', () => {
         message: 'rate-limited',
         retryAfterMs: 1000,
         status: 'error',
+      }).success,
+    ).toBeTruthy();
+  });
+
+  it('accepts validated realtime scene and cursor updates', () => {
+    expect(
+      whiteboardLiveSceneUpdateSchema.safeParse({
+        clientSequence: 0,
+        scene: EMPTY_WHITEBOARD_SCENE,
+      }).success,
+    ).toBeTruthy();
+    expect(
+      whiteboardPointerSchema.safeParse({
+        button: 'down',
+        clientSequence: 0,
+        tool: 'pointer',
+        x: 10,
+        y: 20,
       }).success,
     ).toBeTruthy();
   });

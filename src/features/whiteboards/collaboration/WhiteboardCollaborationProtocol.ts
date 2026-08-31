@@ -4,7 +4,10 @@ import type { WhiteboardScene } from '../WhiteboardScene';
 
 export const WHITEBOARD_COLLABORATION_PATH = '/whiteboard-collaboration/socket.io';
 export const MAX_WHITEBOARD_CONFLICT_RETRIES = 3;
+export const MAX_WHITEBOARD_CURSOR_EVENTS_PER_WINDOW = 600;
+export const MAX_WHITEBOARD_LIVE_SCENE_EVENTS_PER_WINDOW = 400;
 export const MAX_WHITEBOARD_SAVE_EVENTS_PER_WINDOW = 20;
+export const WHITEBOARD_REALTIME_INTERVAL_MS = 33;
 export const WHITEBOARD_SAVE_DEBOUNCE_MS = 750;
 export const WHITEBOARD_SAVE_RATE_WINDOW_MS = 10_000;
 
@@ -20,8 +23,15 @@ export const whiteboardCandidateSchema = z.object({
 
 export const whiteboardPointerSchema = z.object({
   button: z.enum(['down', 'up']),
+  clientSequence: z.number().int().nonnegative(),
+  tool: z.enum(['laser', 'pointer']),
   x: z.number().min(-10_000_000).max(10_000_000),
   y: z.number().min(-10_000_000).max(10_000_000),
+});
+
+export const whiteboardLiveSceneUpdateSchema = z.object({
+  clientSequence: z.number().int().nonnegative(),
+  scene: whiteboardSceneSchema,
 });
 
 const canonicalSceneSchema = z.object({
@@ -47,10 +57,20 @@ export const whiteboardSaveAcknowledgementSchema = z.union([
 ]);
 
 export type WhiteboardCollaborationMember = {
+  connectionId: string;
   id: string;
   image: string | null;
   name: string;
-  pointer?: z.infer<typeof whiteboardPointerSchema>;
+};
+
+export type WhiteboardCursorUpdate = z.infer<typeof whiteboardPointerSchema> & {
+  connectionId: string;
+};
+
+export type WhiteboardLiveSceneUpdate = z.infer<typeof whiteboardLiveSceneUpdateSchema>;
+
+export type WhiteboardRemoteSceneUpdate = WhiteboardLiveSceneUpdate & {
+  connectionId: string;
 };
 
 export type WhiteboardCanonicalScene = {
@@ -67,15 +87,18 @@ export type WhiteboardBaseline = WhiteboardCanonicalScene & {
 export type WhiteboardSaveAcknowledgement = z.infer<typeof whiteboardSaveAcknowledgementSchema>;
 
 export type WhiteboardClientToServerEvents = {
-  presence: (pointer: unknown) => void;
+  cursor: (pointer: unknown) => void;
   save: (candidate: unknown, acknowledge: (result: WhiteboardSaveAcknowledgement) => void) => void;
+  scene: (update: unknown) => void;
 };
 
 export type WhiteboardServerToClientEvents = {
   baseline: (baseline: WhiteboardBaseline) => void;
   canonical: (canonical: WhiteboardCanonicalScene) => void;
+  cursor: (pointer: WhiteboardCursorUpdate) => void;
   frozen: (reason: 'permission-denied' | 'service-unavailable') => void;
   presence: (members: WhiteboardCollaborationMember[]) => void;
+  scene: (update: WhiteboardRemoteSceneUpdate) => void;
 };
 
 export type WhiteboardSocketData = {
