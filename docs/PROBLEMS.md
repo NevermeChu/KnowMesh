@@ -1067,3 +1067,25 @@ PGlite 测试帮助器直接按 Drizzle journal 的 entries 顺序生成 SQL 文
 服务端对光标单独实施每 10 秒 600 次的防御性上限，只向房间其他连接 volatile 转发一个坐标增量，不修改成员名单。接收端按连接 ID 和序号忽略旧位置，把网络坐标作为低频最新目标而不是直接跳转位置；所有协作者共用一个 `requestAnimationFrame` 循环，从当前显示位置以 50 毫秒快速缓出追踪目标，并在到达后停止调度。新的目标从当前插值位置继续追踪，真实 `down → up` 则立即精确落到可靠最终坐标。每个动画帧只创建一次 collaborators Map 并调用一次 Excalidraw `updateScene`，React `members` state 仍只处理人员生命周期变化，避免用提高网络频率换取流畅度，也避免按成员创建独立定时器。
 
 指标分别记录接受与丢弃的光标数量。单元与 Socket.IO 集成测试必须覆盖 33 毫秒合并、共享动画帧、目标点之间存在中间位置、最终 `pointerup` 不被旧样本覆盖、光标增量不触发 Presence 重发以及房间成员身份键稳定；真实浏览器验收还应证明一个新的低频目标会产生多个本地渲染帧，并继续观察端到端光标更新频率、主线程帧耗时和受控网络抖动下是否存在可靠消息追赶。
+
+## 87. 通知深度链接不切换活动工作区也不驱动项目导航
+
+### 问题
+用户在当前工作区打开另一工作区或项目的通知后，页面仍按旧活动工作区渲染。前往工作区只进入 `/dashboard`；前往项目一律进入 `/collaboration?project=`。侧边栏可能因路径看起来像协作区而高亮，但分区和项目保持折叠，根文档未加载，主栏停留在「选择一篇文档」。错误工作区下还会落到个人空间协作占位或 `getProjectDocuments` 的 `notFound()`。
+
+### 根因
+活动工作区只由 cookie `knowmesh-active-workspace` 决定，切换必须走 `selectWorkspace`。通知卡片把资源标识当成普通 `href`，既不写入 cookie，也不按 Workspace `kind` 选择 `/personal` 或 `/collaboration`。侧边栏展开与根文档加载原先只跟用户点击或带 `document` 的路径加载绑定，仅有 `?project=` 时不会同步。
+
+### 解决方法
+`openNotificationResource` 校验成员身份后调用 `selectWorkspace`，工作区目标返回 `/dashboard`，项目目标返回对应分区的 `?project=` 且不自动打开文档。通知卡片通过该 Action 再 `router.push`。侧边栏在仅有 `?project=` 时展开分区与项目并 `loadDocumentChildren(projectId, null)`，与侧边栏点项目一致；已有 `document` 时仍由路径加载器处理。
+
+## 88. 成员审批成功后用 throw 把结果交给客户端
+
+### 问题
+批准或拒绝 Workspace/Project 权限申请已在数据库提交，界面仍弹出生产环境摘要：「An error occurred in the Server Components render…」。用户无法区分失败与成功后的刷新异常，弹窗路径也无法展示真实业务错误。
+
+### 根因
+审批 Action 在事务成功后仍可能 `throw`（业务拒绝、授权失败，或后续 `revalidatePath` 触发的渲染异常）。Next.js 生产环境会隐藏 Server Action 的 throw 原文。事务提交发生在把错误抛给客户端之前，于是出现「数据已变、界面报致命错误」。
+
+### 解决方法
+批准/拒绝经 `runMemberAction` 捕获异常并返回可序列化的 `{ ok, error }`；调用方用 `isFailedMemberAction` 展示 `reviewError`，不再把业务结果编码为 throw。`revalidatePath('/(workspace)', 'layout')` 保持现状，不把刷新对齐当作先决修复。

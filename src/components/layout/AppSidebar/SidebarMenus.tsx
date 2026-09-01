@@ -39,7 +39,7 @@ export function WorkspaceSwitcher(props: {
   onToggle: () => void;
 }) {
   return (
-    <div className="relative flex h-14 items-center border-b border-line-soft px-1.5">
+    <div className="relative flex h-12 items-center border-b border-line px-1.5">
       <button
         type="button"
         aria-controls="workspace-switcher-dialog"
@@ -80,14 +80,8 @@ export function WorkspaceSwitcher(props: {
               props.onSelect(workspace.id);
             }}
           >
-            <AppLogo className="size-8 shrink-0" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-ink">
-                {workspace.name}
-              </span>
-              <span className="block text-xs text-ink-faint">
-                {workspace.role === 'owner' ? 'Owner' : workspace.role}
-              </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+              {workspace.name}
             </span>
             {workspace.id === props.activeWorkspace?.id && (
               <Check aria-hidden="true" className="size-3.5 text-accent" strokeWidth={2} />

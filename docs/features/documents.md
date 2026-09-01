@@ -103,7 +103,7 @@ Personal 白板可导出 `.excalidraw`、PNG 和 SVG。Team 白板在独立协�
 
 `viewer` 可接收 scene、Presence 与光标，但实时 scene 和持久化写入都会被服务端拒绝；功能关闭、断线或服务不可用时读取最近成功 scene 的只读画布，不回退 Personal 保存入口。收到新的 baseline 时必须丢弃可能已冻结的保存队列与实时发布器并按该快照重建，以便协作进程重启后恢复写入。scene envelope 当前只允许空 `files`；图片、二进制资产和元素链接不会进入持久化 scene。Excalidraw 仅在浏览器动态加载，`postinstall` 将锁定版本字体复制到同源静态资产目录，CSP `connect-src` 对每个协作 URL 同时放行 HTTP(S) 与 WS(S) 源，因为 Socket.IO 在浏览器里会把 `http://` 端点升级为 `ws://`。
 
-白板打开时不走富文本阅读栏：`DocumentWorkspace` 抵消 `AppShell` 水平内边距，画布铺满右侧文档区剩余高度。标题仍在 `ContentToolbar` 面包屑中。Excalidraw 保留自己的顶栏菜单、形状工具和素材库；KnowMesh 的保存状态、导出与收藏叠在画布左上、与白板菜单同高并紧挨其右侧。在线成员叠在画布右上。内容宽度偏好只作用于 `WorkspaceContent`，白板页隐藏该控件。
+白板打开时不走富文本阅读栏：`DocumentWorkspace` 抵消 `AppShell` 水平内边距，画布铺满右侧文档区剩余高度。标题仍在 `ContentToolbar` 面包屑中。Excalidraw 保留自己的顶栏菜单、形状工具、素材库，以及协作开启时的官方 UserList；KnowMesh 的保存状态、导出与收藏叠在画布左上、与白板菜单同高并紧挨其右侧，不再另做覆盖层头像条。内容宽度偏好只作用于 `WorkspaceContent`，白板页隐藏该控件。
 
 ## 相关代码
 

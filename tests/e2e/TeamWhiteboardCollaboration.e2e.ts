@@ -325,8 +325,12 @@ test.describe('team whiteboard collaboration', () => {
       await Promise.all([ownerPage.goto(route), editorPage.goto(route)]);
       await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
       await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
-      await expect(ownerPage.getByLabel('2 位成员在线')).toBeVisible();
-      await expect(editorPage.getByLabel('2 位成员在线')).toBeVisible();
+      await expect
+        .poll(async () => {
+          const metrics = await readWhiteboardMetrics();
+          return metrics.activeConnections;
+        })
+        .toBe(2);
       const before = await readWhiteboardMetrics();
 
       await drawSlowRectangle(ownerPage);
@@ -334,8 +338,6 @@ test.describe('team whiteboard collaboration', () => {
       await expect.poll(readSceneElementCount).toBeGreaterThan(0);
       await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
       await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
-      await expect(ownerPage.getByLabel('2 位成员在线')).toBeVisible();
-      await expect(editorPage.getByLabel('2 位成员在线')).toBeVisible();
       await expect
         .poll(async () => {
           const metrics = await readWhiteboardMetrics();
@@ -379,7 +381,6 @@ test.describe('team whiteboard collaboration', () => {
       await Promise.all([ownerPage.goto(route), editorPage.goto(route)]);
       await expect(ownerPage.getByText('已同步', { exact: true })).toBeVisible();
       await expect(editorPage.getByText('已同步', { exact: true })).toBeVisible();
-      await expect(editorPage.getByLabel('2 位成员在线')).toBeVisible();
       const editorCanvas = editorPage.locator('[data-whiteboard-cursor-frame]');
 
       await moveWhiteboardCursor(ownerPage, 0.35);

@@ -104,28 +104,6 @@ function toCollaborators(options: {
   return collaborators;
 }
 
-function WhiteboardPresence(props: { members: WhiteboardCollaborationMember[] }) {
-  if (props.members.length === 0) {
-    return null;
-  }
-  return (
-    <div aria-label={`${props.members.length} 位成员在线`} className="flex items-center -space-x-1">
-      {props.members.slice(0, 4).map((member) => {
-        const initial = member.name.trim().slice(0, 1).toLocaleUpperCase();
-        return (
-          <span
-            key={member.connectionId}
-            className="grid size-6 place-items-center rounded-full border-2 border-canvas bg-accent text-[10px] font-semibold text-white"
-            title={member.name}
-          >
-            {initial.length > 0 ? initial : '?'}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 export function TeamWhiteboardEditor(props: { canEdit: boolean; document: WhiteboardDocument }) {
   const enabled = Env.NEXT_PUBLIC_WHITEBOARD_COLLABORATION_ENABLED === 'true';
   const theme = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot);
@@ -147,7 +125,6 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
   const [collaborationState, setCollaborationState] = useState<CollaborationState>(
     enabled ? 'connecting' : 'offline',
   );
-  const [members, setMembers] = useState<WhiteboardCollaborationMember[]>([]);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [initialData] = useState(async () => await restoreScene(props.document.scene));
   const isEditable = enabled && props.canEdit && canWrite && collaborationState === 'synced';
@@ -221,7 +198,6 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
       presenceMembers: WhiteboardCollaborationMember[],
       currentConnectionId?: string,
     ) => {
-      setMembers(presenceMembers);
       collaboratorsRef.current = toCollaborators({
         current: collaboratorsRef.current,
         currentConnectionId,
@@ -364,16 +340,12 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
     };
   }, [enabled, props.canEdit, props.document.id]);
 
-  let status: React.ReactNode = (
-    <span className="text-xs text-ink-faint">团队白板（协作已关闭）</span>
-  );
-  if (enabled) {
-    status = members.length > 0 ? <WhiteboardPresence members={members} /> : null;
-  }
-
   return (
     <WhiteboardCanvasFrame
       nestBesideExcalidrawMenu={isEditable}
+      status={
+        enabled ? undefined : <span className="text-xs text-ink-faint">团队白板（协作已关闭）</span>
+      }
       documentActions={
         <>
           <DocumentSaveStatus
@@ -402,7 +374,6 @@ export function TeamWhiteboardEditor(props: { canEdit: boolean; document: Whiteb
           />
         </>
       }
-      status={status}
       canvas={
         <div className="h-full min-h-0" ref={canvasRef}>
           <Excalidraw
