@@ -10,6 +10,16 @@ export const isMemberInvitationExpired = (expiresAt: Date, now = new Date()) => 
 export type MemberActionResult = { ok: true } | { ok: false; error: string };
 
 /**
+ * Converts an unknown mutation failure into a client-safe message.
+ *
+ * @param error - Caught value from a membership mutation.
+ * @returns The Error message, or a generic fallback.
+ */
+export function memberActionErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '操作失败，请重试';
+}
+
+/**
  * Narrows an action return value to a failed membership mutation result.
  *
  * @param result - Unknown server action return value.
@@ -39,7 +49,7 @@ export async function runMemberAction(operation: () => Promise<void>): Promise<M
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : '操作失败，请重试',
+      error: memberActionErrorMessage(error),
     };
   }
 }

@@ -4,6 +4,7 @@ import {
   getMemberInvitationExpiration,
   isFailedMemberAction,
   isMemberInvitationExpired,
+  memberActionErrorMessage,
   runMemberAction,
 } from './MemberWorkflow';
 
@@ -66,10 +67,27 @@ describe(runMemberAction, () => {
   });
 });
 
+describe(memberActionErrorMessage, () => {
+  it('uses the Error message or a generic fallback', () => {
+    expect(memberActionErrorMessage(new Error('权限申请不存在'))).toBe('权限申请不存在');
+    expect(memberActionErrorMessage('failed')).toBe('操作失败，请重试');
+  });
+});
+
 describe(isFailedMemberAction, () => {
-  it('narrows failed membership action results', () => {
+  it('accepts a failed membership action result', () => {
     expect(isFailedMemberAction({ error: '权限申请不存在', ok: false })).toBeTruthy();
+  });
+
+  it('rejects values that are not failed membership results', () => {
     expect(isFailedMemberAction({ ok: true })).toBeFalsy();
     expect(isFailedMemberAction({ workspaceId: 'workspace' })).toBeFalsy();
+    expect(isFailedMemberAction(null)).toBeFalsy();
+    expect(isFailedMemberAction('error')).toBeFalsy();
+    expect(isFailedMemberAction({ error: 1, ok: false })).toBeFalsy();
+  });
+
+  it('rejects a false ok flag without an error message', () => {
+    expect(isFailedMemberAction({ ok: false })).toBeFalsy();
   });
 });
