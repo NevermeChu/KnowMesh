@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -65,7 +65,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -91,7 +91,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -133,7 +133,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -176,7 +176,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js environment
         uses: ./.github/actions/setup-project
@@ -226,7 +226,7 @@ jobs:
       PUBLIC_APP_ORIGIN: ${{ vars.PRODUCTION_APP_URL }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up project
         uses: ./.github/actions/setup-project
