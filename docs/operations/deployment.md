@@ -590,7 +590,7 @@ PY
 
 ### 4. 先部署制品（灰度仍关）
 
-先把含白板制品的变更合入要发布的分支，再用 **Actions → CI → Run workflow**（`workflow_dispatch`）选择 `main` 或当前允许部署的功能分支（`feature/permissions`），或 `gh workflow run CI.yml --ref <branch>`。其他功能分支的手动运行只执行检查，不会部署；不要用普通 push 或 Re-run 绕过检查。
+先把含白板制品的变更合入 `main`，再用 **Actions → CI → Run workflow**（`workflow_dispatch`）选择 `main`，或 `gh workflow run CI.yml --ref main`。其他分支的手动运行只执行检查，不会部署；不要用普通 push 或 Re-run 绕过检查。
 
 部署成功后：
 
@@ -728,10 +728,10 @@ workflow 要求部署前已经存在有效的 `current` 软链接作为回滚目
 2. 提交并 push。`main` 的 push 会运行检查并部署；其他分支通过 Pull Request 或手动 workflow 获取检查。
 3. 打开 GitHub 仓库的 **Actions → CI**（不要带着 `branch:` 筛选找 Run workflow）。
 4. 先看 `static`、`build`、`unit`、`e2e` 和 `packaging`；任何一个失败都不会开始部署。
-5. 再看 `Deploy production`。`workflow_dispatch` 在 `main` 或 `feature/permissions` 上会在检查通过后部署；仅 `main` 的 push 会自动部署。
+5. 再看 `Deploy production`。仅 `main` 的 push 或在 `main` 上的 `workflow_dispatch` 会在检查通过后部署。
 6. 所有应运行的 job 绿色后访问生产站点，完成与改动风险相称的人工业务验收。
 
-没有新 commit 但需要重新部署时，在 **Actions → CI → Run workflow** 选择 `main` 或 `feature/permissions`，或 `gh workflow run CI.yml --ref <branch>`。其他分支不能直接部署。在 push run 上 **Re-run** 不会改变原事件。
+没有新 commit 但需要重新部署时，在 **Actions → CI → Run workflow** 选择 `main`，或 `gh workflow run CI.yml --ref main`。其他分支不能直接部署。在 push run 上 **Re-run** 不会改变原事件。
 
 如果只想生成可下载的生产 artifact，使用 **Actions → Release → Run workflow**。Release workflow 不连接服务器、不迁移数据库、不切换生产版本，artifact 保留 14 天。
 
