@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   createMemberAuditContext,
   getMemberInvitationExpiration,
+  isFailedMemberAction,
   isMemberInvitationExpired,
+  runMemberAction,
 } from './MemberWorkflow';
 
 describe(getMemberInvitationExpiration, () => {
@@ -40,5 +42,34 @@ describe(createMemberAuditContext, () => {
       targetKind: 'member',
       workspaceId: 'workspace',
     });
+  });
+});
+
+describe(runMemberAction, () => {
+  it('returns success when the mutation completes', async () => {
+    await expect(
+      runMemberAction(async () => {
+        await Promise.resolve();
+      }),
+    ).resolves.toStrictEqual({
+      ok: true,
+    });
+  });
+
+  it('returns the error message instead of throwing', async () => {
+    await expect(
+      runMemberAction(async () => {
+        await Promise.resolve();
+        throw new Error('权限申请不存在');
+      }),
+    ).resolves.toStrictEqual({ error: '权限申请不存在', ok: false });
+  });
+});
+
+describe(isFailedMemberAction, () => {
+  it('narrows failed membership action results', () => {
+    expect(isFailedMemberAction({ error: '权限申请不存在', ok: false })).toBeTruthy();
+    expect(isFailedMemberAction({ ok: true })).toBeFalsy();
+    expect(isFailedMemberAction({ workspaceId: 'workspace' })).toBeFalsy();
   });
 });

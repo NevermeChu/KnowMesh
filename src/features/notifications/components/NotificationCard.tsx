@@ -11,12 +11,15 @@ import {
   UserPlus,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { openPermissionOverviewModal } from '@/components/layout/ShellEvents';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { NotificationItem, NotificationType } from '@/features/notifications/Notification';
 import { markNotificationRead } from '@/features/notifications/server/NotificationActions';
+import { openNotificationResource } from '@/features/notifications/server/OpenNotificationResource';
+import { isFailedMemberAction } from '@/features/permissions/MemberWorkflow';
 import {
   acceptProjectInvitation,
   approveProjectAccessRequest,
@@ -86,6 +89,7 @@ function getNotificationVisuals(type: NotificationType) {
 }
 
 export function NotificationCard(props: { notification: NotificationItem }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const visuals = getNotificationVisuals(props.notification.type);
@@ -95,11 +99,26 @@ export function NotificationCard(props: { notification: NotificationItem }) {
   const handleAction = (actionFn: () => Promise<unknown>, feedback: string) => {
     startTransition(async () => {
       try {
-        await actionFn();
+        const result = await actionFn();
+        if (isFailedMemberAction(result)) {
+          setActionFeedback(result.error);
+          return;
+        }
         setActionFeedback(feedback);
       } catch (error) {
         setActionFeedback(error instanceof Error ? error.message : '操作失败，请重试');
       }
+    });
+  };
+
+  const handleOpenTarget = (targetKind: 'project' | 'workspace', targetId: string) => {
+    startTransition(async () => {
+      const result = await openNotificationResource({ targetId, targetKind });
+      if (!result.ok) {
+        setActionFeedback(result.error);
+        return;
+      }
+      router.push(result.href);
     });
   };
 
@@ -179,13 +198,17 @@ export function NotificationCard(props: { notification: NotificationItem }) {
           >
             忽略
           </Button>
-          <Link
-            href={`/collaboration?project=${projectId}`}
-            className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-strong hover:underline"
+          <button
+            disabled={isPending}
+            onClick={() => {
+              handleOpenTarget('project', projectId);
+            }}
+            type="button"
+            className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-strong hover:underline disabled:cursor-not-allowed disabled:opacity-60"
           >
             前往项目
             <ArrowRight aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-          </Link>
+          </button>
         </div>
       );
     }
@@ -290,25 +313,41 @@ export function NotificationCard(props: { notification: NotificationItem }) {
 
     return (
       <div className="flex flex-wrap items-center gap-4">
-        {props.notification.targetKind === 'project' && props.notification.targetId && (
-          <Link
-            href={`/collaboration?project=${props.notification.targetId}`}
-            className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-strong hover:underline"
+        {props.notification.targetKind === 'project' && props.notification.targetId ? (
+          <button
+            disabled={isPending}
+            onClick={() => {
+              const projectId = props.notification.targetId;
+              if (!projectId) {
+                return;
+              }
+              handleOpenTarget('project', projectId);
+            }}
+            type="button"
+            className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-strong hover:underline disabled:cursor-not-allowed disabled:opacity-60"
           >
             前往项目
             <ArrowRight aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-          </Link>
-        )}
+          </button>
+        ) : null}
 
-        {props.notification.targetKind === 'workspace' && (
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-strong hover:underline"
+        {props.notification.targetKind === 'workspace' && props.notification.targetId ? (
+          <button
+            disabled={isPending}
+            onClick={() => {
+              const workspaceId = props.notification.targetId;
+              if (!workspaceId) {
+                return;
+              }
+              handleOpenTarget('workspace', workspaceId);
+            }}
+            type="button"
+            className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-strong hover:underline disabled:cursor-not-allowed disabled:opacity-60"
           >
             前往工作区
             <ArrowRight aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-          </Link>
-        )}
+          </button>
+        ) : null}
       </div>
     );
   };

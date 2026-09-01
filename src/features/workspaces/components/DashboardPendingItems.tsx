@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { openPermissionOverviewModal } from '@/components/layout/ShellEvents';
 import { Button } from '@/components/ui/Button';
+import { isFailedMemberAction } from '@/features/permissions/MemberWorkflow';
 import type { PendingApprovalItem } from '@/features/permissions/server/GetPendingApprovals';
 import {
   approveProjectAccessRequest,
@@ -43,7 +44,11 @@ export function DashboardPendingItems(props: {
     setActionError(null);
     startTransition(async () => {
       try {
-        await actionFn();
+        const result = await actionFn();
+        if (isFailedMemberAction(result)) {
+          setActionError(result.error);
+          return;
+        }
         setHandledIds((prev) => new Set([...prev, id]));
       } catch (error) {
         setActionError(error instanceof Error ? error.message : '操作失败，请刷新重试');

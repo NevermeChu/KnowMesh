@@ -62,6 +62,7 @@ export function WorkspaceAccessReviews(props: {
   overview: Extract<PermissionOverview, { scope: 'workspace' }>;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   if (props.overview.requests.length === 0) {
     return null;
@@ -70,6 +71,14 @@ export function WorkspaceAccessReviews(props: {
   return (
     <section className="mb-6 last:mb-0">
       <h3 className={`mb-2 ${sectionTitleClassName}`}>待审批申请</h3>
+      {reviewError ? (
+        <p
+          className="mb-2 rounded-lg bg-danger/8 px-3 py-2 text-sm text-danger-strong"
+          role="alert"
+        >
+          {reviewError}
+        </p>
+      ) : null}
       <ul className="space-y-2">
         {props.overview.requests.map((request) => (
           <li
@@ -85,10 +94,15 @@ export function WorkspaceAccessReviews(props: {
                 disabled={isPending}
                 onClick={() => {
                   startTransition(async () => {
-                    await rejectWorkspaceAccessRequest({
+                    const result = await rejectWorkspaceAccessRequest({
                       memberUserId: request.userId,
                       workspaceId: props.overview.workspaceId,
                     });
+                    if (!result.ok) {
+                      setReviewError(result.error);
+                      return;
+                    }
+                    setReviewError(null);
                     props.onMutated('update', 'workspace');
                   });
                 }}
@@ -101,10 +115,15 @@ export function WorkspaceAccessReviews(props: {
                 disabled={isPending}
                 onClick={() => {
                   startTransition(async () => {
-                    await approveWorkspaceAccessRequest({
+                    const result = await approveWorkspaceAccessRequest({
                       memberUserId: request.userId,
                       workspaceId: props.overview.workspaceId,
                     });
+                    if (!result.ok) {
+                      setReviewError(result.error);
+                      return;
+                    }
+                    setReviewError(null);
                     props.onMutated('update', 'workspace');
                   });
                 }}

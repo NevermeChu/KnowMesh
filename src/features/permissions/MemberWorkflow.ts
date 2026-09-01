@@ -7,6 +7,43 @@ export const getMemberInvitationExpiration = (now = new Date()) =>
 
 export const isMemberInvitationExpired = (expiresAt: Date, now = new Date()) => expiresAt <= now;
 
+export type MemberActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Narrows an action return value to a failed membership mutation result.
+ *
+ * @param result - Unknown server action return value.
+ * @returns Whether the result is a failed membership action.
+ */
+export function isFailedMemberAction(result: unknown): result is { error: string; ok: false } {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'ok' in result &&
+    result.ok === false &&
+    'error' in result &&
+    typeof result.error === 'string'
+  );
+}
+
+/**
+ * Runs a membership mutation and returns a serializable result instead of throwing.
+ *
+ * @param operation - Mutation that may throw business or authorization errors.
+ * @returns Success, or a client-safe error message.
+ */
+export async function runMemberAction(operation: () => Promise<void>): Promise<MemberActionResult> {
+  try {
+    await operation();
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : '操作失败，请重试',
+    };
+  }
+}
+
 export function createMemberAuditContext(options: {
   actorUserId: string;
   metadata: AuditLogMetadata;

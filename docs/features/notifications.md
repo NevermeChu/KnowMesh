@@ -10,7 +10,7 @@
 
 侧边栏在“设置”上方显示通知入口。通过 Web 标准的 Server-Sent Events (SSE) 长连接（`/api/realtime/notifications`），客户端在通知事务提交后收到由 PostgreSQL `LISTEN / NOTIFY` 驱动的事件。数据库订阅器把连接的 `error` 和干净 `end` 都视为失效，清除旧启动状态并按有上限的指数退避重新建立 `LISTEN`。服务端每 15 秒复验建立连接时的 Better Auth Session，撤销、过期或账户失效会关闭旧流；每条流只保留有限的待发送 chunk，慢客户端填满缓冲区时服务端解除订阅并关闭流。客户端对浏览器已终止的 EventSource 进行有上限的指数退避重建，并在每次连接后从数据库校准未读数，因此断流不会改变持久通知事实。侧边栏通过独立的 `NotificationSidebarBadge` 局部更新未读角标数字（最多呈现为 `99+`），同时弹出无打扰轻量 Toast 微浮窗，不触发页面整体重载或打断编辑器输入焦点。
 
-点击后由共享 Workspace Layout 在右侧内容区打开 `/notifications`，页面展示最近 50 条通知，并支持单条或全部标为已读。对于工作区邀请、项目邀请与权限申请类通知，卡片直接挂载“接受/忽略/批准/拒绝”就地操作按钮，并提供直达邀请详情页或全局权限管理弹窗的深度链接；用户就地操作或在权限弹窗中审批通过后，相关通知会在同一数据库事务中自动标记为已读。已读变更通过 SSE 广播 `notification:count_sync`，跨标签页即时同步消除角标。页面读取本身不会自动改变已读状态，避免路由预取或普通刷新误消费通知。
+点击后由共享 Workspace Layout 在右侧内容区打开 `/notifications`，页面展示最近 50 条通知，并支持单条或全部标为已读。对于工作区邀请、项目邀请与权限申请类通知，卡片直接挂载“接受/忽略/批准/拒绝”就地操作按钮，并提供直达邀请详情页或全局权限管理弹窗的深度链接；“前往工作区 / 前往项目”会先把活动 Workspace cookie 切到目标资源所属空间，再打开仪表盘或对应分区的项目页（`/personal` 或 `/collaboration`，仅带 `project`，不自动打开文档）。侧边栏在选中项目后展开所属分区与项目节点并加载根级文档树。用户就地操作或在权限弹窗中审批通过后，相关通知会在同一数据库事务中自动标记为已读；批准与拒绝把业务结果以可序列化对象返回客户端，避免生产环境把 `throw` 显示为 Server Components digest。已读变更通过 SSE 广播 `notification:count_sync`，跨标签页即时同步消除角标。页面读取本身不会自动改变已读状态，避免路由预取或普通刷新误消费通知。
 
 工作区邀请支持双轨处理机制：已登录用户可直接通过站内通知或控制台就地接受（`acceptWorkspaceInvitationInApp`），也可通过邮件中的 Token 外链（`/invitations/accept?token=...`）或站内详情直达链接（`/invitations/accept?workspace=...`）完成加入。
 
@@ -99,6 +99,7 @@ SSE 路由处理程序 (/api/realtime/notifications)
 - `src/features/notifications/server/CreateNotification.ts`
 - `src/features/notifications/server/GetNotifications.ts`
 - `src/features/notifications/server/NotificationActions.ts`
+- `src/features/notifications/server/OpenNotificationResource.ts`
 - `src/features/notifications/context/RealtimeNotificationContext.tsx`
 - `src/features/notifications/components/NotificationCard.tsx`
 - `src/features/workspaces/components/DashboardPendingItems.tsx`

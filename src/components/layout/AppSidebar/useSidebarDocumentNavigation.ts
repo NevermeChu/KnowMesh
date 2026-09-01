@@ -191,12 +191,49 @@ export function useSidebarDocumentNavigation(props: {
     });
   });
 
+  const syncSelectedProjectNavigation = useEffectEvent(() => {
+    if (!props.selectedProjectId) {
+      return;
+    }
+
+    const selectedProject = props.projects.find(
+      (project) => project.id === props.selectedProjectId,
+    );
+    if (!selectedProject) {
+      return;
+    }
+
+    const projectId = selectedProject.id;
+    setExpandedSections((current) => ({
+      ...current,
+      [selectedProject.workspaceKind === 'personal' ? 'personal' : 'collaboration']: true,
+    }));
+    setExpandedProjectIds((current) => ({
+      ...current,
+      [projectId]: true,
+    }));
+
+    if (props.selectedDocumentId) {
+      return;
+    }
+
+    const key = getNavigationNodeKey(projectId, null);
+    const nodeState = stateRef.current.nodeStates[key] ?? emptyNavigationNodeState;
+    if (!nodeState.hasLoadedFirstPage && !nodeState.isLoading) {
+      void loadDocumentChildren(projectId, null);
+    }
+  });
+
   useEffect(() => {
     notifyDocumentsChange(state.documents);
   }, [state.documents]);
 
   useEffect(() => {
     void loadSelectedDocumentPath();
+  }, [projectIdsKey, props.selectedDocumentId, props.selectedProjectId]);
+
+  useEffect(() => {
+    syncSelectedProjectNavigation();
   }, [projectIdsKey, props.selectedDocumentId, props.selectedProjectId]);
 
   useEffect(() => {

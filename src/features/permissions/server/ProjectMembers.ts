@@ -9,6 +9,7 @@ import { markRelatedNotificationsRead } from '@/features/notifications/server/Ma
 import {
   getMemberInvitationExpiration,
   isMemberInvitationExpired,
+  runMemberAction,
 } from '@/features/permissions/MemberWorkflow';
 import { recordMemberAuditLog } from '@/features/permissions/server/RecordMemberAuditLog';
 import { db } from '@/libs/DB';
@@ -270,166 +271,170 @@ export async function requestProjectAccess(input: ProjectAccessRequestInput) {
 }
 
 export async function approveProjectAccessRequest(input: ProjectAccessReviewInput) {
-  const reviewInput = projectAccessReviewSchema.parse(input);
-  const { userId } = await authorizeProjectMemberMutation({
-    memberUserId: reviewInput.memberUserId,
-    projectId: reviewInput.projectId,
-    role: 'viewer',
-  });
+  return await runMemberAction(async () => {
+    const reviewInput = projectAccessReviewSchema.parse(input);
+    const { userId } = await authorizeProjectMemberMutation({
+      memberUserId: reviewInput.memberUserId,
+      projectId: reviewInput.projectId,
+      role: 'viewer',
+    });
 
-  await db.transaction(async (transaction) => {
-    const [project] = await transaction
-      .select({ name: projectsSchema.name, workspaceId: projectsSchema.workspaceId })
-      .from(projectsSchema)
-      .where(eq(projectsSchema.id, reviewInput.projectId))
-      .limit(1);
+    await db.transaction(async (transaction) => {
+      const [project] = await transaction
+        .select({ name: projectsSchema.name, workspaceId: projectsSchema.workspaceId })
+        .from(projectsSchema)
+        .where(eq(projectsSchema.id, reviewInput.projectId))
+        .limit(1);
 
-    if (!project) {
-      throw new Error('项目不存在');
-    }
+      if (!project) {
+        throw new Error('项目不存在');
+      }
 
-    const [workspaceMembership] = await transaction
-      .select({ userId: workspaceMembersSchema.userId })
-      .from(workspaceMembersSchema)
-      .where(
-        and(
-          eq(workspaceMembersSchema.workspaceId, project.workspaceId),
-          eq(workspaceMembersSchema.userId, reviewInput.memberUserId),
-        ),
-      )
-      .for('update');
+      const [workspaceMembership] = await transaction
+        .select({ userId: workspaceMembersSchema.userId })
+        .from(workspaceMembersSchema)
+        .where(
+          and(
+            eq(workspaceMembersSchema.workspaceId, project.workspaceId),
+            eq(workspaceMembersSchema.userId, reviewInput.memberUserId),
+          ),
+        )
+        .for('update');
 
-    if (!workspaceMembership) {
-      throw new Error('项目成员必须先加入所属工作区');
-    }
+      if (!workspaceMembership) {
+        throw new Error('项目成员必须先加入所属工作区');
+      }
 
-    const [request] = await transaction
-      .delete(projectAccessRequestsSchema)
-      .where(
-        and(
-          eq(projectAccessRequestsSchema.projectId, reviewInput.projectId),
-          eq(projectAccessRequestsSchema.userId, reviewInput.memberUserId),
-        ),
-      )
-      .returning({ requestedRole: projectAccessRequestsSchema.requestedRole });
+      const [request] = await transaction
+        .delete(projectAccessRequestsSchema)
+        .where(
+          and(
+            eq(projectAccessRequestsSchema.projectId, reviewInput.projectId),
+            eq(projectAccessRequestsSchema.userId, reviewInput.memberUserId),
+          ),
+        )
+        .returning({ requestedRole: projectAccessRequestsSchema.requestedRole });
 
-    if (!request) {
-      throw new Error('权限申请不存在');
-    }
-    if (request.requestedRole === 'owner') {
-      throw new Error('不能通过权限申请成为项目所有者');
-    }
+      if (!request) {
+        throw new Error('权限申请不存在');
+      }
+      if (request.requestedRole === 'owner') {
+        throw new Error('不能通过权限申请成为项目所有者');
+      }
 
-    await transaction
-      .insert(projectMembersSchema)
-      .values({
-        projectId: reviewInput.projectId,
-        role: request.requestedRole,
-        userId: reviewInput.memberUserId,
-        workspaceId: project.workspaceId,
-      })
-      .onConflictDoUpdate({
-        set: { role: request.requestedRole },
-        target: [projectMembersSchema.projectId, projectMembersSchema.userId],
+      await transaction
+        .insert(projectMembersSchema)
+        .values({
+          projectId: reviewInput.projectId,
+          role: request.requestedRole,
+          userId: reviewInput.memberUserId,
+          workspaceId: project.workspaceId,
+        })
+        .onConflictDoUpdate({
+          set: { role: request.requestedRole },
+          target: [projectMembersSchema.projectId, projectMembersSchema.userId],
+        });
+      await transaction
+        .delete(projectInvitationsSchema)
+        .where(
+          and(
+            eq(projectInvitationsSchema.projectId, reviewInput.projectId),
+            eq(projectInvitationsSchema.userId, reviewInput.memberUserId),
+          ),
+        );
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你在“${project.name}”的 ${request.requestedRole} 权限申请已通过。`,
+        recipientUserId: reviewInput.memberUserId,
+        target: { id: reviewInput.projectId, kind: 'project' },
+        title: '项目权限申请已通过',
+        type: 'project_access_approved',
       });
-    await transaction
-      .delete(projectInvitationsSchema)
-      .where(
-        and(
-          eq(projectInvitationsSchema.projectId, reviewInput.projectId),
-          eq(projectInvitationsSchema.userId, reviewInput.memberUserId),
-        ),
-      );
-    await createNotification(transaction, {
-      actorUserId: userId,
-      body: `你在“${project.name}”的 ${request.requestedRole} 权限申请已通过。`,
-      recipientUserId: reviewInput.memberUserId,
-      target: { id: reviewInput.projectId, kind: 'project' },
-      title: '项目权限申请已通过',
-      type: 'project_access_approved',
-    });
-    await recordMemberAuditLog(transaction, {
-      action: 'project_access_approved',
-      actorUserId: userId,
-      metadata: {
-        nextRole: request.requestedRole,
-        resourceName: project.name,
+      await recordMemberAuditLog(transaction, {
+        action: 'project_access_approved',
+        actorUserId: userId,
+        metadata: {
+          nextRole: request.requestedRole,
+          resourceName: project.name,
+          targetUserId: reviewInput.memberUserId,
+        },
         targetUserId: reviewInput.memberUserId,
-      },
-      targetUserId: reviewInput.memberUserId,
-      workspaceId: project.workspaceId,
+        workspaceId: project.workspaceId,
+      });
+      await markRelatedNotificationsRead(transaction, {
+        actorUserId: reviewInput.memberUserId,
+        recipientUserId: userId,
+        targetId: reviewInput.projectId,
+        type: 'project_access_requested',
+      });
     });
-    await markRelatedNotificationsRead(transaction, {
-      actorUserId: reviewInput.memberUserId,
-      recipientUserId: userId,
-      targetId: reviewInput.projectId,
-      type: 'project_access_requested',
-    });
-  });
 
-  revalidatePath('/(workspace)', 'layout');
+    revalidatePath('/(workspace)', 'layout');
+  });
 }
 
 export async function rejectProjectAccessRequest(input: ProjectAccessReviewInput) {
-  const reviewInput = projectAccessReviewSchema.parse(input);
-  const { userId } = await authorizeProjectMemberMutation({
-    memberUserId: reviewInput.memberUserId,
-    projectId: reviewInput.projectId,
-    role: 'viewer',
-  });
-
-  await db.transaction(async (transaction) => {
-    const [project] = await transaction
-      .select({ name: projectsSchema.name, workspaceId: projectsSchema.workspaceId })
-      .from(projectsSchema)
-      .where(eq(projectsSchema.id, reviewInput.projectId))
-      .limit(1);
-
-    if (!project) {
-      throw new Error('项目不存在');
-    }
-
-    const [request] = await transaction
-      .delete(projectAccessRequestsSchema)
-      .where(
-        and(
-          eq(projectAccessRequestsSchema.projectId, reviewInput.projectId),
-          eq(projectAccessRequestsSchema.userId, reviewInput.memberUserId),
-        ),
-      )
-      .returning({ requestedRole: projectAccessRequestsSchema.requestedRole });
-
-    if (!request) {
-      throw new Error('权限申请不存在');
-    }
-
-    await createNotification(transaction, {
-      actorUserId: userId,
-      body: `你在“${project.name}”的 ${request.requestedRole} 权限申请未通过。`,
-      recipientUserId: reviewInput.memberUserId,
-      target: { id: reviewInput.projectId, kind: 'project' },
-      title: '项目权限申请未通过',
-      type: 'project_access_rejected',
+  return await runMemberAction(async () => {
+    const reviewInput = projectAccessReviewSchema.parse(input);
+    const { userId } = await authorizeProjectMemberMutation({
+      memberUserId: reviewInput.memberUserId,
+      projectId: reviewInput.projectId,
+      role: 'viewer',
     });
-    await recordMemberAuditLog(transaction, {
-      action: 'project_access_rejected',
-      actorUserId: userId,
-      metadata: {
-        resourceName: project.name,
+
+    await db.transaction(async (transaction) => {
+      const [project] = await transaction
+        .select({ name: projectsSchema.name, workspaceId: projectsSchema.workspaceId })
+        .from(projectsSchema)
+        .where(eq(projectsSchema.id, reviewInput.projectId))
+        .limit(1);
+
+      if (!project) {
+        throw new Error('项目不存在');
+      }
+
+      const [request] = await transaction
+        .delete(projectAccessRequestsSchema)
+        .where(
+          and(
+            eq(projectAccessRequestsSchema.projectId, reviewInput.projectId),
+            eq(projectAccessRequestsSchema.userId, reviewInput.memberUserId),
+          ),
+        )
+        .returning({ requestedRole: projectAccessRequestsSchema.requestedRole });
+
+      if (!request) {
+        throw new Error('权限申请不存在');
+      }
+
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你在“${project.name}”的 ${request.requestedRole} 权限申请未通过。`,
+        recipientUserId: reviewInput.memberUserId,
+        target: { id: reviewInput.projectId, kind: 'project' },
+        title: '项目权限申请未通过',
+        type: 'project_access_rejected',
+      });
+      await recordMemberAuditLog(transaction, {
+        action: 'project_access_rejected',
+        actorUserId: userId,
+        metadata: {
+          resourceName: project.name,
+          targetUserId: reviewInput.memberUserId,
+        },
         targetUserId: reviewInput.memberUserId,
-      },
-      targetUserId: reviewInput.memberUserId,
-      workspaceId: project.workspaceId,
+        workspaceId: project.workspaceId,
+      });
+      await markRelatedNotificationsRead(transaction, {
+        actorUserId: reviewInput.memberUserId,
+        recipientUserId: userId,
+        targetId: reviewInput.projectId,
+        type: 'project_access_requested',
+      });
     });
-    await markRelatedNotificationsRead(transaction, {
-      actorUserId: reviewInput.memberUserId,
-      recipientUserId: userId,
-      targetId: reviewInput.projectId,
-      type: 'project_access_requested',
-    });
-  });
 
-  revalidatePath('/(workspace)', 'layout');
+    revalidatePath('/(workspace)', 'layout');
+  });
 }
 
 export async function updateProjectMemberRole(input: ProjectMemberMutationInput) {

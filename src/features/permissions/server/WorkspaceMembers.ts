@@ -9,7 +9,10 @@ import { requireUser } from '@/features/auth/server/CurrentUser';
 import { sendWorkspaceInvitationEmail } from '@/features/emails/server/SendWorkspaceInvitationEmail';
 import { createNotification } from '@/features/notifications/server/CreateNotification';
 import { markRelatedNotificationsRead } from '@/features/notifications/server/MarkRelatedNotificationsRead';
-import { getMemberInvitationExpiration } from '@/features/permissions/MemberWorkflow';
+import {
+  getMemberInvitationExpiration,
+  runMemberAction,
+} from '@/features/permissions/MemberWorkflow';
 import { recordMemberAuditLog } from '@/features/permissions/server/RecordMemberAuditLog';
 import { hashWorkspaceInvitationToken } from '@/features/permissions/server/WorkspaceInvitationToken';
 import {
@@ -579,127 +582,131 @@ export async function requestWorkspaceEditAccess(input: WorkspaceAccessRequestIn
 }
 
 export async function approveWorkspaceAccessRequest(input: WorkspaceAccessReviewInput) {
-  const { id: userId } = await requireUser();
-  const reviewInput = workspaceAccessReviewSchema.parse(input);
-  const authorization = await authorizeWorkspace({
-    permission: 'workspace.members.manage',
-    userId,
-    workspaceId: reviewInput.workspaceId,
-  });
-
-  if (authorization.workspace.kind === 'personal') {
-    throw new Error('个人空间不支持权限申请');
-  }
-
-  await db.transaction(async (transaction) => {
-    const [request] = await transaction
-      .delete(workspaceAccessRequestsSchema)
-      .where(
-        and(
-          eq(workspaceAccessRequestsSchema.workspaceId, reviewInput.workspaceId),
-          eq(workspaceAccessRequestsSchema.userId, reviewInput.memberUserId),
-        ),
-      )
-      .returning({ userId: workspaceAccessRequestsSchema.userId });
-
-    if (!request) {
-      throw new Error('权限申请不存在');
-    }
-
-    await transaction
-      .update(workspaceMembersSchema)
-      .set({ role: 'editor' })
-      .where(
-        and(
-          eq(workspaceMembersSchema.workspaceId, reviewInput.workspaceId),
-          eq(workspaceMembersSchema.userId, reviewInput.memberUserId),
-        ),
-      );
-    await createNotification(transaction, {
-      actorUserId: userId,
-      body: `你在“${authorization.workspace.name}”的 Editor 权限申请已通过。`,
-      recipientUserId: request.userId,
-      target: { id: reviewInput.workspaceId, kind: 'workspace' },
-      title: '工作区权限申请已通过',
-      type: 'workspace_access_approved',
-    });
-    await recordMemberAuditLog(transaction, {
-      action: 'workspace_access_approved',
-      actorUserId: userId,
-      metadata: {
-        nextRole: 'editor',
-        resourceName: authorization.workspace.name,
-        targetUserId: reviewInput.memberUserId,
-      },
-      targetUserId: reviewInput.memberUserId,
+  return await runMemberAction(async () => {
+    const { id: userId } = await requireUser();
+    const reviewInput = workspaceAccessReviewSchema.parse(input);
+    const authorization = await authorizeWorkspace({
+      permission: 'workspace.members.manage',
+      userId,
       workspaceId: reviewInput.workspaceId,
     });
-    await markRelatedNotificationsRead(transaction, {
-      actorUserId: reviewInput.memberUserId,
-      recipientUserId: userId,
-      targetId: reviewInput.workspaceId,
-      type: 'workspace_access_requested',
-    });
-  });
 
-  revalidatePath('/(workspace)', 'layout');
+    if (authorization.workspace.kind === 'personal') {
+      throw new Error('个人空间不支持权限申请');
+    }
+
+    await db.transaction(async (transaction) => {
+      const [request] = await transaction
+        .delete(workspaceAccessRequestsSchema)
+        .where(
+          and(
+            eq(workspaceAccessRequestsSchema.workspaceId, reviewInput.workspaceId),
+            eq(workspaceAccessRequestsSchema.userId, reviewInput.memberUserId),
+          ),
+        )
+        .returning({ userId: workspaceAccessRequestsSchema.userId });
+
+      if (!request) {
+        throw new Error('权限申请不存在');
+      }
+
+      await transaction
+        .update(workspaceMembersSchema)
+        .set({ role: 'editor' })
+        .where(
+          and(
+            eq(workspaceMembersSchema.workspaceId, reviewInput.workspaceId),
+            eq(workspaceMembersSchema.userId, reviewInput.memberUserId),
+          ),
+        );
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你在“${authorization.workspace.name}”的 Editor 权限申请已通过。`,
+        recipientUserId: request.userId,
+        target: { id: reviewInput.workspaceId, kind: 'workspace' },
+        title: '工作区权限申请已通过',
+        type: 'workspace_access_approved',
+      });
+      await recordMemberAuditLog(transaction, {
+        action: 'workspace_access_approved',
+        actorUserId: userId,
+        metadata: {
+          nextRole: 'editor',
+          resourceName: authorization.workspace.name,
+          targetUserId: reviewInput.memberUserId,
+        },
+        targetUserId: reviewInput.memberUserId,
+        workspaceId: reviewInput.workspaceId,
+      });
+      await markRelatedNotificationsRead(transaction, {
+        actorUserId: reviewInput.memberUserId,
+        recipientUserId: userId,
+        targetId: reviewInput.workspaceId,
+        type: 'workspace_access_requested',
+      });
+    });
+
+    revalidatePath('/(workspace)', 'layout');
+  });
 }
 
 export async function rejectWorkspaceAccessRequest(input: WorkspaceAccessReviewInput) {
-  const { id: userId } = await requireUser();
-  const reviewInput = workspaceAccessReviewSchema.parse(input);
-  const authorization = await authorizeWorkspace({
-    permission: 'workspace.members.manage',
-    userId,
-    workspaceId: reviewInput.workspaceId,
-  });
-
-  if (authorization.workspace.kind === 'personal') {
-    throw new Error('个人空间不支持权限申请');
-  }
-
-  await db.transaction(async (transaction) => {
-    const [request] = await transaction
-      .delete(workspaceAccessRequestsSchema)
-      .where(
-        and(
-          eq(workspaceAccessRequestsSchema.workspaceId, reviewInput.workspaceId),
-          eq(workspaceAccessRequestsSchema.userId, reviewInput.memberUserId),
-        ),
-      )
-      .returning({ userId: workspaceAccessRequestsSchema.userId });
-
-    if (!request) {
-      throw new Error('权限申请不存在');
-    }
-
-    await createNotification(transaction, {
-      actorUserId: userId,
-      body: `你在“${authorization.workspace.name}”的 Editor 权限申请未通过。`,
-      recipientUserId: request.userId,
-      target: { id: reviewInput.workspaceId, kind: 'workspace' },
-      title: '工作区权限申请未通过',
-      type: 'workspace_access_rejected',
-    });
-    await recordMemberAuditLog(transaction, {
-      action: 'workspace_access_rejected',
-      actorUserId: userId,
-      metadata: {
-        resourceName: authorization.workspace.name,
-        targetUserId: reviewInput.memberUserId,
-      },
-      targetUserId: reviewInput.memberUserId,
+  return await runMemberAction(async () => {
+    const { id: userId } = await requireUser();
+    const reviewInput = workspaceAccessReviewSchema.parse(input);
+    const authorization = await authorizeWorkspace({
+      permission: 'workspace.members.manage',
+      userId,
       workspaceId: reviewInput.workspaceId,
     });
-    await markRelatedNotificationsRead(transaction, {
-      actorUserId: reviewInput.memberUserId,
-      recipientUserId: userId,
-      targetId: reviewInput.workspaceId,
-      type: 'workspace_access_requested',
-    });
-  });
 
-  revalidatePath('/(workspace)', 'layout');
+    if (authorization.workspace.kind === 'personal') {
+      throw new Error('个人空间不支持权限申请');
+    }
+
+    await db.transaction(async (transaction) => {
+      const [request] = await transaction
+        .delete(workspaceAccessRequestsSchema)
+        .where(
+          and(
+            eq(workspaceAccessRequestsSchema.workspaceId, reviewInput.workspaceId),
+            eq(workspaceAccessRequestsSchema.userId, reviewInput.memberUserId),
+          ),
+        )
+        .returning({ userId: workspaceAccessRequestsSchema.userId });
+
+      if (!request) {
+        throw new Error('权限申请不存在');
+      }
+
+      await createNotification(transaction, {
+        actorUserId: userId,
+        body: `你在“${authorization.workspace.name}”的 Editor 权限申请未通过。`,
+        recipientUserId: request.userId,
+        target: { id: reviewInput.workspaceId, kind: 'workspace' },
+        title: '工作区权限申请未通过',
+        type: 'workspace_access_rejected',
+      });
+      await recordMemberAuditLog(transaction, {
+        action: 'workspace_access_rejected',
+        actorUserId: userId,
+        metadata: {
+          resourceName: authorization.workspace.name,
+          targetUserId: reviewInput.memberUserId,
+        },
+        targetUserId: reviewInput.memberUserId,
+        workspaceId: reviewInput.workspaceId,
+      });
+      await markRelatedNotificationsRead(transaction, {
+        actorUserId: reviewInput.memberUserId,
+        recipientUserId: userId,
+        targetId: reviewInput.workspaceId,
+        type: 'workspace_access_requested',
+      });
+    });
+
+    revalidatePath('/(workspace)', 'layout');
+  });
 }
 
 export async function removeWorkspaceMember(input: WorkspaceMemberMutationInput) {
