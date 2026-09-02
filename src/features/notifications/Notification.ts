@@ -21,6 +21,7 @@ export type NotificationType = (typeof notificationTypes)[number];
 export type NotificationTargetKind = (typeof notificationTargetKinds)[number];
 
 export type NotificationItem = {
+  accessRequestPending: boolean;
   actorUserId?: string | null;
   body: string;
   createdAt: Date;

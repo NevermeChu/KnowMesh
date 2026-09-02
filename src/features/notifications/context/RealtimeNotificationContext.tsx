@@ -81,6 +81,9 @@ export function RealtimeNotificationProvider(props: {
 
       if (parsed.notification) {
         const item: NotificationItem = {
+          accessRequestPending:
+            parsed.notification.type === 'workspace_access_requested' ||
+            parsed.notification.type === 'project_access_requested',
           body: parsed.notification.body,
           createdAt: new Date(parsed.notification.createdAt),
           id: parsed.notification.id,

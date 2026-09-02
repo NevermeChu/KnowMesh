@@ -1,10 +1,14 @@
 import 'server-only';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { cache } from 'react';
 import { requireUser } from '@/features/auth/server/CurrentUser';
 import type { NotificationItem } from '@/features/notifications/Notification';
 import { db } from '@/libs/DB';
-import { notificationsSchema } from '@/models/Schema';
+import {
+  notificationsSchema,
+  projectAccessRequestsSchema,
+  workspaceAccessRequestsSchema,
+} from '@/models/Schema';
 
 const NOTIFICATION_PAGE_SIZE = 50;
 
@@ -13,6 +17,21 @@ export const getNotifications = cache(async (): Promise<NotificationItem[]> => {
 
   return await db
     .select({
+      accessRequestPending: sql<boolean>`CASE
+        WHEN ${notificationsSchema.type} = 'workspace_access_requested' THEN EXISTS (
+          SELECT 1
+          FROM ${workspaceAccessRequestsSchema}
+          WHERE ${workspaceAccessRequestsSchema.workspaceId} = ${notificationsSchema.targetId}
+            AND ${workspaceAccessRequestsSchema.userId} = ${notificationsSchema.actorUserId}
+        )
+        WHEN ${notificationsSchema.type} = 'project_access_requested' THEN EXISTS (
+          SELECT 1
+          FROM ${projectAccessRequestsSchema}
+          WHERE ${projectAccessRequestsSchema.projectId} = ${notificationsSchema.targetId}
+            AND ${projectAccessRequestsSchema.userId} = ${notificationsSchema.actorUserId}
+        )
+        ELSE FALSE
+      END`,
       actorUserId: notificationsSchema.actorUserId,
       body: notificationsSchema.body,
       createdAt: notificationsSchema.createdAt,

@@ -1,6 +1,7 @@
 import type { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { getNotifications as getNotificationsType } from '@/features/notifications/server/GetNotifications';
 import type { getPendingApprovals as getPendingApprovalsType } from '@/features/permissions/server/GetPendingApprovals';
 import type {
   acceptProjectInvitation as acceptProjectInvitationType,
@@ -49,6 +50,7 @@ let rejectProjectAccessRequest: typeof rejectProjectAccessRequestType;
 let getPendingApprovals: typeof getPendingApprovalsType;
 let getPendingInvitations: typeof getPendingInvitationsType;
 let getWorkspaceInvitation: typeof getWorkspaceInvitationType;
+let getNotifications: typeof getNotificationsType;
 
 let currentUser = {
   email: 'invitee@knowmesh.test',
@@ -100,6 +102,9 @@ describe('in-app invitations and direct actions', () => {
     const workspaceInvitationModule =
       await import('@/features/workspaces/server/GetWorkspaceInvitation');
     ({ getWorkspaceInvitation } = workspaceInvitationModule);
+
+    const notificationsModule = await import('@/features/notifications/server/GetNotifications');
+    ({ getNotifications } = notificationsModule);
 
     await database.transaction(async (transaction) => {
       await transaction.query(`
@@ -591,6 +596,33 @@ describe('in-app invitations and direct actions', () => {
       `SELECT read_at FROM notifications WHERE id = '50000000-0000-4000-8000-000000000209'`,
     );
     expect(notifResult2.rows[0]?.read_at).not.toBeNull();
+
+    const pendingProjectId = '20000000-0000-4000-8000-000000000202';
+    await database.query(`
+      INSERT INTO project_access_requests (project_id, user_id, requested_role)
+      VALUES ('${pendingProjectId}', 'user_other', 'viewer')
+    `);
+    await database.query(`
+      INSERT INTO notifications (id, recipient_user_id, actor_user_id, type, title, body, target_kind, target_id)
+      VALUES ('50000000-0000-4000-8000-000000000210', 'user_owner', 'user_other', 'project_access_requested', '项目权限申请', '申请 Viewer 权限', 'project', '${pendingProjectId}')
+    `);
+
+    const notifications = await getNotifications();
+    expect(
+      notifications.find(
+        (notification) => notification.id === '50000000-0000-4000-8000-000000000208',
+      )?.accessRequestPending,
+    ).toBeFalsy();
+    expect(
+      notifications.find(
+        (notification) => notification.id === '50000000-0000-4000-8000-000000000209',
+      )?.accessRequestPending,
+    ).toBeFalsy();
+    expect(
+      notifications.find(
+        (notification) => notification.id === '50000000-0000-4000-8000-000000000210',
+      )?.accessRequestPending,
+    ).toBeTruthy();
   });
 
   it('fetches pending approvals with requester name and resource identifiers', async () => {

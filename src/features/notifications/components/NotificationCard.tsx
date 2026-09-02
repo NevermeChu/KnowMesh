@@ -88,6 +88,10 @@ function getNotificationVisuals(type: NotificationType) {
   }
 }
 
+function isPendingAccessRequest(notification: NotificationItem, type: NotificationType) {
+  return notification.type === type && notification.accessRequestPending;
+}
+
 export function NotificationCard(props: { notification: NotificationItem }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -214,7 +218,7 @@ export function NotificationCard(props: { notification: NotificationItem }) {
     }
 
     if (
-      props.notification.type === 'workspace_access_requested' &&
+      isPendingAccessRequest(props.notification, 'workspace_access_requested') &&
       props.notification.targetId &&
       props.notification.actorUserId
     ) {
@@ -225,9 +229,10 @@ export function NotificationCard(props: { notification: NotificationItem }) {
           <Button
             disabled={isPending}
             onClick={() => {
-              handleAction(async () => {
-                await approveWorkspaceAccessRequest({ memberUserId, workspaceId });
-              }, '已批准工作区编辑权限');
+              handleAction(
+                async () => await approveWorkspaceAccessRequest({ memberUserId, workspaceId }),
+                '已批准工作区编辑权限',
+              );
             }}
             size="sm"
             type="button"
@@ -238,9 +243,10 @@ export function NotificationCard(props: { notification: NotificationItem }) {
           <Button
             disabled={isPending}
             onClick={() => {
-              handleAction(async () => {
-                await rejectWorkspaceAccessRequest({ memberUserId, workspaceId });
-              }, '已拒绝权限申请');
+              handleAction(
+                async () => await rejectWorkspaceAccessRequest({ memberUserId, workspaceId }),
+                '已拒绝权限申请',
+              );
             }}
             size="sm"
             type="button"
@@ -263,7 +269,7 @@ export function NotificationCard(props: { notification: NotificationItem }) {
     }
 
     if (
-      props.notification.type === 'project_access_requested' &&
+      isPendingAccessRequest(props.notification, 'project_access_requested') &&
       props.notification.targetId &&
       props.notification.actorUserId
     ) {
@@ -274,9 +280,10 @@ export function NotificationCard(props: { notification: NotificationItem }) {
           <Button
             disabled={isPending}
             onClick={() => {
-              handleAction(async () => {
-                await approveProjectAccessRequest({ memberUserId, projectId });
-              }, '已批准项目权限');
+              handleAction(
+                async () => await approveProjectAccessRequest({ memberUserId, projectId }),
+                '已批准项目权限',
+              );
             }}
             size="sm"
             type="button"
@@ -287,9 +294,10 @@ export function NotificationCard(props: { notification: NotificationItem }) {
           <Button
             disabled={isPending}
             onClick={() => {
-              handleAction(async () => {
-                await rejectProjectAccessRequest({ memberUserId, projectId });
-              }, '已拒绝项目申请');
+              handleAction(
+                async () => await rejectProjectAccessRequest({ memberUserId, projectId }),
+                '已拒绝项目申请',
+              );
             }}
             size="sm"
             type="button"
