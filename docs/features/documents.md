@@ -73,6 +73,12 @@ Provider 报告本地未同步正文更新后，界面保持“保存中”直�
 - **文档收藏**：用户可在文档编辑区顶部点击星标切换收藏状态。客户端提交明确的目标状态，服务端通过冲突安全插入或联合键删除保持重复请求幂等。收藏持久化于 `starred_documents`，在 `/starred` 页面列出所有当前用户已收藏且仍具有 `document.read` 权限的文档；用户或文档被删除时数据库外键级联清理收藏记录。
 - **全站搜索**：`/search` 页面支持跨个人空间与团队协作项目对文档标题及 ProseMirror 正文进行检索，并提供上下文片段高亮摘要。搜索严格受项目直接成员关系限制，无权读取正文的文档不会被检索或呈现内容片段。
 
+## WebMCP
+
+登录后的应用外壳在浏览器支持 `document.modelContext` 时注册 `read_current_personal_document` 与 `write_personal_document`。读取工具无需参数，从当前页面 URL 解析已打开文档并返回其 UUID、完整 ProseMirror JSON、内容 Schema 版本与 `updatedAt`；写入工具要求回传读取结果中的 UUID 与 `updatedAt`，以绑定目标文档、建立乐观并发基线并整篇替换正文。服务端仍执行 Better Auth、Document/Project 能力授权、Personal Workspace 与富文本类型限制、内容 Schema 校验、事务内权限复查和冲突检测。
+
+WebMCP 不提供文档搜索、创建、重命名、移动、删除、Team 文档、白板、成员或权限操作。浏览器不支持 WebMCP 时不注册工具，现有页面行为不变。
+
 
 ## Schema 演进
 
@@ -152,6 +158,7 @@ Personal 白板可导出 `.excalidraw`、PNG 和 SVG。Team 白板在独立协�
 - `src/features/documents/server/MoveDocument.ts`
 - `src/features/documents/server/UpdateDocument.ts`
 - `src/features/documents/server/DeleteDocument.ts`
+- `src/features/webmcp/`
 - `src/features/permissions/`
 - `src/models/Schema.ts`
 

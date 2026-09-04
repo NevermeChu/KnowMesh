@@ -10,6 +10,7 @@ import type { DocumentNavigationItem } from '@/features/documents/Document';
 import type { ContentWidthPercentage } from '@/features/preferences/Preferences';
 import type { Project } from '@/features/projects/Project';
 import { CommandPalette } from '@/features/search/components/CommandPalette';
+import { KnowMeshWebMcpTools } from '@/features/webmcp/components/KnowMeshWebMcpTools';
 import type { Workspace } from '@/features/workspaces/Workspace';
 
 const DEFAULT_SIDEBAR_WIDTH = 190;
@@ -117,6 +118,7 @@ export function AppShell(props: {
         </main>
         <CommandPalette currentUserId={props.currentUserId} />
         <ShortcutsHelpDialog />
+        <KnowMeshWebMcpTools />
       </div>
     </DocumentEditorToolbarProvider>
   );
