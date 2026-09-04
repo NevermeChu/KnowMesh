@@ -133,6 +133,7 @@ describe('local runtime collaboration orchestration', () => {
 
   it('starts collaboration after migration and before Next.js', async () => {
     const started: string[] = [];
+    const databaseUrls = new Map<string, string | undefined>();
     const terminated: { name: string; timeoutMs?: number }[] = [];
     const childNames = new Map<ChildProcess, string>();
     const signal = Promise.withResolvers<{ exitCode: number; signal: NodeJS.Signals }>();
@@ -141,6 +142,7 @@ describe('local runtime collaboration orchestration', () => {
         const child = createChild();
         childNames.set(child, command.name);
         started.push(command.name);
+        databaseUrls.set(command.name, command.env?.DATABASE_URL);
         if (command.name === 'Database migration') {
           queueMicrotask(() => {
             exitChild(child);
@@ -180,6 +182,11 @@ describe('local runtime collaboration orchestration', () => {
     ).resolves.toBe(130);
 
     expect(started).toStrictEqual(['PGlite', 'Database migration', 'Hocuspocus', 'Next.js']);
+    expect(databaseUrls).toMatchObject(
+      new Map(
+        started.map((name) => [name, 'postgresql://postgres:postgres@127.0.0.1:5432/postgres']),
+      ),
+    );
     expect(terminated[0]).toStrictEqual({ name: 'Hocuspocus', timeoutMs: 17_000 });
     expect(terminated.map((item) => item.name)).toStrictEqual(
       expect.arrayContaining(['Hocuspocus', 'Next.js', 'PGlite']),

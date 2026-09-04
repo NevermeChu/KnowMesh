@@ -48,6 +48,7 @@ type RuntimeSignal = {
 
 const DATABASE_HOST = '127.0.0.1';
 const DATABASE_PORT = 5432;
+const MANAGED_DATABASE_URL = `postgresql://postgres:postgres@${DATABASE_HOST}:${DATABASE_PORT}/postgres`;
 const STARTUP_TIMEOUT_MS = 60_000;
 // Must comfortably exceed the embedded PostgreSQL checkpoint time; a forced
 // kill before checkpointing has corrupted local data directories twice.
@@ -196,7 +197,13 @@ export const runRuntime = async (options: {
   let cleanupPromise: Promise<void> | undefined;
 
   const start = (command: Command) => {
-    const child = options.operations.spawnProcess(command);
+    const runtimeCommand = options.manageDatabase
+      ? {
+          ...command,
+          env: { ...command.env, DATABASE_URL: MANAGED_DATABASE_URL },
+        }
+      : command;
+    const child = options.operations.spawnProcess(runtimeCommand);
     const exit = waitForExit(child);
     children.add(child);
     child.once('exit', () => children.delete(child));

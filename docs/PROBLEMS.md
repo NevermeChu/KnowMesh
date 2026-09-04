@@ -1089,3 +1089,17 @@ PGlite 测试帮助器直接按 Drizzle journal 的 entries 顺序生成 SQL 文
 
 ### 解决方法
 批准/拒绝经 `runMemberAction` 捕获异常并返回可序列化的 `{ ok, error }`；调用方用 `isFailedMemberAction` 展示 `reviewError`，不再把业务结果编码为 throw。`revalidatePath('/(workspace)', 'layout')` 保持现状，不把刷新对齐当作先决修复。
+
+## 89. 本地运行器启动 PGlite 后未向子进程提供数据库地址
+
+### 问题
+
+未在调用终端或环境文件中设置 `DATABASE_URL` 时，`npm run dev` 与 `npm run build-local` 会成功启动本地 PGlite，但紧接着的 Drizzle 迁移收到空 URL 并退出，应用无法启动。
+
+### 根因
+
+本地运行器只负责启动并等待 `127.0.0.1:5432`，随后原样继承调用进程环境启动迁移、协作服务和 Next.js。它没有把自己管理的 PGlite 连接串写入这些子进程；`.env.example` 中的空占位值也不能提供有效地址。
+
+### 解决方法
+
+当本地运行器管理 PGlite 时，为它启动的所有子进程显式注入 `postgresql://postgres:postgres@127.0.0.1:5432/postgres`，覆盖空占位值并确保迁移与应用连接同一实例。`E2E_REAL_POSTGRES=true` 的外部数据库模式不注入或覆盖地址，继续使用调用方提供的 `DATABASE_URL`。
