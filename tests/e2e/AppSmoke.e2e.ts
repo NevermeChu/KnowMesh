@@ -147,6 +147,14 @@ test.describe('application smoke coverage', () => {
         sameSite: 'Lax',
         value: options.workspaceId ?? personalWorkspaceId,
       },
+      {
+        domain: new URL(options.baseURL).hostname,
+        httpOnly: true,
+        name: 'knowmesh-theme',
+        path: '/',
+        sameSite: 'Lax',
+        value: 'system',
+      },
     ]);
     const page = await browserContext.newPage();
     return {

@@ -65,6 +65,14 @@ async function createAuthenticatedContext(options: {
       sameSite: 'Lax',
       value: workspaceId,
     },
+    {
+      domain: new URL(options.baseURL).hostname,
+      httpOnly: true,
+      name: 'knowmesh-theme',
+      path: '/',
+      sameSite: 'Lax',
+      value: 'system',
+    },
   ]);
   return context;
 }

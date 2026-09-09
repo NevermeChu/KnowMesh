@@ -194,6 +194,14 @@ test.describe('sidebar navigation and command palette resilience', () => {
         sameSite: 'Lax',
         value: personalWorkspaceId,
       },
+      {
+        domain: new URL(options.baseURL).hostname,
+        httpOnly: true,
+        name: 'knowmesh-theme',
+        path: '/',
+        sameSite: 'Lax',
+        value: 'system',
+      },
     ]);
     const page = await browserContext.newPage();
     return {
