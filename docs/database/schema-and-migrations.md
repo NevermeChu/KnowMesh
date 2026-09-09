@@ -120,7 +120,7 @@
 - UUID 主键；每个用户最多一行，`user_id` 唯一索引既是 upsert 冲突目标也是读取隔离条件。
 - `theme` 为 `light`、`dark`、`system` 枚举，默认 `system`。
 - `content_width` 为整数，当前应用只写入 `60`、`70`、`80` 或 `90`，默认 `80`；数据库不使用检查约束限制该集合，读取侧会把越界值回退为默认值。
-- 偏好是主题持久化真相源；根布局渲染读取的是 Server Action 同步写入的 `knowmesh-theme` cookie 镜像，不查询本表。
+- 偏好是主题持久化真相源；根布局渲染默认只读取 Server Action 同步写入的 `knowmesh-theme` cookie 镜像，镜像缺失或非法时通过 `getPersistedTheme()` 查询本表（无 session 时不查库），并由回填 Route Handler 写回 cookie 后回到只读 cookie 的路径。
 - `updated_at` 由 Drizzle 写入路径更新，不是数据库触发器。
 - Better Auth 删除账户前的业务清理流程删除该用户的偏好行。
 

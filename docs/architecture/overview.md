@@ -43,7 +43,7 @@ PostgreSQL / 本地 PGlite
 
 路由组只组织代码，不自动提供鉴权；新增工作区路由时必须同时确认 `src/proxy.ts` 的保护范围。
 
-当前仓库提供 `/api/auth/[...all]` Better Auth Route Handler，处理登录、注册、会话、邮箱验证、密码重置和账户操作。其他新增 API 路由必须单独定义认证和授权边界。
+当前仓库提供 `/api/auth/[...all]` Better Auth Route Handler，处理登录、注册、会话、邮箱验证、密码重置和账户操作；另有 `/api/preferences/theme` Route Handler 在主题镜像 cookie 缺失时回填持久化偏好。其他新增 API 路由必须单独定义认证和授权边界。
 
 ## 代码职责
 

@@ -176,6 +176,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 
 - `src/app/(workspace)/layout.tsx`：服务端初始查询入口。
 - `src/app/api/auth/[...all]/route.ts`：挂载 Better Auth Route Handler。
+- `src/app/api/preferences/theme/route.ts`：主题镜像 cookie 缺失时的回填 Route Handler。
 - `src/app/api/realtime/notifications/route.ts`：挂载 SSE 实时通知长连接 Route Handler。
 - `src/libs/Auth.ts`：在共享核心选项之上组合邮件、rate limit、trusted origins 和用户生命周期 hook。
 - `src/libs/AuthCore.ts`：主应用与协作进程共享的 Better Auth 核心配置构造器（base URL、secret、认证表 adapter）。
