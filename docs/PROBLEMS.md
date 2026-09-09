@@ -1116,7 +1116,7 @@ PGlite 测试帮助器直接按 Drizzle journal 的 entries 顺序生成 SQL 文
 
 ### 解决方法
 
-初版方案是在 Better Auth Session 创建 hook（参照 `ensureUserWorkspace` 先例）读取 `user_preferences` 并回填 cookie，但该 hook 只在 session 创建时触发，覆盖不了“session 仍有效而主题 cookie 单独过期或被清”的场景。最终实现为按需渲染期解析 + 客户端回填：根布局在主题镜像缺失或非法时调用 `getPersistedTheme()`，无 session 时 Better Auth 不查库直接返回，有 session 才查询 `user_preferences`，用数据库偏好渲染首帧以消除“先 system 再纠正”的闪烁；已登录时挂载 `RestorePersistedTheme`，由 `restoreThemePreference` Server Action 回填 cookie，无偏好行写入 `system` 哨兵值，使后续请求回到只读 cookie 的零查询路径。匿名请求不挂载组件、不写入。
+初版方案是在 Better Auth Session 创建 hook（参照 `ensureUserWorkspace` 先例）读取 `user_preferences` 并回填 cookie，但该 hook 只在 session 创建时触发，覆盖不了“session 仍有效而主题 cookie 单独过期或被清”的场景。最终实现为按需渲染期解析 + 客户端回填：根布局在主题镜像缺失或非法时调用 `getPersistedTheme()`，无 session 时 Better Auth 不查库直接返回，有 session 才查询 `user_preferences`，用数据库偏好渲染首帧以消除“先 system 再纠正”的闪烁；已登录时挂载 `RestorePersistedTheme`，由 `POST /api/preferences/theme` Route Handler 回填 cookie，无偏好行写入 `system` 哨兵值，使后续请求回到只读 cookie 的零查询路径。匿名请求不挂载组件、不写入。回填最初使用 Server Action，但其响应会携带当前路由重渲染后的 RSC 树，首次无 cookie 加载时可能覆盖客户端刚产生的未提交状态（E2E 中表现为标题改名被回滚、侧边栏被重渲染）；改为 Route Handler 后响应只含 JSON，不再触发路由重渲染。
 
 ## 91. ProseMirror attrs 的 null 原型在 Server Action 序列化中被静默损坏
 
