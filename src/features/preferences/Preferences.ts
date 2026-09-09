@@ -16,6 +16,14 @@ export type UserPreferences = {
 /** Cookie mirroring the persisted theme so the root layout can render it before paint. */
 export const THEME_COOKIE = 'knowmesh-theme';
 
+/** Attributes shared by every theme-cookie write so update and restore paths stay identical. */
+export const THEME_COOKIE_OPTIONS = {
+  httpOnly: true,
+  maxAge: 60 * 60 * 24 * 365,
+  path: '/',
+  sameSite: 'lax',
+} as const;
+
 /** Cookie mirroring the persisted content width so the root layout can size content before paint. */
 export const CONTENT_WIDTH_COOKIE = 'knowmesh-content-width';
 
