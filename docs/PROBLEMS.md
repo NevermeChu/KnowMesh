@@ -1103,6 +1103,7 @@ PGlite 测试帮助器直接按 Drizzle journal 的 entries 顺序生成 SQL 文
 ### 解决方法
 
 当本地运行器管理 PGlite 时，为它启动的所有子进程显式注入 `postgresql://postgres:postgres@127.0.0.1:5432/postgres`，覆盖空占位值并确保迁移与应用连接同一实例。`E2E_REAL_POSTGRES=true` 的外部数据库模式不注入或覆盖地址，继续使用调用方提供的 `DATABASE_URL`。
+
 ## 90. 主题偏好数据库记录不参与渲染恢复
 
 ### 问题
@@ -1117,3 +1118,22 @@ PGlite 测试帮助器直接按 Drizzle journal 的 entries 顺序生成 SQL 文
 
 初版方案是在 Better Auth Session 创建 hook（参照 `ensureUserWorkspace` 先例）读取 `user_preferences` 并回填 cookie，但该 hook 只在 session 创建时触发，覆盖不了“session 仍有效而主题 cookie 单独过期或被清”的场景。最终实现为按需渲染期解析 + 客户端回填：根布局在主题镜像缺失或非法时调用 `getPersistedTheme()`，无 session 时 Better Auth 不查库直接返回，有 session 才查询 `user_preferences`，用数据库偏好渲染首帧以消除“先 system 再纠正”的闪烁；已登录时挂载 `RestorePersistedTheme`，由 `restoreThemePreference` Server Action 回填 cookie，无偏好行写入 `system` 哨兵值，使后续请求回到只读 cookie 的零查询路径。匿名请求不挂载组件、不写入。
 
+## 91. ProseMirror attrs 的 null 原型在 Server Action 序列化中被静默损坏
+
+### 问题
+
+Personal 富文本文档中，凡 JSON 中出现 `attrs` 的节点（标题 H1–H6、代码块 language、callout type、task item checked、有序列表 start 等）都会让自动保存必然失败：保存请求返回 500，服务端抛出 ZodError `{"path":["content"],"message":"文档内容格式无效"}`，界面红标「保存失败」，内容永远无法落库。纯段落与文本内容不含 attrs，保存正常，因此粘贴纯文本可以成功，第一个标题操作即触发失败，表象像是「改成一级标题导致保存失败」。客户端 `flushContent` 的 `isDocumentContent` 预检并不拦截——该校验只递归检查值而不检查对象原型，null 原型 attrs 照样放行；单元与集成测试直接以普通 JSON 调用校验函数和服务端 action，不经过浏览器端序列化路径，因此测试全绿、缺陷只在线上保存链路出现。
+
+### 根因
+
+三方各自合理的设计在同一条序列化边界上组合出静默数据损坏：
+
+1. prosemirror-model（1.25.11）出于防原型污染考虑，用 `Object.create(null)` 构造节点 attrs（`computeAttrs`），`Node.toJSON()` 按引用携带，`editor.getJSON()` 输出的 attrs 均为 null 原型对象。该对象在进程内传递时完全无害。
+2. React Flight 的 `encodeReply`（Next 16.2.6 内置 react-server-dom-turbopack）只序列化原型为 `Object.prototype` 的普通对象，null 原型被归入「类或 null 原型不支持」。Next 调用 Server Action 时携带 `temporaryReferences`（为向服务端传 React 元素/客户端引用而设），该分支因此不抛错而是输出 `"$T"` 占位符；且与 React 元素分支不同，它不向临时引用表注册任何值，占位符悬空，服务端解出的 `attrs` 就是字面字符串 `"$T"`。
+3. `updateDocumentSchema` 中 `isDocumentContent` 要求 attrs 为对象，字符串被拒绝 → ZodError → action 500 → 客户端 `catch` 显示「保存失败」。
+
+受影响的只有「浏览器把文档 JSON 作为 Server Action 参数」这一条通道：Team 文档正文走 Yjs 二进制 WebSocket（服务端进程内还原 JSON，原型无关），标题保存只有字符串参数，均不受影响。上游已知：tiptap#4697（2023-12 起 open）报告同一问题，维护者确认根因在 prosemirror 并建议调用方自行 JSON 往返；React 侧「非普通对象静默输出悬空 `$T`」也值得反馈。
+
+### 解决方法
+
+在 `DocumentEditor.flushContent` 把规范化放在唯一跨 Server Action 的边界上：先 `JSON.stringify(pendingContent.current)` 一次并复用于变更检测（与 `lastSavedContent` 比较提前，未变更路径反而少一次序列化），仅当内容变化时 `JSON.parse` 重建普通对象，再交给 `isDocumentContent` 校验与 `updateDocument` 保存。变更路径因此新增一次 parse，换来请求 payload 的原型安全。注意 `structuredClone` 会保留 null 原型，不能替代；JSON 往返对键序与值语义无损。未来任何把编辑器 JSON 作为 Server Action 参数的客户端入口都必须先做同样规范化。若上游把 null 原型纳入 Flight 序列化白名单或 prosemirror 改变 attrs 构造方式，该步骤可移除。修复已用浏览器端到端验证：同一 H1 保存操作从 500 ZodError 变为 200 `status:"saved"`，数据库落盘 `{"type":"heading","attrs":{"level":1}}`。

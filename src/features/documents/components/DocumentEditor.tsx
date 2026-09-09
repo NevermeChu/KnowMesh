@@ -84,17 +84,19 @@ export function DocumentEditor(props: {
       return;
     }
 
-    const content = pendingContent.current;
-
-    if (!isDocumentContent(content)) {
-      setSaveState('error');
-      return;
-    }
-
-    const serializedContent = JSON.stringify(content);
+    const serializedContent = JSON.stringify(pendingContent.current);
 
     if (serializedContent === lastSavedContent.current) {
       setSaveState('saved');
+      return;
+    }
+
+    // ProseMirror attrs 带 null 原型，React Flight 会把它们替换成 "$T" 占位符，
+    // 传给 Server Action 前必须重建为普通对象
+    const content = JSON.parse(serializedContent);
+
+    if (!isDocumentContent(content)) {
+      setSaveState('error');
       return;
     }
 
