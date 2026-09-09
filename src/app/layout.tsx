@@ -3,6 +3,7 @@ import '@fontsource-variable/plus-jakarta-sans/wght.css';
 import '@/styles/global.css';
 import { cookies } from 'next/headers';
 import { ToastProvider } from '@/components/ui/Toast';
+import { RestorePersistedTheme } from '@/features/preferences/components/RestorePersistedTheme';
 import {
   CONTENT_WIDTH_COOKIE,
   isUserThemePreference,
@@ -10,6 +11,7 @@ import {
   THEME_COOKIE,
 } from '@/features/preferences/Preferences';
 import type { UserThemePreference } from '@/features/preferences/Preferences';
+import { getPersistedTheme } from '@/features/preferences/server/GetPersistedTheme';
 
 type RootLayoutStyle = React.CSSProperties & {
   '--content-read-width': string;
@@ -53,7 +55,9 @@ const themeInitScript = `(function(){var d=document.documentElement,m=window.mat
 export default async function RootLayout(props: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const themeCookie = cookieStore.get(THEME_COOKIE)?.value;
-  const theme: UserThemePreference = isUserThemePreference(themeCookie) ? themeCookie : 'system';
+  const cookieTheme = isUserThemePreference(themeCookie) ? themeCookie : null;
+  const persistedTheme = cookieTheme ? null : await getPersistedTheme();
+  const theme: UserThemePreference = cookieTheme ?? persistedTheme?.theme ?? 'system';
   const contentWidth = parseContentWidth(cookieStore.get(CONTENT_WIDTH_COOKIE)?.value);
   const rootStyle: RootLayoutStyle = { '--content-read-width': `${contentWidth}%` };
 
@@ -70,6 +74,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
       </head>
       <body>
         <ToastProvider>{props.children}</ToastProvider>
+        {persistedTheme?.hasSession ? <RestorePersistedTheme /> : null}
       </body>
     </html>
   );

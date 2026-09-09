@@ -1103,3 +1103,17 @@ PGlite 测试帮助器直接按 Drizzle journal 的 entries 顺序生成 SQL 文
 ### 解决方法
 
 当本地运行器管理 PGlite 时，为它启动的所有子进程显式注入 `postgresql://postgres:postgres@127.0.0.1:5432/postgres`，覆盖空占位值并确保迁移与应用连接同一实例。`E2E_REAL_POSTGRES=true` 的外部数据库模式不注入或覆盖地址，继续使用调用方提供的 `DATABASE_URL`。
+## 90. 主题偏好数据库记录不参与渲染恢复
+
+### 问题
+
+主题偏好双写 `user_preferences` 数据库与 httpOnly cookie，但渲染恢复只读 cookie。换浏览器、清除 cookie 或 cookie 过期（一年）后，首屏按 `system` 渲染；数据库中的偏好既不回填 cookie，也不在设置页挂载时应用到 DOM，仅用于回显选中状态，没有任何从数据库恢复的路径。
+
+### 根因
+
+设计上数据库是账号级权威记录、cookie 是渲染镜像，渲染路径刻意不查数据库（根布局每个请求都执行且包含未登录公开页）。该取舍本身成立，但“登录时从数据库回填 cookie”的镜像方向从未实现，权威数据与渲染快照之间缺少同步路径。
+
+### 解决方法
+
+初版方案是在 Better Auth Session 创建 hook（参照 `ensureUserWorkspace` 先例）读取 `user_preferences` 并回填 cookie，但该 hook 只在 session 创建时触发，覆盖不了“session 仍有效而主题 cookie 单独过期或被清”的场景。最终实现为按需渲染期解析 + 客户端回填：根布局在主题镜像缺失或非法时调用 `getPersistedTheme()`，无 session 时 Better Auth 不查库直接返回，有 session 才查询 `user_preferences`，用数据库偏好渲染首帧以消除“先 system 再纠正”的闪烁；已登录时挂载 `RestorePersistedTheme`，由 `restoreThemePreference` Server Action 回填 cookie，无偏好行写入 `system` 哨兵值，使后续请求回到只读 cookie 的零查询路径。匿名请求不挂载组件、不写入。
+

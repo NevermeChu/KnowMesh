@@ -148,7 +148,7 @@ Personal 和 Collaboration 是界面区域，不是 Project 数据字段。Perso
 
 ## 外观主题渲染
 
-主题偏好持久化在 `user_preferences`，但渲染路径不查询数据库：根布局读取 `knowmesh-theme` cookie 镜像，在 `<html>` 上输出 `data-theme` 与可选的 `dark` 类，首帧前由内联脚本把 `system` 解析为当前系统偏好并持续监听其变化。`updateThemePreference` Server Action 同时 upsert 数据库和 cookie，不失效根布局；设置页的乐观切换在本地立即应用同一解析逻辑，Action 失败时回滚，后续请求由 cookie 恢复。
+主题偏好持久化在 `user_preferences`，渲染路径默认不查询数据库：根布局读取 `knowmesh-theme` cookie 镜像，在 `<html>` 上输出 `data-theme` 与可选的 `dark` 类，首帧前由内联脚本把 `system` 解析为当前系统偏好并持续监听其变化。`updateThemePreference` Server Action 同时 upsert 数据库和 cookie，不失效根布局；设置页的乐观切换在本地立即应用同一解析逻辑，Action 失败时回滚，后续请求由 cookie 恢复。镜像缺失或非法时，根布局按需调用 `getPersistedTheme()` 解析首帧主题——无 session 时立即返回且不查库，有 session 才查询 `user_preferences`，从而避免首帧先渲染 `system` 再被客户端纠正的闪烁；已登录时额外挂载 `RestorePersistedTheme` 客户端组件，由 `restoreThemePreference` Server Action 回填 cookie（无偏好行时写入 `system` 哨兵值），匿名请求不挂载也不写入。
 
 由此产生的渲染边界：根布局读取 cookie，因此所有路由（含公开首页）均为动态渲染。细节见[系统偏好设置](../features/preferences.md)。
 

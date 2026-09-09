@@ -15,24 +15,31 @@
 
 ## 主题解析与防闪烁
 
-主题的持久化真相源是数据库，但根布局渲染时只读取镜像 cookie，避免每次请求查询数据库：
+主题的持久化真相源是数据库，但根布局渲染时优先只读取镜像 cookie，仅在镜像缺失或非法时才查询一次数据库：
 
 ```text
 updateThemePreference Server Action
-→ requireUser() 鉴权 + Zod 校验
-→ upsert user_preferences
+→ getCurrentUser() 识别登录状态 + Zod 校验
+→ 已登录时 upsert user_preferences
 → 写入 HttpOnly cookie knowmesh-theme（有效期一年）
 → 不失效布局；客户端已即时应用，后续请求由 cookie 恢复
 
 根布局（每个请求）
-→ 读取 knowmesh-theme，非法值回退 system
+→ 读取 knowmesh-theme，值有效时直接用于首帧渲染，不查询数据库
+→ 值缺失或非法时调用 getPersistedTheme()：无 session 立即返回（Better Auth 无 session cookie 时不查库），有 session 才查询 user_preferences
 → <html data-theme="..." class="dark?">
 → <head> 带请求级 CSP nonce 的脚本在首帧前解析 system → prefers-color-scheme
 → 根布局加载 Plus Jakarta Sans；工作区布局再加载 Noto Sans SC 与 JetBrains Mono
 → 内联脚本持续监听系统主题变化，跟随系统时实时切换
+
+RestorePersistedTheme 客户端组件（仅已确认存在 session 且 cookie 缺失/非法时挂载）
+→ 调用 restoreThemePreference Server Action
+→ 匿名请求不挂载该组件，因此不会发出恢复请求
+→ 有 session 时读取 user_preferences：无偏好行回填 system 哨兵值，有偏好行回填该值
+→ 回填 HttpOnly cookie 并返回主题，客户端 applyThemePreference 复应用（首帧已正确，通常为无操作）
 ```
 
-由此产生的边界：页面使用请求级 CSP nonce，因此所有页面路由（含公开首页）按请求动态渲染；根布局同时读取 cookie，未登录或没有 cookie 的访客按 `跟随系统` 处理。设置页展示的当前值从数据库读取，跨设备一致；cookie 只用于渲染加速，两者短暂不一致时以数据库为准。
+由此产生的边界：页面使用请求级 CSP nonce，因此所有页面路由（含公开首页）按请求动态渲染；根布局同时读取 cookie，未登录或没有 cookie 的访客按 `跟随系统` 处理。设置页展示的当前值从数据库读取，跨设备一致；cookie 用于渲染加速，镜像缺失或非法时由根布局按需查询数据库保证首帧正确，随后由客户端组件回填 cookie，其余情况以 cookie 为准。
 
 ## 持久化模型
 
@@ -57,6 +64,9 @@ updateThemePreference Server Action
 
 - `src/features/preferences/Preferences.ts`：主题与内容宽度枚举、cookie 名、默认值与值校验/解析。
 - `src/features/preferences/server/GetUserPreferences.ts`：server-only 用户偏好查询。
+- `src/features/preferences/server/GetPersistedTheme.ts`：server-only 主题镜像读取，供根布局按需解析首帧主题并判断是否需要回填。
+- `src/features/preferences/server/RestoreThemePreference.ts`：主题 cookie 缺失时的回填 Server Action，读取偏好并写入 cookie。
+- `src/features/preferences/components/RestorePersistedTheme.tsx`：根布局仅在已登录且主题 cookie 缺失/非法时挂载的客户端回填组件。
 - `src/features/preferences/server/UpdateThemePreference.ts`：主题偏好 Server Action。
 - `src/features/preferences/server/UpdateContentWidth.ts`：内容宽度偏好 Server Action。
 - `src/features/preferences/components/ThemePreferenceSection.tsx`：主题卡片与乐观切换。
